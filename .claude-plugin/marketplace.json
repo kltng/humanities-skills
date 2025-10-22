@@ -1,0 +1,15 @@
+{
+  "name": "plugin-marketplace",
+  "description": "A centralized marketplace for discovering and installing Claude Code plugins",
+  "owner": {
+    "name": "Plugin Marketplace",
+    "email": "admin@pluginmarketplace.com"
+  },
+  "plugins": [
+    {
+      "name": "example-plugin",
+      "source": "./plugins/example-plugin",
+      "description": "An example plugin to demonstrate the marketplace structure"
+    }
+  ]
+}
