@@ -1,15 +1,30 @@
 {
-  "name": "plugin-marketplace",
-  "description": "A centralized marketplace for discovering and installing Claude Code plugins",
+  "name": "academic-skills-marketplace",
+  "description": "A marketplace for academic research skills focused on Chinese historical and geographical data analysis",
   "owner": {
-    "name": "Plugin Marketplace",
-    "email": "admin@pluginmarketplace.com"
+    "name": "Kwok-leong Tang",
+    "email": "kltang@example.com"
   },
   "plugins": [
     {
-      "name": "example-plugin",
-      "source": "./plugins/example-plugin",
-      "description": "An example plugin to demonstrate the marketplace structure"
+      "name": "cbdb-api",
+      "source": "./cbdb-api",
+      "description": "Query the China Biographical Database API for comprehensive biographical data about historical Chinese figures from the 7th century BCE through the 19th century CE",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created by AI"
+      }
+    },
+    {
+      "name": "chgis-tgaz",
+      "source": "./chgis-tgaz",
+      "description": "Query the CHGIS Temporal Gazetteer API for historical Chinese placenames and administrative units from 222 BCE to 1911 CE",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created by AI"
+      }
     }
   ]
 }
