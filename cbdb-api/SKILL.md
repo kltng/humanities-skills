@@ -5,6 +5,9 @@ version: 1.0.0
 license: MIT
 creator: AI
 author: Kwok-leong Tang
+contributors:
+  - Claude (AI Assistant)
+  - Z.ai (AI Platform)
 ---
 
 # CBDB API
