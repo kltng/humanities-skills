@@ -1,6 +1,6 @@
 {
   "name": "humanities-skills",
-  "description": "A marketplace for academic research skills focused on Chinese historical and geographical data analysis",
+  "description": "A marketplace for academic research skills focused on Chinese historical and geographical data analysis. Install both CBDB API for biographical data and CHGIS TGAZ for historical place names.",
   "owner": {
     "name": "Kwok-leong Tang",
     "email": "kltang@example.com"
