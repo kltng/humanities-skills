@@ -1,6 +1,6 @@
 ---
 name: wikidata-search
-description: Search for items and properties on Wikidata and retrieve external identifiers. Use when Claude needs to (1) search for Wikidata items by label or alias, (2) get entity details including labels, descriptions, aliases, (3) retrieve external identifiers (authority control IDs) for an entity, (4) look up properties or claims for items. Triggers on queries mentioning Wikidata, Q-IDs, P-IDs, authority control, external identifiers, or structured knowledge base lookups.
+description: Search for items and properties on Wikidata and retrieve external identifiers. Use when an agent needs to (1) search for Wikidata items by label or alias, (2) get entity details including labels, descriptions, aliases, (3) retrieve external identifiers (authority control IDs) for an entity, (4) look up properties or claims for items. Triggers on queries mentioning Wikidata, Q-IDs, P-IDs, authority control, external identifiers, or structured knowledge base lookups.
 ---
 
 # Wikidata Search Skill
@@ -60,19 +60,19 @@ curl 'https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=Q42&property=
 
 External identifiers are stored as claims with datatype `external-id`. Common identifier properties:
 
-| Property | Name | Example |
-|----------|------|---------|
-| P214 | VIAF ID | 75121530 |
-| P227 | GND ID | 119033364 |
-| P244 | Library of Congress ID | n79023811 |
-| P213 | ISNI | 0000 0001 2144 9326 |
-| P345 | IMDb ID | nm0001354 |
-| P646 | Freebase ID | /m/0282x |
-| P349 | NDL ID | 00621256 |
-| P268 | BnF ID | 11888092r |
-| P269 | IdRef ID | 026927608 |
-| P906 | SELIBR ID | 182099 |
-| P396 | SBN author ID | IT\\ICCU\\CFIV\\000163 |
+| Property | Name                   | Example                |
+| -------- | ---------------------- | ---------------------- |
+| P214     | VIAF ID                | 75121530               |
+| P227     | GND ID                 | 119033364              |
+| P244     | Library of Congress ID | n79023811              |
+| P213     | ISNI                   | 0000 0001 2144 9326    |
+| P345     | IMDb ID                | nm0001354              |
+| P646     | Freebase ID            | /m/0282x               |
+| P349     | NDL ID                 | 00621256               |
+| P268     | BnF ID                 | 11888092r              |
+| P269     | IdRef ID               | 026927608              |
+| P906     | SELIBR ID              | 182099                 |
+| P396     | SBN author ID          | IT\\ICCU\\CFIV\\000163 |
 
 To extract identifiers from `wbgetentities` response:
 ```python
