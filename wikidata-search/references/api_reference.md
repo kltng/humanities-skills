@@ -246,3 +246,99 @@ Common error codes:
 | param-missing | Required parameter missing |
 | param-invalid | Invalid parameter value |
 | too-many-entities | Too many entity IDs (max 50) |
+## Special:EntityData (Direct Entity JSON)
+
+For many "fetch the entity JSON now" use cases, the Linked Data interface is a good fit:
+
+```text
+GET https://www.wikidata.org/wiki/Special:EntityData/Q42.json
+```
+
+### Common query parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| flavor | full | `simple` for truthy statements; `full` for full data; `dump` mainly for RDF use |
+| revision | (none) | Retrieve a specific revision |
+
+Example:
+
+```text
+GET https://www.wikidata.org/wiki/Special:EntityData/Q42.json?flavor=simple
+```
+
+## Wikidata Query Service (WDQS) SPARQL
+
+Endpoint:
+
+```text
+GET https://query.wikidata.org/sparql
+```
+
+Send a `query` parameter (URL-encoded) and set an appropriate `Accept` header:
+
+```bash
+curl -G 'https://query.wikidata.org/sparql' \
+  --data-urlencode 'query=SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5' \
+  -H 'Accept: application/sparql-results+json'
+```
+
+## Wikidata Vector Database (Semantic / Hybrid Search)
+
+The Wikidata Vector Database provides hybrid vector+keyword retrieval with Reciprocal Rank Fusion.
+
+Base URL:
+
+```text
+https://wd-vectordb.wmcloud.org
+```
+
+### /item/query/
+
+```text
+GET https://wd-vectordb.wmcloud.org/item/query/?query=...&lang=all&K=50
+```
+
+Parameters:
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| query | Yes | - | Search string |
+| lang | No | all | Language code or `all` |
+| K | No | 50 | Number of results |
+| instanceof | No | - | Comma-separated QIDs to filter by "instance of" |
+| rerank | No | false | Apply reranker (slower) |
+
+### /property/query/
+
+```text
+GET https://wd-vectordb.wmcloud.org/property/query/?query=...&lang=all&K=50
+```
+
+Additional parameter:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| exclude_external_ids | false | Exclude properties of external-id datatype |
+
+### /similarity-score/
+
+```text
+GET https://wd-vectordb.wmcloud.org/similarity-score/?query=...&qid=Q42,Q1&lang=en
+```
+
+Parameters:
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| query | Yes | Query string |
+| qid | Yes | Comma-separated list of QIDs to score |
+| lang | No | Language code |
+
+### Authentication header (optional / service dependent)
+
+Some deployments may require an API secret header:
+
+```text
+X-API-SECRET: <secret>
+```

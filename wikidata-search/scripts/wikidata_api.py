@@ -4,16 +4,28 @@ Wikidata API client for searching items and retrieving identifiers.
 """
 
 import json
+import os
 import time
 import urllib.parse
 import urllib.request
-from typing import Optional
+import gzip
+from typing import Optional, Iterable, Any
+from urllib.error import HTTPError, URLError
 
 
 class WikidataAPI:
     """Client for Wikidata API operations."""
     
     BASE_URL = "https://www.wikidata.org/w/api.php"
+
+    # EntityData (often faster for current entity JSON than Action API)
+    ENTITYDATA_URL = "https://www.wikidata.org/wiki/Special:EntityData"
+
+    # Wikidata Query Service (SPARQL)
+    WDQS_URL = "https://query.wikidata.org/sparql"
+
+    # Wikidata Vector Database
+    VDB_BASE_URL = "https://wd-vectordb.wmcloud.org"
     
     # Common external identifier properties
     IDENTIFIER_PROPERTIES = {
@@ -43,13 +55,26 @@ class WikidataAPI:
         "P1728": "AllMusic artist ID",
         "P434": "MusicBrainz artist ID",
         "P496": "ORCID iD",
-        "P1015": "BIBSYS ID",
     }
-    
-    def __init__(self, user_agent: str = "WikidataSearchSkill/1.0"):
+
+    def __init__(
+        self,
+        user_agent: str = "WikidataSearchSkill/1.0 (https://www.wikidata.org; contact: example@example.com)",
+        min_request_interval: float = 0.5,
+        max_retries: int = 4,
+        maxlag: int = 5,
+        vectordb_api_secret: Optional[str] = None,
+    ):
         self.user_agent = user_agent
         self._last_request_time = 0
-        self._min_request_interval = 0.5  # 500ms between requests
+        self._min_request_interval = float(min_request_interval)
+        self._max_retries = int(max_retries)
+        self._maxlag = int(maxlag)
+        self._vectordb_api_secret = (
+            vectordb_api_secret
+            if vectordb_api_secret is not None
+            else os.environ.get("WIKIDATA_VECTORDB_API_SECRET")
+        )
     
     def _rate_limit(self):
         """Enforce rate limiting between requests."""
@@ -57,18 +82,77 @@ class WikidataAPI:
         if elapsed < self._min_request_interval:
             time.sleep(self._min_request_interval - elapsed)
         self._last_request_time = time.time()
-    
+
+    def _read_response_body(self, response) -> bytes:
+        body = response.read()
+        encoding = (response.headers.get("Content-Encoding") or "").lower()
+        if encoding == "gzip":
+            return gzip.decompress(body)
+        return body
+
+    def _request_json(
+        self,
+        base_url: str,
+        params: dict,
+        extra_headers: Optional[dict[str, str]] = None,
+        timeout: int = 30,
+        method: str = "GET",
+    ) -> Any:
+        """Make a JSON HTTP request with retry/backoff and basic etiquette."""
+        params = dict(params)
+        params.setdefault("format", "json")
+
+        url = f"{base_url}?{urllib.parse.urlencode(params)}"
+
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept-Encoding": "gzip,deflate",
+            "Accept": "application/json",
+        }
+        if extra_headers:
+            headers.update(extra_headers)
+
+        last_error: Optional[Exception] = None
+        for attempt in range(self._max_retries + 1):
+            self._rate_limit()
+
+            req = urllib.request.Request(url, headers=headers, method=method)
+
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    body = self._read_response_body(response)
+                    return json.loads(body.decode("utf-8"))
+            except HTTPError as e:
+                last_error = e
+                # Respect Retry-After on 429
+                if e.code == 429:
+                    retry_after = e.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            time.sleep(float(retry_after))
+                            continue
+                        except ValueError:
+                            pass
+                # Retry transient errors
+                if e.code in (429, 500, 502, 503, 504):
+                    time.sleep(min(8.0, 0.5 * (2**attempt)))
+                    continue
+                raise
+            except URLError as e:
+                last_error = e
+                time.sleep(min(8.0, 0.5 * (2**attempt)))
+                continue
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("Request failed without an exception")
+
     def _request(self, params: dict) -> dict:
-        """Make API request with rate limiting."""
-        self._rate_limit()
-        params["format"] = "json"
-        url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
-        
-        req = urllib.request.Request(url)
-        req.add_header("User-Agent", self.user_agent)
-        
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+        """Make Wikidata Action API request with rate limiting and retries."""
+        params = dict(params)
+        params.setdefault("maxlag", str(self._maxlag))
+        params.setdefault("formatversion", "2")
+        return self._request_json(self.BASE_URL, params)
     
     def search(
         self,
@@ -104,6 +188,84 @@ class WikidataAPI:
             
         response = self._request(params)
         return response.get("search", [])
+
+    def vector_search_items(
+        self,
+        query: str,
+        lang: str = "all",
+        k: int = 20,
+        instanceof: Optional[list[str]] = None,
+        rerank: bool = False,
+    ) -> list[dict]:
+        """Hybrid (vector+keyword) search for Wikidata items via Wikidata Vector DB."""
+        params: dict[str, object] = {
+            "query": query,
+            "lang": lang,
+            "K": int(k),
+            "rerank": bool(rerank),
+        }
+        if instanceof:
+            params["instanceof"] = ",".join(instanceof)
+
+        headers = {}
+        if self._vectordb_api_secret:
+            headers["X-API-SECRET"] = self._vectordb_api_secret
+
+        url = f"{self.VDB_BASE_URL}/item/query/"
+        data = self._request_json(url, params, extra_headers=headers, timeout=30)
+        if not isinstance(data, list):
+            raise ValueError("Unexpected Vector DB response (expected list)")
+        return data
+
+    def vector_search_properties(
+        self,
+        query: str,
+        lang: str = "all",
+        k: int = 20,
+        rerank: bool = False,
+        exclude_external_ids: bool = False,
+    ) -> list[dict]:
+        """Hybrid (vector+keyword) search for Wikidata properties via Wikidata Vector DB."""
+        params: dict[str, object] = {
+            "query": query,
+            "lang": lang,
+            "K": int(k),
+            "rerank": bool(rerank),
+            "exclude_external_ids": bool(exclude_external_ids),
+        }
+
+        headers = {}
+        if self._vectordb_api_secret:
+            headers["X-API-SECRET"] = self._vectordb_api_secret
+
+        url = f"{self.VDB_BASE_URL}/property/query/"
+        data = self._request_json(url, params, extra_headers=headers, timeout=30)
+        if not isinstance(data, list):
+            raise ValueError("Unexpected Vector DB response (expected list)")
+        return data
+
+    def similarity_score(
+        self,
+        query: str,
+        qids: list[str],
+        lang: str = "en",
+    ) -> list[dict]:
+        """Compute similarity scores (query vs specific entities) via Vector DB."""
+        params: dict[str, object] = {
+            "query": query,
+            "qid": ",".join(qids),
+            "lang": lang,
+        }
+
+        headers = {}
+        if self._vectordb_api_secret:
+            headers["X-API-SECRET"] = self._vectordb_api_secret
+
+        url = f"{self.VDB_BASE_URL}/similarity-score/"
+        data = self._request_json(url, params, extra_headers=headers, timeout=30)
+        if not isinstance(data, list):
+            raise ValueError("Unexpected Vector DB response (expected list)")
+        return data
     
     def get_entity(
         self,
@@ -159,6 +321,53 @@ class WikidataAPI:
         
         # Filter out missing entities
         return {k: v for k, v in entities.items() if "missing" not in v}
+
+    def get_entitydata(
+        self,
+        entity_id: str,
+        flavor: str = "simple",
+        revision: Optional[int] = None,
+    ) -> dict:
+        """
+        Fetch entity JSON from Special:EntityData.
+
+        flavor:
+          - simple: truthy statements; includes sitelinks/version
+          - full: full data
+          - dump: excludes descriptions of referenced entities (RDF-focused)
+        """
+        allowed = {"simple", "full", "dump"}
+        if flavor not in allowed:
+            raise ValueError(f"Invalid flavor: {flavor}. Expected one of {sorted(allowed)}")
+
+        url = f"{self.ENTITYDATA_URL}/{entity_id}.json"
+        qs = {"flavor": flavor}
+        if revision is not None:
+            qs["revision"] = str(int(revision))
+        full_url = f"{url}?{urllib.parse.urlencode(qs)}"
+
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept-Encoding": "gzip,deflate",
+            "Accept": "application/json",
+        }
+
+        last_error: Optional[Exception] = None
+        for attempt in range(self._max_retries + 1):
+            self._rate_limit()
+            req = urllib.request.Request(full_url, headers=headers, method="GET")
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    body = self._read_response_body(response)
+                    return json.loads(body.decode("utf-8"))
+            except (HTTPError, URLError) as e:
+                last_error = e
+                time.sleep(min(8.0, 0.5 * (2**attempt)))
+                continue
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("Request failed without an exception")
     
     def get_claims(
         self,
@@ -184,11 +393,75 @@ class WikidataAPI:
             
         response = self._request(params)
         return response.get("claims", {})
+
+    def execute_sparql(
+        self,
+        sparql: str,
+        accept: str = "application/sparql-results+json",
+        timeout: int = 30,
+    ) -> bytes:
+        """Execute SPARQL against WDQS and return raw response bytes."""
+        params = {"query": sparql}
+        url = f"{self.WDQS_URL}?{urllib.parse.urlencode(params)}"
+
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": accept,
+            "Accept-Encoding": "gzip,deflate",
+        }
+
+        last_error: Optional[Exception] = None
+        for attempt in range(self._max_retries + 1):
+            self._rate_limit()
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    return self._read_response_body(response)
+            except HTTPError as e:
+                last_error = e
+                if e.code in (429, 500, 502, 503, 504):
+                    time.sleep(min(8.0, 0.5 * (2**attempt)))
+                    continue
+                raise
+            except URLError as e:
+                last_error = e
+                time.sleep(min(8.0, 0.5 * (2**attempt)))
+                continue
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("Request failed without an exception")
+
+    def _property_labels(self, property_ids: Iterable[str], language: str = "en") -> dict[str, str]:
+        ids = [pid for pid in property_ids if pid]
+        if not ids:
+            return {}
+        entities = self.get_entities(ids[:50], props=["labels"], languages=[language])
+        out: dict[str, str] = {}
+        for pid, ent in entities.items():
+            labels = ent.get("labels", {})
+            label = (labels.get(language) or {}).get("value")
+            if label:
+                out[pid] = label
+        return out
+
+    def _rank_sort_key(self, claim: dict) -> int:
+        rank = claim.get("rank")
+        if rank == "preferred":
+            return 0
+        if rank == "normal":
+            return 1
+        if rank == "deprecated":
+            return 2
+        return 3
     
     def get_identifiers(
         self,
         entity_id: str,
-        include_labels: bool = False
+        include_labels: bool = False,
+        language: str = "en",
+        first_only: bool = False,
+        include_unknown_properties: bool = True,
     ) -> dict:
         """
         Get all external identifiers for an entity.
@@ -207,31 +480,44 @@ class WikidataAPI:
         claims = entity.get("claims", {})
         identifiers = {}
         
+        label_map: dict[str, str] = {}
+        if include_labels:
+            prop_ids = [pid for pid in claims.keys() if pid.startswith("P")]
+            label_map = self._property_labels(prop_ids, language=language)
+
         for prop_id, prop_claims in claims.items():
-            # Check if this is an external-id property
+            # Collect all external-id values for this property, preferring higher rank.
+            external_claims = []
             for claim in prop_claims:
                 mainsnak = claim.get("mainsnak", {})
-                datatype = mainsnak.get("datatype")
-                
-                if datatype == "external-id":
-                    datavalue = mainsnak.get("datavalue", {})
-                    value = datavalue.get("value")
-                    
-                    if value:
-                        if include_labels and prop_id in self.IDENTIFIER_PROPERTIES:
-                            key = f"{self.IDENTIFIER_PROPERTIES[prop_id]} ({prop_id})"
-                        else:
-                            key = prop_id
-                            
-                        # Handle multiple values for same property
-                        if key in identifiers:
-                            if isinstance(identifiers[key], list):
-                                identifiers[key].append(value)
-                            else:
-                                identifiers[key] = [identifiers[key], value]
-                        else:
-                            identifiers[key] = value
-                    break  # Only take preferred/first value
+                if mainsnak.get("datatype") != "external-id":
+                    continue
+                datavalue = mainsnak.get("datavalue") or {}
+                value = datavalue.get("value")
+                if value is None:
+                    continue
+                external_claims.append((claim, value))
+
+            if not external_claims:
+                continue
+
+            if not include_unknown_properties and prop_id not in self.IDENTIFIER_PROPERTIES:
+                continue
+
+            # Sort by rank (preferred -> normal -> deprecated), preserving API order within rank.
+            external_claims.sort(key=lambda cv: self._rank_sort_key(cv[0]))
+            values = [v for _, v in external_claims]
+
+            if include_labels:
+                label = label_map.get(prop_id) or self.IDENTIFIER_PROPERTIES.get(prop_id) or prop_id
+                key = f"{label} ({prop_id})"
+            else:
+                key = prop_id
+
+            if first_only:
+                identifiers[key] = values[0]
+            else:
+                identifiers[key] = values[0] if len(values) == 1 else values
                     
         return identifiers
     

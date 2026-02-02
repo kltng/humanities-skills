@@ -7,3 +7,18 @@
 ehthumbs.db
 Thumbs.db
 
+## Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+## Virtualenv
+.venv/
+venv/
+ENV/
+env/
+
+## Editor / tooling
+.idea/
+.vscode/
