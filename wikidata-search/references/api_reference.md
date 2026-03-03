@@ -293,6 +293,8 @@ Base URL:
 https://wd-vectordb.wmcloud.org
 ```
 
+**Important:** A descriptive `User-Agent` header is **required** for all Vector DB requests. Requests without one return `403 {"detail": "A more descriptive User-Agent is required"}`.
+
 ### /item/query/
 
 ```text
@@ -334,6 +336,37 @@ Parameters:
 | query | Yes | Query string |
 | qid | Yes | Comma-separated list of QIDs to score |
 | lang | No | Language code |
+
+### Response Structure
+
+All Vector DB endpoints return a JSON array:
+
+```json
+[
+  {
+    "QID": "Q465108",
+    "similarity_score": 0.80055666,
+    "rrf_score": 0.0196078431372549,
+    "source": "Vector Search"
+  },
+  {
+    "QID": "Q9397",
+    "similarity_score": 0.7975637,
+    "rrf_score": 0.019230769230769232,
+    "source": "Keyword Search"
+  }
+]
+```
+
+`source` is either `"Vector Search"` or `"Keyword Search"`, indicating which retrieval method found the result. Results are ranked by RRF (Reciprocal Rank Fusion) combining both methods.
+
+### Required Headers
+
+A descriptive `User-Agent` header is **required**:
+
+```text
+User-Agent: YourAppName/1.0 (contact: you@example.com)
+```
 
 ### Authentication header (optional / service dependent)
 

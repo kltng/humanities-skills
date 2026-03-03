@@ -14,26 +14,31 @@ Valid years: **-222 to 1911** (222 BCE to 1911 CE)
 
 ## API Methods
 
-### 1. Canonical Placename Search
+### 1. Canonical Placename Lookup
 
 Retrieve a specific placename record by its unique ID.
 
-**Endpoint Pattern:**
+**Endpoint Patterns:**
 ```
-GET /placename/{UNIQUE_ID}
+GET /placename/{UNIQUE_ID}          (HTML, default)
+GET /placename/json/{UNIQUE_ID}     (JSON)
+GET /placename/xml/{UNIQUE_ID}      (XML)
+GET /placename/rdf/{UNIQUE_ID}      (RDF)
 ```
+
+**Important:** For ID-based lookups, the output format is part of the URL path, NOT a query parameter. The `fmt` query parameter only works with the faceted search endpoint.
 
 **ID Format:**
 - TGAZ uses IDs with the prefix `hvd_`
 - CHGIS IDs are converted by adding this prefix
 - Example: CHGIS ID `32180` → TGAZ ID `hvd_32180`
 
-**Example Request:**
+**Example Requests:**
 ```
-GET https://chgis.hudci.org/tgaz/placename/hvd_32180
+GET https://chgis.hudci.org/tgaz/placename/hvd_32180           (HTML)
+GET https://chgis.hudci.org/tgaz/placename/json/hvd_32180      (JSON)
+GET https://chgis.hudci.org/tgaz/placename/xml/hvd_32180       (XML)
 ```
-
-**Default Response Format:** XML (can be changed with `fmt` parameter)
 
 ---
 
@@ -62,6 +67,7 @@ GET /placename
 - **Chinese characters** should be sent as plain UTF-8 encodings, NOT URLencoded hexadecimal strings
 - Default output is XML unless `fmt=json` is specified
 - Multiple parameters can be combined in a single query
+- **Prefix matching**: The `n` parameter uses wildcard suffix matching (e.g., `n=beijing` matches "北京路", "北京行省", "北井县", etc.)
 
 **Example Requests:**
 
@@ -101,21 +107,77 @@ Historical Chinese administrative units include:
 
 ---
 
-## Response Structure
+## Response Structures
+
+### Faceted Search JSON Response
+
+```json
+{
+  "system": "CHGIS - Harvard University & Fudan University",
+  "memo": "Results for query matching key 'suzhou%' and year '1820' and feature type 'fu'",
+  "count of displayed results": "3",
+  "count of total results": "3",
+  "placenames": [
+    {
+      "sys_id": "hvd_32432",
+      "uri": "https://chgis.hudci.org/tgaz/placename/hvd_32432",
+      "name": "苏州府",
+      "transcription": "Suzhou Fu",
+      "years": "1367 ~ 1911",
+      "parent sys_id": "hvd_30040",
+      "parent name": "江南行省 (Jiangnan Xings)",
+      "feature type": "府 (fu)",
+      "object type": "POINT",
+      "xy coordinates": "120.61862, 31.31271",
+      "data source": "CHGIS"
+    }
+  ]
+}
+```
+
+**Note:** The `memo` field shows the actual query pattern used, including the wildcard suffix (`%`). This confirms the API uses prefix matching.
+
+### Canonical Lookup JSON Response
+
+```json
+{
+  "system": "China Historical GIS, Harvard University and Fudan University",
+  "license": "CC BY-NC 4.0",
+  "uri": "https://chgis.hudci.org/tgaz/placename/hvd_32180",
+  "sys_id": "hvd_32180",
+  "spellings": [
+    {"written form": "婺州", "script": "traditional Chinese"},
+    {"written form": "Wu Zhou", "transcribed in": "Pinyin"}
+  ],
+  "feature_type": {
+    "name": "州",
+    "transcription": "zhou",
+    "English": "prefecture"
+  },
+  "temporal": {
+    "begin": "758",
+    "end": "1275"
+  },
+  "spatial": {
+    "object_type": "POINT",
+    "latitude": "29.10471",
+    "longitude": "119.64992",
+    "present_location": [
+      {"country code": "cn", "text": "今浙江金华市"}
+    ]
+  },
+  "historical_context": {
+    "part of": [
+      {"begin year": "758", "end year": "769", "parent id": "hvd_30083", "name": "浙江东道节度使"}
+    ]
+  },
+  "data_source": "CHGIS"
+}
+```
 
 ### XML Response (Default)
 
-The API returns XML with placename records including:
-- Unique identifiers
-- Placename spellings (multiple transcriptions/languages)
-- Historical dates (begin/end validity)
-- Administrative hierarchy
-- Geographic coordinates
-- Feature type classifications
-
-### JSON Response
-
-Use `fmt=json` parameter to receive responses in JSON format with the same data structure.
+The API returns XML with the same fields as above.
 
 ---
 
@@ -155,7 +217,7 @@ GET https://chgis.hudci.org/tgaz/placename?n=苏州府&yr=1750&fmt=json
 GET https://chgis.hudci.org/tgaz/placename?n=ningbo&ipar=zhejiang&yr=1850&fmt=json
 ```
 
-### Retrieve specific record by ID
+### Retrieve specific record by ID (JSON)
 ```
-GET https://chgis.hudci.org/tgaz/placename/hvd_32180
+GET https://chgis.hudci.org/tgaz/placename/json/hvd_32180
 ```

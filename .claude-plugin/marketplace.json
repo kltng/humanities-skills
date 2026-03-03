@@ -37,6 +37,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
       }
+    },
+    {
+      "name": "wikidata-search",
+      "source": "./wikidata-search",
+      "description": "Search Wikidata for items, properties, and external identifiers using keyword search, semantic/hybrid search, SPARQL, and direct entity retrieval",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude and Z.ai"
+      }
     }
   ]
 }

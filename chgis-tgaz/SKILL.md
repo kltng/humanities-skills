@@ -141,12 +141,19 @@ Fetch a complete record when the unique TGAZ ID is known.
 
 **Approach:**
 ```python
-# Retrieve specific record
+# Retrieve specific record as JSON
 tgaz_id = "hvd_32180"
-url = f"https://chgis.hudci.org/tgaz/placename/{tgaz_id}"
-params = {"fmt": "json"}
-response = requests.get(url, params=params)
+url = f"https://chgis.hudci.org/tgaz/placename/json/{tgaz_id}"
+response = requests.get(url)
 ```
+
+**Important:** For ID-based lookups, the output format is specified in the URL path (`/json/` or `/xml/`), NOT as a query parameter. The `?fmt=json` parameter only works with the faceted search endpoint.
+
+**Available format paths:**
+- `/placename/json/{id}` — JSON format
+- `/placename/xml/{id}` — XML format
+- `/placename/rdf/{id}` — RDF format
+- `/placename/{id}` — HTML format (default)
 
 **ID format:** TGAZ IDs use the prefix `hvd_` (e.g., CHGIS ID 32180 becomes TGAZ ID hvd_32180)
 
@@ -171,11 +178,17 @@ Begin with simple queries and add parameters progressively:
    params = {"n": "guangzhou", "yr": "1820", "ftyp": "fu", "fmt": "json"}
    ```
 
+### Search Matching Behavior
+
+The API uses **prefix matching** (wildcard suffix). For example, `n=beijing` matches "北京路", "北京行省", "北井县" (Pinyin "Beijing Xian"), etc. This means:
+- Short search terms return more results (broader matching)
+- More specific terms narrow results (e.g., `n=beijing lu` for 北京路)
+
 ### Handling Chinese Characters
 
 **Always use UTF-8 encoding directly:**
 - ✅ Correct: `"n": "北京"`
-- ❌ Wrong: URL-encoding Chinese characters
+- ❌ Wrong: URL-encoding Chinese characters into hex strings
 
 **The API accepts both Chinese and Romanized names:**
 - `"n": "beijing"` and `"n": "北京"` both work
@@ -201,13 +214,21 @@ Faceted searches often return multiple records because:
 
 **Approach:** Present all relevant results to the user or ask for clarification.
 
-### Understanding Historical Context
+### Understanding Response Fields
 
-Records include:
-- **Begin/end dates** showing when the placename was valid
-- **Administrative hierarchy** showing parent-child relationships
-- **Multiple spellings** in different languages/transcriptions
-- **Geographic coordinates** for mapping
+**Faceted search results** include these fields per placename:
+- `sys_id` / `uri` — unique identifier and link
+- `name` / `transcription` — Chinese name and Pinyin
+- `years` — temporal span (e.g., "1367 ~ 1911")
+- `parent sys_id` / `parent name` — parent administrative unit
+- `feature type` — administrative type with Chinese and Romanized names
+- `xy coordinates` — geographic coordinates
+
+**Canonical lookup results** additionally include:
+- `spellings` — multiple written forms and transcriptions
+- `temporal.begin` / `temporal.end` — exact year range
+- `spatial.present_location` — modern equivalent location
+- `historical_context.part of` — full administrative hierarchy over time
 
 ### No Results
 
@@ -262,8 +283,8 @@ User wants to verify a place name or identification.
 ```python
 # Example: "Is this the correct ID for Beijing?"
 tgaz_id = "hvd_12345"
-url = f"https://chgis.hudci.org/tgaz/placename/{tgaz_id}"
-params = {"fmt": "json"}
+url = f"https://chgis.hudci.org/tgaz/placename/json/{tgaz_id}"
+response = requests.get(url)
 ```
 
 ## Resources
@@ -316,19 +337,18 @@ def search_tgaz(placename, year=None, feature_type=None, parent=None):
 def get_placename_by_id(tgaz_id):
     """
     Retrieve specific placename record by TGAZ ID.
-    
+
     Args:
         tgaz_id: TGAZ unique identifier (format: hvd_XXXXX)
-    
+
     Returns:
         JSON response from API
     """
-    url = f"https://chgis.hudci.org/tgaz/placename/{tgaz_id}"
-    params = {"fmt": "json"}
-    
-    response = requests.get(url, params=params)
+    url = f"https://chgis.hudci.org/tgaz/placename/json/{tgaz_id}"
+
+    response = requests.get(url)
     response.raise_for_status()
-    
+
     return response.json()
 
 # Example usage

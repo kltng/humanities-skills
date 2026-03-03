@@ -49,6 +49,8 @@ Response fields per result:
 - `description`: Short description
 - `aliases`: Alternative names
 - `url`: Wikidata page URL
+- `display`: Structured label/description with language info
+- `match`: What matched the search (label, alias, or description)
 
 ### 2. Get Entity Details (wbgetentities)
 
@@ -75,14 +77,18 @@ curl 'https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=Q42&property=
 
 When you don't know the exact label, or want "things like this" discovery, use the Vector DB.
 
+**Important:** A descriptive `User-Agent` header is required. Requests without one will be rejected with `403`.
+
 Item search:
 ```bash
-curl 'https://wd-vectordb.wmcloud.org/item/query/?query=QUERY&lang=all&K=20'
+curl -H 'User-Agent: WikidataSearchSkill/1.0 (contact: you@example.com)' \
+  'https://wd-vectordb.wmcloud.org/item/query/?query=QUERY&lang=all&K=20'
 ```
 
 Property search:
 ```bash
-curl 'https://wd-vectordb.wmcloud.org/property/query/?query=QUERY&lang=all&K=20&exclude_external_ids=false'
+curl -H 'User-Agent: WikidataSearchSkill/1.0 (contact: you@example.com)' \
+  'https://wd-vectordb.wmcloud.org/property/query/?query=QUERY&lang=all&K=20&exclude_external_ids=false'
 ```
 
 Optional parameters:
@@ -110,8 +116,13 @@ curl 'https://www.wikidata.org/wiki/Special:EntityData/Q42.json?flavor=simple'
 ### 6. Structured Queries (WDQS SPARQL)
 
 ```bash
-curl -G 'https://query.wikidata.org/sparql' --data-urlencode 'query=SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5' -H 'Accept: application/sparql-results+json'
+curl -G 'https://query.wikidata.org/sparql' \
+  --data-urlencode 'query=SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5' \
+  -H 'Accept: application/sparql-results+json' \
+  -H 'User-Agent: WikidataSearchSkill/1.0 (contact: you@example.com)'
 ```
+
+**Note:** A descriptive `User-Agent` header is required for WDQS as well.
 
 ## Extracting External Identifiers
 
@@ -160,7 +171,10 @@ identifiers = wd.get_identifiers("Q937")
 # Semantic search (Vector DB)
 candidates = wd.vector_search_items("a famous science fiction writer", lang="en", k=5)
 
-# SPARQL
+# SPARQL (returns parsed JSON dict)
+results = wd.sparql_json("SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5")
+
+# SPARQL (returns raw bytes, for non-JSON accept types)
 raw = wd.execute_sparql("SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5")
 ```
 

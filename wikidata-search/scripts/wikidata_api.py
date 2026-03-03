@@ -419,6 +419,14 @@ class WikidataAPI:
                     return self._read_response_body(response)
             except HTTPError as e:
                 last_error = e
+                if e.code == 429:
+                    retry_after = e.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            time.sleep(float(retry_after))
+                            continue
+                        except ValueError:
+                            pass
                 if e.code in (429, 500, 502, 503, 504):
                     time.sleep(min(8.0, 0.5 * (2**attempt)))
                     continue
@@ -431,6 +439,15 @@ class WikidataAPI:
         if last_error:
             raise last_error
         raise RuntimeError("Request failed without an exception")
+
+    def sparql_json(
+        self,
+        sparql: str,
+        timeout: int = 30,
+    ) -> dict:
+        """Execute SPARQL against WDQS and return parsed JSON results."""
+        raw = self.execute_sparql(sparql, accept="application/sparql-results+json", timeout=timeout)
+        return json.loads(raw.decode("utf-8"))
 
     def _property_labels(self, property_ids: Iterable[str], language: str = "en") -> dict[str, str]:
         ids = [pid for pid in property_ids if pid]

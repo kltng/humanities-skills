@@ -67,7 +67,7 @@ https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=1762&o=json
 
 **If user provides Chinese name:**
 - Use name-based query with Chinese characters
-- URL-encode the Chinese characters
+- Pass Chinese characters as UTF-8 (HTTP clients like `requests` handle encoding automatically)
 - Format: `?name={chinese_name}&o=json`
 
 **If user provides Pinyin/romanized name:**
@@ -111,15 +111,21 @@ url = "https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=6191&o=json"
 
 ### Step 4: Parse and Present Results
 
-Extract relevant information from the response:
+The JSON response has a nested structure. Navigate it as follows:
 
-- **Basic details**: Name (in Chinese and Pinyin), alternative names, dynasty, gender
-- **Dates and places**: Birth/death dates and locations
-- **Biographical context**: Historical notes, significance
-- **Relationships**: Family, teachers, students, colleagues, friends
-- **Official positions**: Government roles, titles, appointments
-- **Literary works**: Writings, publications, contributions
-- **Geographic associations**: Places lived, worked, or visited
+```
+response["Package"]["PersonAuthority"]["PersonInfo"]["Person"]
+```
+
+The `Person` object contains these sections:
+
+- **`BasicInfo`**: PersonId, EngName, ChName, IndexYear, Gender, YearBirth, YearDeath, Dynasty, EraBirth, EraDeath, YearsLived, Notes
+- **`PersonSources`**: Source references with URLs
+- **`AltNameInfo`**: Alternative names (courtesy name 字, pen name 號, etc.)
+- **`AddrInfo`**: Associated places and addresses
+- **`EntryInfo`**: Examination entries and ranks
+- **`PostingInfo`**: Official positions and appointments
+- **`SocialAssocInfo`**: Social relationships (family, teachers, students, etc.)
 
 Present the information in a clear, organized format appropriate to the user's query.
 
@@ -127,9 +133,8 @@ Present the information in a clear, organized format appropriate to the user's q
 
 ### URL Encoding
 
-Always URL-encode query parameters:
-- Chinese characters must be properly encoded
 - Spaces in Pinyin names should be encoded as `%20`
+- Chinese characters should be passed as UTF-8 (most HTTP clients handle this automatically)
 - Use proper encoding functions in bash or Python when constructing URLs
 
 ### Handling Ambiguous Results
@@ -148,6 +153,11 @@ When querying by name (especially Pinyin):
 3. **Pinyin/romanization** - convenient but may be ambiguous
 
 ### Error Handling
+
+When a person is not found, the API returns:
+```json
+{"error": {"code": 404, "message": "Person not found."}}
+```
 
 If a query returns no results:
 - Try alternative name forms (Chinese vs. Pinyin)
@@ -174,6 +184,48 @@ CBDB contains extensive relationship data. When presenting relationships:
 - Specify the type of relationship (family, teacher-student, colleague, etc.)
 - Include relevant dates for the relationship when available
 - Note the direction of the relationship (who is teacher, who is student, etc.)
+
+## Example Code Template
+
+```python
+import requests
+
+def query_cbdb(name=None, person_id=None):
+    """
+    Query the CBDB API for biographical data.
+
+    Args:
+        name: Person's name (Chinese or Pinyin)
+        person_id: CBDB person ID (integer)
+
+    Returns:
+        Person data dict, or None if not found
+    """
+    url = "https://cbdb.fas.harvard.edu/cbdbapi/person.php"
+    params = {"o": "json"}
+
+    if person_id:
+        params["id"] = person_id
+    elif name:
+        params["name"] = name
+    else:
+        raise ValueError("Provide either name or person_id")
+
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if "error" in data:
+        return None
+
+    return data["Package"]["PersonAuthority"]["PersonInfo"]["Person"]
+
+# Example usage
+person = query_cbdb(name="蘇軾")
+if person:
+    basic = person["BasicInfo"]
+    print(f"{basic['ChName']} ({basic['EngName']})")
+    print(f"Dynasty: {basic['Dynasty']}, {basic['YearBirth']}-{basic['YearDeath']}")
+```
 
 ## Resources
 

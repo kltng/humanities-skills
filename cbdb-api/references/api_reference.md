@@ -62,16 +62,71 @@ Returns JSON-formatted data for person named 王安石.
 
 ## Response Data
 
-The API returns comprehensive biographical data including:
+### JSON Response Structure
 
-- Basic information (name, alternative names, gender, dynasty)
-- Birth and death dates/locations
-- Biographical notes and historical context
-- Social relationships and associations
-- Official positions and titles
-- Literary works and writings
-- Geographic locations associated with the person
-- References to source materials
+The JSON response nests data under `Package.PersonAuthority.PersonInfo.Person`:
+
+```json
+{
+  "Package": {
+    "PersonAuthority": {
+      "DataSource": "CBDB",
+      "Version": "20131220",
+      "PersonInfo": {
+        "Person": {
+          "BasicInfo": {
+            "PersonId": "1762",
+            "EngName": "Wang Anshi",
+            "ChName": "王安石",
+            "IndexYear": "1021",
+            "Gender": "0",
+            "YearBirth": "1021",
+            "YearDeath": "1086",
+            "YearsLived": "66",
+            "Dynasty": "宋",
+            "DynastyId": "15",
+            "DynastyBirth": "北宋",
+            "EraBirth": "天禧",
+            "EraYearBirth": "5",
+            "EraDeath": "元祐",
+            "EraYearDeath": "1",
+            "IndexAddr": "臨川",
+            "JunWang": "太原",
+            "Notes": "..."
+          },
+          "PersonSources": { "Source": [...] },
+          "AltNameInfo": { "AltName": [...] },
+          "AddrInfo": { "Addr": [...] },
+          "EntryInfo": { "Entry": [...] },
+          "PostingInfo": { "Posting": [...] },
+          "SocialAssocInfo": { "SocialAssoc": [...] }
+        }
+      }
+    }
+  }
+}
+```
+
+### Key BasicInfo Fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| PersonId | Unique CBDB identifier | 1762 |
+| EngName | Romanized name | Wang Anshi |
+| ChName | Chinese name | 王安石 |
+| Gender | 0 = male, 1 = female | 0 |
+| YearBirth / YearDeath | Western calendar years | 1021 / 1086 |
+| Dynasty | Dynasty name (Chinese) | 宋 |
+| EraBirth / EraDeath | Reign era names | 天禧 / 元祐 |
+| EraYearBirth / EraYearDeath | Year within the era | 5 / 1 |
+| IndexAddr | Index address (place) | 臨川 |
+| Notes | Biographical notes (English) | ... |
+
+### Error Response
+
+```json
+{"error": {"code": 404, "message": "Person not found."}}
+```
 
 ## Output Formats
 
@@ -84,12 +139,33 @@ Structured XML output following CBDB's schema, providing maximum flexibility for
 ### JSON
 JavaScript Object Notation format for easy integration with modern web applications and APIs.
 
+## SocialAssocInfo Structure
+
+Social associations include relationship types and associated persons:
+
+| Field | Description |
+|-------|-------------|
+| AssocName / AssocChName | Associated person's name |
+| AssocId | Associated person's CBDB ID |
+| AssocRelation | Relationship type (e.g., "Father", "Teacher", "Friend") |
+| AssocRelationId | Relationship type ID |
+
+## PostingInfo Structure
+
+Official postings include:
+
+| Field | Description |
+|-------|-------------|
+| PostingName | Office/position name (Chinese) |
+| PostingNameEng | Office/position name (English) |
+| PostingAddr | Location of posting |
+| FirstYear / LastYear | Years of appointment |
+
 ## Best Practices
 
-1. **URL Encoding**: Always URL-encode query parameters, especially for:
-   - Chinese characters
-   - Spaces in Pinyin names
-   - Special characters
+1. **URL Encoding**:
+   - Spaces in Pinyin names should be encoded as `%20`
+   - Chinese characters can be passed as UTF-8 (HTTP clients handle encoding)
 
 2. **Output Format Selection**:
    - Use JSON for programmatic data extraction and processing
