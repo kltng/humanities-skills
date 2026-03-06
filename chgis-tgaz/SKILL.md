@@ -1,7 +1,7 @@
 ---
 name: chgis-tgaz
 description: Query the China Historical GIS (CHGIS) Temporal Gazetteer (TGAZ) API to search for historical Chinese placenames from 222 BCE to 1911 CE. Use this skill when searching for information about historical Chinese places, administrative units, or geographic locations during the dynastic period. Applicable for queries about historical place names, administrative hierarchies, or when users mention specific Chinese locations with historical context.
-version: 1.0.0
+version: 1.1.0
 license: MIT
 creator: AI
 author: Kwok-leong Tang
@@ -12,357 +12,110 @@ contributors:
 
 # CHGIS TGAZ
 
-## Overview
+Query the China Historical GIS Temporal Gazetteer for historical placenames and administrative units (222 BCE–1911 CE).
 
-The CHGIS Temporal Gazetteer (TGAZ) skill enables querying the China Historical GIS database to search for historical Chinese placenames and administrative units from 222 BCE to 1911 CE. The API accepts UTF-8 encoded Chinese characters and Romanized transcriptions, making it accessible for searches in multiple languages.
+## Critical: Things Claude Won't Know Without This Skill
 
-## When to Use This Skill
+**The correct domain is `chgis.hudci.org`** — the old `maps.cga.harvard.edu` is defunct. Do not use it.
 
-Apply this skill when users:
-- Search for historical Chinese placenames or locations
-- Ask about administrative units during China's dynastic period
-- Need to verify historical place names or their spellings
-- Request information about administrative hierarchies (provinces, prefectures, counties)
-- Inquire about places that existed during specific historical years
-- Need to identify modern equivalents of historical placenames
-- Research geographic locations mentioned in historical texts
-
-## Core Capabilities
-
-### 1. Placename Search by Name
-
-Search for places using Chinese characters or Romanized names.
-
-**When to use:** User provides a place name and wants to find matching records.
-
-**Basic approach:**
-```python
-import requests
-
-# Basic search
-url = "https://chgis.hudci.org/tgaz/placename"
-params = {
-    "n": "beijing",      # or "北京"
-    "fmt": "json"
-}
-response = requests.get(url, params=params)
-data = response.json()
+**ID lookups use a URL path format, NOT query params:**
 ```
-
-**Example user requests:**
-- "Find information about Beijing in the CHGIS database"
-- "Search for the place called 苏州 in Chinese history"
-- "What records exist for Hangzhou?"
-
-### 2. Historical Year-Specific Searches
-
-Search for places as they existed in a specific historical year.
-
-**When to use:** User specifies or implies a particular time period.
-
-**Approach:**
-```python
-# Search with specific year
-params = {
-    "n": "suzhou",
-    "yr": "1820",       # Use negative for BCE: "-100"
-    "fmt": "json"
-}
-response = requests.get(url, params=params)
+✅  https://chgis.hudci.org/tgaz/placename/json/hvd_32180
+❌  https://chgis.hudci.org/tgaz/placename?id=hvd_32180&fmt=json
 ```
+The `?fmt=json` parameter only works for the faceted search endpoint.
 
-**Example user requests:**
-- "What was the administrative status of Nanjing in 1750?"
-- "Find counties in Zhejiang province in the year 1850"
-- "Search for places named Chang'an during the Tang dynasty" (would need approximate year like 750)
+**TGAZ IDs use the `hvd_` prefix:** CHGIS ID 32180 → TGAZ ID `hvd_32180`.
 
-**Important:** The valid year range is -222 to 1911 (222 BCE to 1911 CE).
+**The `ipar` (parent) search parameter is unreliable.** For hierarchical queries (e.g., "find all counties in Zhejiang"), use the canonical record drill-down approach instead: look up the parent record by ID and read its subordinate units.
 
-### 3. Feature Type Filtering
+**Romanization quirks:** Some names use older romanizations, not modern pinyin. For example, Ningbo is stored as "Ningpo". If a search returns no results, try alternative romanizations.
 
-Search for specific types of administrative units.
+**Search uses prefix matching:** `n=beijing` matches 北京路, 北京行省, 北井县, etc. Short terms return more results.
 
-**When to use:** User asks about a specific administrative level or type.
+## Python Script
 
-**Approach:**
-```python
-# Search for a specific administrative type
-params = {
-    "n": "suzhou",
-    "yr": "1820",
-    "ftyp": "fu",      # Superior prefecture
-    "fmt": "json"
-}
-response = requests.get(url, params=params)
-```
-
-**Common feature types:**
-- `xian` (县) - County
-- `zhou` (州) - Prefecture
-- `fu` (府) - Superior prefecture
-- `sheng` (省) - Province
-- `dao` (道) - Circuit
-- `lu` (路) - Route
-- `jun` (郡) - Commandery
-
-**Example user requests:**
-- "Find all counties (xian) named Anqing"
-- "What prefectures existed in 1650?"
-- "Search for superior prefectures (fu) in Jiangsu"
-
-### 4. Hierarchical Searches
-
-Search for places within a specific parent administrative unit.
-
-**When to use:** User specifies a place within a broader geographic region.
-
-**Approach:**
-```python
-# Search within a parent unit
-params = {
-    "n": "ningbo",
-    "ipar": "zhejiang",  # Immediate parent
-    "yr": "1850",
-    "fmt": "json"
-}
-response = requests.get(url, params=params)
-```
-
-**Example user requests:**
-- "Find places named Xiaoshan in Zhejiang province"
-- "What counties were in Yunnan in 1800?"
-- "Search for administrative units under Jiangnan"
-
-### 5. Retrieve Specific Records by ID
-
-Fetch a complete record when the unique TGAZ ID is known.
-
-**When to use:** User provides or you've discovered a specific TGAZ ID.
-
-**Approach:**
-```python
-# Retrieve specific record as JSON
-tgaz_id = "hvd_32180"
-url = f"https://chgis.hudci.org/tgaz/placename/json/{tgaz_id}"
-response = requests.get(url)
-```
-
-**Important:** For ID-based lookups, the output format is specified in the URL path (`/json/` or `/xml/`), NOT as a query parameter. The `?fmt=json` parameter only works with the faceted search endpoint.
-
-**Available format paths:**
-- `/placename/json/{id}` — JSON format
-- `/placename/xml/{id}` — XML format
-- `/placename/rdf/{id}` — RDF format
-- `/placename/{id}` — HTML format (default)
-
-**ID format:** TGAZ IDs use the prefix `hvd_` (e.g., CHGIS ID 32180 becomes TGAZ ID hvd_32180)
-
-## Search Strategy Best Practices
-
-### Start Broad, Then Narrow
-
-Begin with simple queries and add parameters progressively:
-
-1. **First attempt:** Basic placename only
-   ```python
-   params = {"n": "guangzhou", "fmt": "json"}
-   ```
-
-2. **If too many results:** Add year
-   ```python
-   params = {"n": "guangzhou", "yr": "1820", "fmt": "json"}
-   ```
-
-3. **If still ambiguous:** Add feature type or parent
-   ```python
-   params = {"n": "guangzhou", "yr": "1820", "ftyp": "fu", "fmt": "json"}
-   ```
-
-### Search Matching Behavior
-
-The API uses **prefix matching** (wildcard suffix). For example, `n=beijing` matches "北京路", "北京行省", "北井县" (Pinyin "Beijing Xian"), etc. This means:
-- Short search terms return more results (broader matching)
-- More specific terms narrow results (e.g., `n=beijing lu` for 北京路)
-
-### Handling Chinese Characters
-
-**Always use UTF-8 encoding directly:**
-- ✅ Correct: `"n": "北京"`
-- ❌ Wrong: URL-encoding Chinese characters into hex strings
-
-**The API accepts both Chinese and Romanized names:**
-- `"n": "beijing"` and `"n": "北京"` both work
-- Try both if one doesn't return expected results
-
-### Format Preferences
-
-**Always request JSON format** for easier parsing:
-```python
-params = {"n": "place_name", "fmt": "json"}
-```
-
-Without `fmt=json`, the API returns XML by default.
-
-## Interpreting Results
-
-### Multiple Results
-
-Faceted searches often return multiple records because:
-- Places had the same name in different locations
-- Administrative status changed over time
-- Names were reused across different periods
-
-**Approach:** Present all relevant results to the user or ask for clarification.
-
-### Understanding Response Fields
-
-**Faceted search results** include these fields per placename:
-- `sys_id` / `uri` — unique identifier and link
-- `name` / `transcription` — Chinese name and Pinyin
-- `years` — temporal span (e.g., "1367 ~ 1911")
-- `parent sys_id` / `parent name` — parent administrative unit
-- `feature type` — administrative type with Chinese and Romanized names
-- `xy coordinates` — geographic coordinates
-
-**Canonical lookup results** additionally include:
-- `spellings` — multiple written forms and transcriptions
-- `temporal.begin` / `temporal.end` — exact year range
-- `spatial.present_location` — modern equivalent location
-- `historical_context.part of` — full administrative hierarchy over time
-
-### No Results
-
-If a search returns no results, try:
-1. Alternative spellings or transcriptions
-2. Broader search (remove year or feature type constraints)
-3. Search in Chinese characters if using Romanization (or vice versa)
-4. Verify the year is within valid range (-222 to 1911)
-
-## Common Patterns
-
-### Pattern 1: Historical Research Query
-
-User asks about a place in a historical context.
+Use `scripts/tgaz_api.py` for programmatic access (zero dependencies):
 
 ```python
-# Example: "What was Yangzhou during the Qing dynasty?"
-params = {
-    "n": "yangzhou",
-    "yr": "1750",  # Mid-Qing approximate year
-    "fmt": "json"
-}
+from scripts.tgaz_api import TGAZAPI
+api = TGAZAPI()
+
+# Faceted search
+results = api.search("suzhou", year=1820)
+results = api.search("北京", feature_type="fu")
+
+# ID lookup (correct URL format handled automatically)
+record = api.get_by_id("hvd_32180")
+
+# Extract structured data
+name = api.get_name(record)                    # Chinese name
+transcription = api.get_transcription(record)  # Romanized
+begin, end = api.get_temporal_span(record)     # Year range
+modern = api.get_modern_location(record)       # Present-day equivalent
+ftype = api.get_feature_type(record)           # Administrative type
+subs = api.get_subordinates(record)            # Child units (reliable!)
+
+# Formatted summary
+print(api.summarize(record))
 ```
 
-### Pattern 2: Administrative Hierarchy Query
+## Quick Reference
 
-User wants to understand administrative structure.
+**Faceted search:**
+```
+https://chgis.hudci.org/tgaz/placename?n=suzhou&yr=1820&fmt=json
+```
+
+Parameters:
+- `n` — placename (Chinese or Romanized, required)
+- `yr` — historical year (-222 to 1911)
+- `ftyp` — administrative type: `xian` (县), `fu` (府), `zhou` (州), `sheng` (省), `dao` (道), `lu` (路), `jun` (郡)
+- `ipar` — parent unit (⚠️ unreliable — prefer canonical record drill-down)
+- `fmt` — output format (`json` recommended; default is XML)
+
+**ID lookup** (format in URL path):
+- `/placename/json/{id}` — JSON
+- `/placename/xml/{id}` — XML
+- `/placename/rdf/{id}` — RDF
+
+## Hierarchical Queries (Recommended Approach)
+
+Since `ipar` is unreliable, use this pattern for "find all X in Y" queries:
+
+1. Search for the parent region to get its TGAZ ID
+2. Look up the parent's canonical record via `/placename/json/{id}`
+3. Read the `historical_context.has parts` field for subordinate units
+4. Filter subordinates by year range and feature type
 
 ```python
-# Example: "What were the counties in Jiangsu in 1850?"
-# First get Jiangsu, then search with it as parent
-params = {
-    "n": "jiangsu",
-    "yr": "1850",
-    "ftyp": "sheng",
-    "fmt": "json"
-}
+api = TGAZAPI()
+# Find Zhejiang
+results = api.search("zhejiang", year=1850, feature_type="sheng")
+zhejiang_id = results[0]["sys_id"]  # e.g., hvd_30015
 
-# Then search for counties
-params = {
-    "ipar": "jiangsu",
-    "yr": "1850",
-    "ftyp": "xian",
-    "fmt": "json"
-}
+# Get canonical record with subordinates
+record = api.get_by_id(zhejiang_id)
+subordinates = api.get_subordinates(record)
+
+# Filter to active units in 1850
+for sub in subordinates:
+    # Check temporal range overlaps with 1850
+    ...
 ```
 
-### Pattern 3: Verification Query
+## Encoding
 
-User wants to verify a place name or identification.
+- Pass Chinese characters as UTF-8 directly: `"n": "北京"` ✅
+- Do not URL-encode Chinese into hex ❌
+- URL-encode spaces and special characters normally
 
-```python
-# Example: "Is this the correct ID for Beijing?"
-tgaz_id = "hvd_12345"
-url = f"https://chgis.hudci.org/tgaz/placename/json/{tgaz_id}"
-response = requests.get(url)
-```
+## Related Skills
+
+- **cbdb-api**: Cross-reference CBDB address data with TGAZ placenames to map historical figures to locations
+- **wikidata-search**: Find Wikidata entries for historical places identified in TGAZ
 
 ## Resources
 
-### API Reference Documentation
-
-Detailed API specifications, query parameters, and examples are available in:
-- `references/api_reference.md` - Complete API documentation
-
-**When to read the reference:** 
-- When encountering unfamiliar query patterns
-- For complete list of feature types
-- When needing detailed parameter specifications
-- For troubleshooting response formats
-
-## Example Code Template
-
-```python
-import requests
-
-def search_tgaz(placename, year=None, feature_type=None, parent=None):
-    """
-    Search CHGIS TGAZ for historical placenames.
-    
-    Args:
-        placename: Name of place (Chinese or Romanized)
-        year: Historical year (-222 to 1911)
-        feature_type: Admin type (xian, fu, zhou, etc.)
-        parent: Parent administrative unit
-    
-    Returns:
-        JSON response from API
-    """
-    url = "https://chgis.hudci.org/tgaz/placename"
-    
-    params = {"n": placename, "fmt": "json"}
-    
-    if year:
-        params["yr"] = str(year)
-    if feature_type:
-        params["ftyp"] = feature_type
-    if parent:
-        params["ipar"] = parent
-    
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    
-    return response.json()
-
-def get_placename_by_id(tgaz_id):
-    """
-    Retrieve specific placename record by TGAZ ID.
-
-    Args:
-        tgaz_id: TGAZ unique identifier (format: hvd_XXXXX)
-
-    Returns:
-        JSON response from API
-    """
-    url = f"https://chgis.hudci.org/tgaz/placename/json/{tgaz_id}"
-
-    response = requests.get(url)
-    response.raise_for_status()
-
-    return response.json()
-
-# Example usage
-results = search_tgaz("beijing", year=1800)
-specific_record = get_placename_by_id("hvd_32180")
-```
-
-## Tips for Effective Use
-
-1. **Default to JSON format** - Always include `"fmt": "json"` for easier parsing
-2. **Start simple** - Begin with just the placename, add filters if needed
-3. **Consider time period** - Historical names changed; try different years
-4. **Try both scripts** - Search in both Chinese characters and Romanization
-5. **Check valid years** - Ensure years are within -222 to 1911
-6. **Present options** - When multiple results exist, show them to the user
-7. **Explain context** - Help users understand why multiple records exist
-8. **Handle errors gracefully** - No results doesn't mean wrong query; try variations
+- `references/api_reference.md` — Complete endpoint specs, all parameters, response field details
+- `scripts/tgaz_api.py` — Python client with correct URL handling and hierarchical query support

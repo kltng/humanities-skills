@@ -1,0 +1,43 @@
+{
+  "skill_name": "cbdb-api",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Look up Su Shi (蘇軾) in CBDB and tell me about his official positions and social relationships",
+      "expected_output": "Biographical info for Su Shi including official positions and social relationships extracted from CBDB API JSON response",
+      "files": [],
+      "expectations": [
+        "The API was queried using Chinese characters 蘇軾 (not URL-encoded hex)",
+        "The response was parsed correctly — BasicInfo, PostingInfo, and SocialAssocInfo data extracted",
+        "Official positions are listed with names and/or years",
+        "Social relationships are listed with names and relationship types",
+        "The output includes dynasty context (Song/宋)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I have CBDB person ID 1762 — can you pull up their biographical info and tell me what dynasty they lived in?",
+      "expected_output": "Biographical info for person ID 1762 with dynasty information",
+      "files": [],
+      "expectations": [
+        "The API was queried using id=1762 parameter",
+        "JSON format was requested (o=json)",
+        "The person is identified as Wang Anshi (王安石)",
+        "The dynasty is clearly stated (Song/宋/Northern Song/北宋)",
+        "Birth and death years are included (1021-1086)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find information about a historical Chinese scholar named Wang Anshi using the CBDB database",
+      "expected_output": "Biographical data for Wang Anshi from CBDB, potentially handling multiple results",
+      "files": [],
+      "expectations": [
+        "The API was queried with the name Wang Anshi (Pinyin or Chinese characters)",
+        "JSON format was requested (o=json)",
+        "The correct Wang Anshi (王安石) was identified from results",
+        "Key biographical details were presented (dates, dynasty, positions)"
+      ]
+    }
+  ]
+}

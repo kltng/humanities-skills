@@ -1,0 +1,58 @@
+{
+  "skill_name": "harvard-library-catalog",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I found a reference to a book called 'The Great Gatsby' by F. Scott Fitzgerald in an old syllabus. Can you look it up in Harvard's library catalog and get me the full bibliographic details — ISBN, publisher, date, subjects?",
+      "expected_output": "Bibliographic record(s) for The Great Gatsby from LibraryCloud with ISBN, publisher, date, and subject headings",
+      "files": [],
+      "expectations": [
+        "LibraryCloud Item API was queried (api.lib.harvard.edu/v2/items)",
+        "JSON format was requested (.json extension or Accept header)",
+        "Title and/or author were used as search parameters",
+        "At least one matching record was found and presented",
+        "Bibliographic details include publisher, date, and at least one subject term",
+        "An ISBN or other identifier is included in the results"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need to find Chinese rare books in Harvard's collection — specifically woodblock-printed texts from before 1800. Can you search for these and tell me what genres and languages are represented?",
+      "expected_output": "Search results for Chinese rare books with faceted breakdown by genre and language",
+      "files": [],
+      "expectations": [
+        "LibraryCloud was queried with relevant search terms (Chinese rare books, woodblock, etc.)",
+        "Results were filtered or searched to focus on pre-1800 materials",
+        "Facets or categorization by genre is presented",
+        "Language distribution is shown (Chinese should dominate)",
+        "Multiple records are listed with titles"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I have a HOLLIS number 011557057 from an old Harvard catalog card. Can you pull up the full record and tell me what book this is?",
+      "expected_output": "Full catalog record for HOLLIS 011557057 identified as 'The Ruby Programming Language' by David Flanagan",
+      "files": [],
+      "expectations": [
+        "PRESTO endpoint was used to retrieve the record (webservices.lib.harvard.edu/rest/)",
+        "The book was correctly identified as 'The Ruby Programming Language'",
+        "Author David Flanagan is mentioned",
+        "Publisher (O'Reilly) and/or date (2008) are included",
+        "The record format used was MARC, MODS, or Dublin Core"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Search Harvard's library for works about the Silk Road published between 1990 and 2010 that are available online. How many are there, and what are the top subjects?",
+      "expected_output": "Search results for Silk Road works (1990-2010) with online availability filter and subject breakdown",
+      "files": [],
+      "expectations": [
+        "LibraryCloud was queried with subject or keyword 'Silk Road'",
+        "Date range filtering was applied (dates.start/dates.end or dateIssued)",
+        "Online availability was filtered (isOnline=true or similar)",
+        "A count of matching records is provided",
+        "Subject terms or facets are listed showing thematic distribution"
+      ]
+    }
+  ]
+}

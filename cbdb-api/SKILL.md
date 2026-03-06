@@ -1,7 +1,7 @@
 ---
 name: cbdb-api
 description: Query the China Biographical Database (CBDB) API to retrieve comprehensive biographical data about historical Chinese figures. Use this skill when searching for information about Chinese historical figures, scholars, officials, or literary figures from the 7th century BCE through the 19th century CE. Applicable for queries about biographical details, social relationships, official positions, or when users mention specific Chinese names or CBDB person IDs.
-version: 1.0.0
+version: 1.1.0
 license: MIT
 creator: AI
 author: Kwok-leong Tang
@@ -12,230 +12,88 @@ contributors:
 
 # CBDB API
 
-## Overview
+Query the China Biographical Database (~500K historical Chinese figures, 7th c. BCE–19th c. CE).
 
-The China Biographical Database (CBDB) is a comprehensive relational database containing biographical information about approximately 500,000 individuals from Chinese history, primarily from the 7th century BCE through the 19th century CE. The CBDB API provides access to this rich biographical data through simple HTTP queries.
+## Critical: Things Claude Won't Know Without This Skill
 
-This skill enables querying the CBDB API to retrieve detailed information about historical Chinese figures including their names, dates, places, social relationships, official positions, and literary works.
+**API endpoint:**
+```
+https://cbdb.fas.harvard.edu/cbdbapi/person.php
+```
 
-## When to Use This Skill
+**Response structure is deeply nested:**
+```
+response["Package"]["PersonAuthority"]["PersonInfo"]["Person"]
+```
+The Person object contains: `BasicInfo`, `AltNameInfo`, `AddrInfo`, `EntryInfo`, `PostingInfo`, `SocialAssocInfo`, `KinshipInfo`.
 
-Use the CBDB API skill when:
+**Encoding:** Pass Chinese characters as UTF-8 directly — do not URL-encode into hex.
 
-- User asks about a historical Chinese figure or scholar
-- User mentions a Chinese name (in characters or Pinyin) from pre-modern China
-- User requests biographical information about Chinese officials, literati, or historical persons
-- User has a CBDB person ID and wants to retrieve associated data
-- User asks about relationships between historical Chinese figures
-- User requests information about official positions, titles, or appointments in Chinese history
-- Research involves Chinese biographical data, prosopography, or social network analysis
+## Python Script
 
-## Quick Start
+Use `scripts/cbdb_api.py` for programmatic access (zero dependencies):
 
-### Basic Query Process
+```python
+from scripts.cbdb_api import CBDBAPI
+api = CBDBAPI()
 
-1. **Identify the query type**: Determine if searching by person ID or by name
-2. **Choose output format**: Select JSON (most common), XML, or HTML
-3. **Construct the URL**: Build the API query with appropriate parameters
-4. **Fetch the data**: Use web_fetch to retrieve the biographical information
-5. **Parse and present**: Extract relevant information and present to user
+# By name (Chinese or Pinyin)
+person = api.query_by_name("蘇軾")
+person = api.query_by_name("Wang Anshi")
 
-### Example Queries
+# By ID (most precise)
+person = api.query_by_id(1762)
+
+# Extract structured data
+basic = api.get_basic_info(person)      # name, dates, dynasty
+postings = api.get_postings(person)     # official positions
+assocs = api.get_social_associations(person)  # social network
+kinship = api.get_kinship(person)       # family relations
+alt_names = api.get_alt_names(person)   # courtesy name, pen name, etc.
+
+# Formatted summary
+print(api.summarize(person))
+```
+
+The script handles rate limiting, retries, and the nested JSON navigation automatically.
+
+## Quick Reference
 
 **Query by Chinese name:**
 ```
-https://cbdb.fas.harvard.edu/cbdbapi/person.php?name=王安石&o=json
+https://cbdb.fas.harvard.edu/cbdbapi/person.php?name=蘇軾&o=json
 ```
 
-**Query by Pinyin name:**
+**Query by Pinyin:** (URL-encode spaces only)
 ```
 https://cbdb.fas.harvard.edu/cbdbapi/person.php?name=Wang%20Anshi&o=json
 ```
 
-**Query by CBDB ID:**
+**Query by ID:** (most precise)
 ```
 https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=1762&o=json
 ```
 
-## Workflow
+**Priority:** ID > Chinese characters > Pinyin (Pinyin may return multiple matches).
 
-### Step 1: Determine Query Parameters
+## Handling Results
 
-**If user provides CBDB ID:**
-- Use ID-based query (most precise)
-- Format: `?id={person_id}&o=json`
+**Multiple results from Pinyin queries:** Check dynasty, dates, or other context to identify the correct person. If ambiguous, present options to the user.
 
-**If user provides Chinese name:**
-- Use name-based query with Chinese characters
-- Pass Chinese characters as UTF-8 (HTTP clients like `requests` handle encoding automatically)
-- Format: `?name={chinese_name}&o=json`
-
-**If user provides Pinyin/romanized name:**
-- Use name-based query with Pinyin
-- URL-encode spaces as %20
-- Format: `?name={pinyin_name}&o=json`
-- Note: May return multiple results if names are similar
-
-### Step 2: Select Output Format
-
-**Recommended: JSON format (`&o=json`)**
-- Easiest to parse programmatically
-- Well-structured data
-- Use for most queries
-
-**Alternative: XML format (`&o=xml`)**
-- Use when XML structure is specifically needed
-- Suitable for data interchange with XML-based systems
-
-**Alternative: HTML format (default, no `&o` parameter)**
-- Use when displaying directly to user in a browser
-- Not recommended for programmatic extraction
-
-### Step 3: Construct and Execute Query
-
-1. Build the complete URL with proper encoding
-2. Use the `web_fetch` tool to retrieve the data
-3. Handle the response based on format selected
-
-**Example implementation:**
-```
-# For Chinese name query
-url = "https://cbdb.fas.harvard.edu/cbdbapi/person.php?name=蘇軾&o=json"
-
-# For Pinyin name query  
-url = "https://cbdb.fas.harvard.edu/cbdbapi/person.php?name=Su%20Shi&o=json"
-
-# For ID query
-url = "https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=6191&o=json"
-```
-
-### Step 4: Parse and Present Results
-
-The JSON response has a nested structure. Navigate it as follows:
-
-```
-response["Package"]["PersonAuthority"]["PersonInfo"]["Person"]
-```
-
-The `Person` object contains these sections:
-
-- **`BasicInfo`**: PersonId, EngName, ChName, IndexYear, Gender, YearBirth, YearDeath, Dynasty, EraBirth, EraDeath, YearsLived, Notes
-- **`PersonSources`**: Source references with URLs
-- **`AltNameInfo`**: Alternative names (courtesy name 字, pen name 號, etc.)
-- **`AddrInfo`**: Associated places and addresses
-- **`EntryInfo`**: Examination entries and ranks
-- **`PostingInfo`**: Official positions and appointments
-- **`SocialAssocInfo`**: Social relationships (family, teachers, students, etc.)
-
-Present the information in a clear, organized format appropriate to the user's query.
-
-## Best Practices
-
-### URL Encoding
-
-- Spaces in Pinyin names should be encoded as `%20`
-- Chinese characters should be passed as UTF-8 (most HTTP clients handle this automatically)
-- Use proper encoding functions in bash or Python when constructing URLs
-
-### Handling Ambiguous Results
-
-When querying by name (especially Pinyin):
-- Results may include multiple people with similar names
-- Check the response carefully for the correct individual
-- Consider dates, dynasty, or other contextual information to identify the right person
-- If ambiguous, present multiple matches to the user and ask for clarification
-
-### Preferred Query Methods
-
-**Priority order:**
-1. **CBDB ID** (when known) - most precise, fastest
-2. **Chinese characters** - more accurate than Pinyin
-3. **Pinyin/romanization** - convenient but may be ambiguous
-
-### Error Handling
-
-When a person is not found, the API returns:
+**Error response:**
 ```json
 {"error": {"code": 404, "message": "Person not found."}}
 ```
+Try alternative name forms (Chinese vs Pinyin), check spelling, or try courtesy names (字, 號).
 
-If a query returns no results:
-- Try alternative name forms (Chinese vs. Pinyin)
-- Check for spelling variations in romanization
-- Consider alternative names or courtesy names (字, 號)
-- Inform user that the person may not be in CBDB or may be listed under a different name
+**BasicInfo fields:** `PersonId`, `EngName`, `ChName`, `IndexYear`, `Gender`, `YearBirth`, `YearDeath`, `Dynasty`, `Notes`
 
-## Data Interpretation
+## Related Skills
 
-### Dates in CBDB
-
-- Dates are typically given in Chinese calendar format
-- May include reign periods and cyclical year designations
-- Some dates are approximate or have ranges
-- Always present dates with appropriate uncertainty indicators
-
-### Dynasty Context
-
-CBDB covers multiple dynasties and periods. Always provide dynastic context when presenting biographical information as it helps users understand the historical timeframe.
-
-### Relationships and Social Networks
-
-CBDB contains extensive relationship data. When presenting relationships:
-- Specify the type of relationship (family, teacher-student, colleague, etc.)
-- Include relevant dates for the relationship when available
-- Note the direction of the relationship (who is teacher, who is student, etc.)
-
-## Example Code Template
-
-```python
-import requests
-
-def query_cbdb(name=None, person_id=None):
-    """
-    Query the CBDB API for biographical data.
-
-    Args:
-        name: Person's name (Chinese or Pinyin)
-        person_id: CBDB person ID (integer)
-
-    Returns:
-        Person data dict, or None if not found
-    """
-    url = "https://cbdb.fas.harvard.edu/cbdbapi/person.php"
-    params = {"o": "json"}
-
-    if person_id:
-        params["id"] = person_id
-    elif name:
-        params["name"] = name
-    else:
-        raise ValueError("Provide either name or person_id")
-
-    response = requests.get(url, params=params)
-    data = response.json()
-
-    if "error" in data:
-        return None
-
-    return data["Package"]["PersonAuthority"]["PersonInfo"]["Person"]
-
-# Example usage
-person = query_cbdb(name="蘇軾")
-if person:
-    basic = person["BasicInfo"]
-    print(f"{basic['ChName']} ({basic['EngName']})")
-    print(f"Dynasty: {basic['Dynasty']}, {basic['YearBirth']}-{basic['YearDeath']}")
-```
+- **chgis-tgaz**: Look up birthplaces or associated locations from CBDB's `AddrInfo` in the CHGIS Temporal Gazetteer
+- **wikidata-search**: Cross-reference CBDB figures with Wikidata for external identifiers (VIAF, LoC, etc.)
 
 ## Resources
 
-### references/api_reference.md
-
-Contains detailed API documentation including:
-- Complete endpoint specifications
-- All query parameters with examples
-- Response data structure details
-- Additional query examples
-- Comprehensive best practices
-
-Load this reference when needing detailed technical information about API calls, troubleshooting queries, or understanding response data structures.
+- `references/api_reference.md` — Complete endpoint specs, all parameters, response structure details
+- `scripts/cbdb_api.py` — Python client with rate limiting and structured data extraction

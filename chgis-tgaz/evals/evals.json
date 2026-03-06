@@ -1,0 +1,42 @@
+{
+  "skill_name": "chgis-tgaz",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "What was the administrative status of Suzhou in 1820? Search the CHGIS temporal gazetteer",
+      "expected_output": "TGAZ records for Suzhou filtered to year 1820, showing administrative type",
+      "files": [],
+      "expectations": [
+        "The correct API domain was used (chgis.hudci.org, NOT maps.cga.harvard.edu)",
+        "JSON format was requested (fmt=json)",
+        "The administrative type (feature type) is stated — fu/府/Superior Prefecture",
+        "Results include temporal span or year information"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Look up TGAZ record hvd_32180 and tell me about the place — what's the modern equivalent?",
+      "expected_output": "Full record for hvd_32180 retrieved via the correct URL path format",
+      "files": [],
+      "expectations": [
+        "The ID lookup used the URL path format /placename/json/hvd_32180 (NOT query params)",
+        "The correct domain was used (chgis.hudci.org)",
+        "The place name is identified (Wu Zhou / 婺州)",
+        "Modern equivalent is provided (Jinhua / 金华)",
+        "Temporal span is included (758-1275 or similar)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find all the counties (xian) in Zhejiang province around 1850 using CHGIS",
+      "expected_output": "List of counties within Zhejiang from TGAZ, whether via faceted search or hierarchical drill-down",
+      "files": [],
+      "expectations": [
+        "The correct API domain was used (chgis.hudci.org)",
+        "A year around 1850 was used to filter results",
+        "Counties are listed with names and/or TGAZ IDs",
+        "Multiple county results are presented (Zhejiang had ~75 counties in 1850)"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "skill_name": "wikidata-search",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Search Wikidata for the philosopher Zhu Xi (朱熹) and get his external identifiers like VIAF and Library of Congress IDs",
+      "expected_output": "Wikidata entity for Zhu Xi with external identifiers extracted",
+      "files": [],
+      "expectations": [
+        "A search was performed to find Zhu Xi's QID (Q9397)",
+        "Entity details were retrieved using wbgetentities or Special:EntityData",
+        "VIAF ID (P214) was extracted and presented with a value",
+        "Library of Congress ID (P244) was extracted and presented with a value",
+        "The correct entity was identified (Song dynasty philosopher, 1130-1200)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use SPARQL to find all items on Wikidata that are instances of 'Chinese dynasty' (Q12857432)",
+      "expected_output": "SPARQL query results listing Chinese dynasties from Wikidata",
+      "files": [],
+      "expectations": [
+        "A SPARQL query was sent to query.wikidata.org/sparql",
+        "The query uses P31 (instance of) with Q12857432",
+        "The API returned a successful response (not a 403 or error)",
+        "Multiple dynasty results are listed with labels (e.g., Han, Tang, Song, Ming)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I'm looking for Wikidata items related to 'historical Chinese cartography' — try a semantic search",
+      "expected_output": "Semantic/vector search results from the Wikidata Vector DB",
+      "files": [],
+      "expectations": [
+        "The Wikidata Vector DB endpoint (wd-vectordb.wmcloud.org) was used",
+        "The API returned a successful response (not a 403 or error)",
+        "Results include QIDs and similarity or relevance scores",
+        "Multiple relevant items are returned (e.g., historical maps, cartographers)"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Look up Su Shi (蘇軾) in CBDB to get his biographical data and birthplace, then find his birthplace Meishan in the CHGIS temporal gazetteer, and finally get his Wikidata external identifiers",
+      "expected_output": "Cross-referenced data from all three databases: CBDB biography, TGAZ place record, Wikidata identifiers",
+      "files": [],
+      "expectations": [
+        "CBDB API was queried and Su Shi's biographical data was retrieved",
+        "A TGAZ search was performed for Meishan (眉山 or meishan)",
+        "Wikidata was searched for Su Shi and external identifiers were extracted",
+        "Data from all three sources is presented together coherently"
+      ]
+    }
+  ]
+}

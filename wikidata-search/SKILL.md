@@ -1,224 +1,108 @@
 ---
 name: wikidata-search
 description: Search for items and properties on Wikidata and retrieve entity details, claims, and external identifiers. Supports both keyword search (Wikidata Action API) and semantic/hybrid search (Wikidata Vector Database), plus direct entity retrieval (Special:EntityData) and structured querying (WDQS SPARQL).
+version: 1.1.0
 ---
 
 # Wikidata Search Skill
 
 Search and retrieve data from Wikidata, the free knowledge base.
 
-## Choosing An Access Method
+## Critical: Things Claude Won't Know Without This Skill
 
-Use the method that matches the task to reduce load and improve accuracy:
+### Wikidata Vector Database (semantic search)
 
-- Keyword search by label/alias/description: Action API `wbsearchentities`
-- Semantic exploration / fuzzy concept search: Wikidata Vector Database (hybrid vector + keyword via RRF)
-- Fetch a known entity's current JSON quickly: Special:EntityData
-- Complex graph relations / reporting: Wikidata Query Service (WDQS) SPARQL
+This is the highest-value feature of this skill. The **Wikidata Vector Database** at `wd-vectordb.wmcloud.org` provides semantic/hybrid search over all Wikidata items — something you can't do with the standard Action API or SPARQL.
 
-## API Endpoints
+**A descriptive `User-Agent` header is required or you get 403.**
 
-Base URL: `https://www.wikidata.org/w/api.php`
-
-Entity JSON (often faster for current state): `https://www.wikidata.org/wiki/Special:EntityData/{ID}.json`
-
-SPARQL endpoint: `https://query.wikidata.org/sparql`
-
-Vector DB API: `https://wd-vectordb.wmcloud.org`
-
-## Core Functions
-
-### 1. Search Items (wbsearchentities)
-
-Search for entities by label or alias.
-
-```bash
-curl 'https://www.wikidata.org/w/api.php?action=wbsearchentities&search=QUERY&language=en&format=json&type=item&limit=10'
-```
-
-Parameters:
-- `search`: Search term (required)
-- `language`: Language code (default: en)
-- `type`: `item` (Q-entities) or `property` (P-entities)
-- `limit`: Max results (1-50, default: 7)
-- `continue`: Offset for pagination
-
-Response fields per result:
-- `id`: Entity ID (e.g., Q42)
-- `label`: Primary label
-- `description`: Short description
-- `aliases`: Alternative names
-- `url`: Wikidata page URL
-- `display`: Structured label/description with language info
-- `match`: What matched the search (label, alias, or description)
-
-### 2. Get Entity Details (wbgetentities)
-
-Retrieve full entity data including claims/identifiers.
-
-```bash
-curl 'https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q42&format=json&props=labels|descriptions|aliases|claims'
-```
-
-Parameters:
-- `ids`: Pipe-separated entity IDs (max 50)
-- `props`: `labels|descriptions|aliases|claims|sitelinks|info`
-- `languages`: Filter languages (e.g., `en|fr|de`)
-
-### 3. Get Claims Only (wbgetclaims)
-
-Retrieve claims for specific entity/property.
-
-```bash
-curl 'https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=Q42&property=P31&format=json'
-```
-
-### 4. Semantic / Hybrid Search (Wikidata Vector Database)
-
-When you don't know the exact label, or want "things like this" discovery, use the Vector DB.
-
-**Important:** A descriptive `User-Agent` header is required. Requests without one will be rejected with `403`.
-
-Item search:
 ```bash
 curl -H 'User-Agent: WikidataSearchSkill/1.0 (contact: you@example.com)' \
-  'https://wd-vectordb.wmcloud.org/item/query/?query=QUERY&lang=all&K=20'
+  'https://wd-vectordb.wmcloud.org/item/query/?query=historical+Chinese+cartography&lang=all&K=20'
 ```
 
-Property search:
-```bash
-curl -H 'User-Agent: WikidataSearchSkill/1.0 (contact: you@example.com)' \
-  'https://wd-vectordb.wmcloud.org/property/query/?query=QUERY&lang=all&K=20&exclude_external_ids=false'
-```
+Response includes `QID`, `similarity_score`, `rrf_score`, and `source` (vector vs keyword).
 
-Optional parameters:
-- `lang`: language code, or `all` for cross-language
-- `K`: number of results
-- `instanceof`: comma-separated QIDs to filter items by "instance of"
-- `rerank`: `true|false` (slower)
+Property search: replace `/item/query/` with `/property/query/`.
 
-Response fields:
-- `QID` / `PID`
-- `similarity_score`
-- `rrf_score`
-- `source`
+Optional params: `lang`, `K` (result count), `instanceof` (comma-separated QIDs), `rerank`.
 
-### 5. Direct Entity JSON (Special:EntityData)
-
-```bash
-curl 'https://www.wikidata.org/wiki/Special:EntityData/Q42.json?flavor=simple'
-```
-
-`flavor`:
-- `simple`: truthy statements + sitelinks/version
-- `full`: full data
-
-### 6. Structured Queries (WDQS SPARQL)
+### WDQS SPARQL also requires User-Agent
 
 ```bash
 curl -G 'https://query.wikidata.org/sparql' \
-  --data-urlencode 'query=SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5' \
+  --data-urlencode 'query=SELECT ?item ?label WHERE { ?item wdt:P31 wd:Q12857432 . ?item rdfs:label ?label . FILTER(LANG(?label)="en") }' \
   -H 'Accept: application/sparql-results+json' \
   -H 'User-Agent: WikidataSearchSkill/1.0 (contact: you@example.com)'
 ```
 
-**Note:** A descriptive `User-Agent` header is required for WDQS as well.
+### External identifiers live in claims
 
-## Extracting External Identifiers
-
-External identifiers are stored as claims with datatype `external-id`. Common identifier properties:
-
-| Property | Name                   | Example                |
-| -------- | ---------------------- | ---------------------- |
-| P214     | VIAF ID                | 75121530               |
-| P227     | GND ID                 | 119033364              |
-| P244     | Library of Congress ID | n79023811              |
-| P213     | ISNI                   | 0000 0001 2144 9326    |
-| P345     | IMDb ID                | nm0001354              |
-| P646     | Freebase ID            | /m/0282x               |
-| P349     | NDL ID                 | 00621256               |
-| P268     | BnF ID                 | 11888092r              |
-| P269     | IdRef ID               | 026927608              |
-| P906     | SELIBR ID              | 182099                 |
-| P396     | SBN author ID          | IT\\ICCU\\CFIV\\000163 |
-
-To extract identifiers from `wbgetentities` response:
 ```python
-# claims = response['entities']['Q42']['claims']
-# For each property P:
-#   claims[P][0]['mainsnak']['datavalue']['value'] -> identifier string
+# claims[property_id][0]["mainsnak"]["datavalue"]["value"] → identifier string
+# Common: P214 (VIAF), P244 (LoC), P227 (GND), P213 (ISNI), P268 (BnF)
 ```
 
-## Python Script Usage
+## Choosing an Access Method
 
-Use `scripts/wikidata_api.py` for programmatic access:
+| Need | Method |
+|------|--------|
+| Keyword search by label/alias | Action API `wbsearchentities` |
+| Semantic / fuzzy concept discovery | **Vector Database** (hybrid vector + keyword) |
+| Fetch a known entity's JSON | `Special:EntityData/{ID}.json` |
+| Complex graph queries / reporting | WDQS SPARQL |
+
+## Python Script
+
+Use `scripts/wikidata_api.py` for programmatic access (zero dependencies):
 
 ```python
 from scripts.wikidata_api import WikidataAPI
-
 wd = WikidataAPI()
 
-# Search for items
-results = wd.search("Albert Einstein", language="en", limit=5)
+# Keyword search
+results = wd.search("Zhu Xi", language="en", limit=5)
 
-# Get entity with identifiers
-entity = wd.get_entity("Q937", props=["labels", "descriptions", "claims"])
+# Semantic search (Vector DB) — the key differentiator
+candidates = wd.vector_search_items("historical Chinese cartography", lang="all", k=20)
 
-# Get external identifiers only (all values by default)
-identifiers = wd.get_identifiers("Q937")
-# Returns: {'P214': ['75121530', ...], 'P227': '118529579', ...}
+# Entity retrieval
+entity = wd.get_entity("Q9397", props=["labels", "descriptions", "claims"])
 
-# Semantic search (Vector DB)
-candidates = wd.vector_search_items("a famous science fiction writer", lang="en", k=5)
+# External identifiers
+ids = wd.get_identifiers("Q9397", include_labels=True)
+# → {'VIAF ID (P214)': '46768804', 'Library of Congress ID (P244)': 'n81008179', ...}
 
-# SPARQL (returns parsed JSON dict)
-results = wd.sparql_json("SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5")
+# SPARQL
+results = wd.sparql_json("SELECT ?item ?label WHERE { ?item wdt:P31 wd:Q12857432 . ?item rdfs:label ?label . FILTER(LANG(?label)='en') }")
 
-# SPARQL (returns raw bytes, for non-JSON accept types)
-raw = wd.execute_sparql("SELECT * WHERE { wd:Q42 ?p ?o } LIMIT 5")
+# Direct entity JSON (fast for current state)
+data = wd.get_entitydata("Q42", flavor="simple")
 ```
 
-## Response Handling
+## API Endpoints Quick Reference
 
-### Search Response Structure
-```json
-{
-  "searchinfo": {"search": "query"},
-  "search": [
-    {
-      "id": "Q42",
-      "label": "Douglas Adams",
-      "description": "English writer and humorist",
-      "aliases": ["Douglas Noël Adams"],
-      "url": "//www.wikidata.org/wiki/Q42"
-    }
-  ]
-}
-```
+| Endpoint | URL |
+|----------|-----|
+| Action API | `https://www.wikidata.org/w/api.php` |
+| Entity JSON | `https://www.wikidata.org/wiki/Special:EntityData/{ID}.json` |
+| SPARQL | `https://query.wikidata.org/sparql` |
+| Vector DB | `https://wd-vectordb.wmcloud.org` |
 
-### Entity Response Structure
-```json
-{
-  "entities": {
-    "Q42": {
-      "type": "item",
-      "id": "Q42",
-      "labels": {"en": {"language": "en", "value": "Douglas Adams"}},
-      "descriptions": {"en": {"language": "en", "value": "..."}},
-      "claims": {
-        "P31": [...],  // instance of
-        "P214": [{"mainsnak": {"datavalue": {"value": "113230702"}}}]  // VIAF
-      }
-    }
-  }
-}
-```
+## API Etiquette
 
-## Best Practices
+- **Rate limit**: 0.5–1s between requests
+- **User-Agent**: Required for Vector DB and WDQS (include contact info)
+- **Respect 429**: Honor `Retry-After` headers
+- **Action API**: Use `maxlag` parameter; batch with pipe-separated IDs (max 50)
+- **SPARQL**: Request only needed fields; use `LIMIT`
 
-1. **Choose the right access method**: search vs vector search vs entity fetch vs SPARQL
-2. **Rate limiting**: add 500ms-1s delay between requests
-3. **Batch requests**: use pipe-separated IDs (max 50 per `wbgetentities` call)
-4. **Set User-Agent**: include contact info in headers
-5. **Handle 429**: respect `Retry-After` and back off
-6. **Action API etiquette**: use `maxlag` and request only needed `props`
+## Related Skills
+
+- **cbdb-api**: Cross-reference Wikidata entities with CBDB biographical data for Chinese historical figures
+- **chgis-tgaz**: Look up historical places found via Wikidata in the CHGIS Temporal Gazetteer for detailed administrative history
+
+## Resources
+
+- `references/api_reference.md` — Complete API specs for all four access methods
+- `scripts/wikidata_api.py` — Full-featured Python client with rate limiting, retries, and identifier extraction
