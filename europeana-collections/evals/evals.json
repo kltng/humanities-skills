@@ -1,0 +1,44 @@
+{
+  "skill_name": "europeana-collections",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Search Europeana for open-access paintings by Vermeer. I want to see what's available with thumbnails and links to the originals.",
+      "expected_output": "Europeana search results for Vermeer paintings with open-access filter, thumbnail URLs, and provider links",
+      "files": [],
+      "expectations": [
+        "The Europeana Search API was used with wskey parameter",
+        "The query includes 'vermeer' as search term",
+        "TYPE:IMAGE or similar filter was applied",
+        "reusability=open was used to filter for open access",
+        "Multiple results are listed with titles and institutions",
+        "Thumbnail or image URLs are provided"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I'm looking for medieval manuscripts from French libraries in Europeana. Can you search for illuminated manuscripts and tell me which institutions have them?",
+      "expected_output": "Europeana search results for medieval manuscripts from France with institution breakdown",
+      "files": [],
+      "expectations": [
+        "Europeana was searched with relevant query terms",
+        "Country filter for France was applied (qf=COUNTRY:France or similar)",
+        "TYPE:TEXT filter was applied",
+        "Multiple results are listed with titles",
+        "Institution names (dataProvider) are shown"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find Chinese art or porcelain in Europeana. I'm interested in what European museums have from China.",
+      "expected_output": "Europeana search results for Chinese art/porcelain with European museum holdings",
+      "files": [],
+      "expectations": [
+        "Europeana was searched with Chinese art/porcelain terms",
+        "Multiple results from European institutions are listed",
+        "Results include titles, dates, and holding museums",
+        "Image type results are prioritized or filtered"
+      ]
+    }
+  ]
+}

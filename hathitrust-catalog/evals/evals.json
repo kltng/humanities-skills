@@ -1,0 +1,44 @@
+{
+  "skill_name": "hathitrust-catalog",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have this ISBN: 0140268863. Can you check if HathiTrust has a digitized version of this book? I'd like to know the title, which libraries have it, and whether I can read it online.",
+      "expected_output": "HathiTrust record for ISBN 0140268863 showing title, holding libraries, and access rights",
+      "files": [],
+      "expectations": [
+        "The HathiTrust Bibliographic API was queried with isbn/0140268863",
+        "The book title is identified (The Odyssey by Homer/Fagles)",
+        "At least one holding library is listed",
+        "Access rights are stated (Full View or Limited/search-only)",
+        "A link to the HathiTrust viewer is provided"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I found OCLC number 34228839 in a library catalog. Can you look it up in HathiTrust and get me the full MARC record?",
+      "expected_output": "HathiTrust full record for OCLC 34228839 with MARC-XML data",
+      "files": [],
+      "expectations": [
+        "The /full/ endpoint was used (not /brief/) to get MARC-XML",
+        "The OCLC number was used as the identifier type",
+        "The title is presented",
+        "MARC-XML data is retrieved or mentioned",
+        "ISBNs and/or publication date are included"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I have a list of ISBNs from a reading list and I want to check which ones are in HathiTrust: 0140449264, 0486411044, 0140447598. Can you batch check them?",
+      "expected_output": "Batch lookup results for 3 ISBNs showing which are in HathiTrust",
+      "files": [],
+      "expectations": [
+        "The multi-ID batch endpoint was used (or multiple individual lookups)",
+        "All 3 ISBNs were checked",
+        "For each ISBN, the result indicates whether it was found or not",
+        "Titles are shown for found records",
+        "Access rights are indicated for found records"
+      ]
+    }
+  ]
+}

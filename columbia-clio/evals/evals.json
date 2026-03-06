@@ -1,0 +1,42 @@
+{
+  "skill_name": "columbia-clio",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Search Columbia University's library catalog for books about 'Dream of the Red Chamber' in Chinese. I want to know what editions they have and where they're shelved.",
+      "expected_output": "CLIO search results for Dream of the Red Chamber with Chinese language filter, showing locations and call numbers",
+      "files": [],
+      "expectations": [
+        "The CLIO JSON API was queried (clio.columbia.edu/catalog.json)",
+        "The search included the title 'Dream of the Red Chamber' or its Chinese equivalent",
+        "Language facet was used to filter for Chinese",
+        "Results include location/call number information",
+        "Multiple editions or copies are listed"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need to find journal articles about quantum computing in Columbia's library. Can you search CLIO and filter by format?",
+      "expected_output": "CLIO search results for quantum computing filtered by journal/periodical format",
+      "files": [],
+      "expectations": [
+        "CLIO was queried with 'quantum computing' as search term",
+        "Format facet was applied (Journal/Periodical or Online)",
+        "Multiple results are listed with titles",
+        "Publication years are shown"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Look up record ID 15294398 in Columbia's CLIO catalog and tell me everything about it.",
+      "expected_output": "Full record details for CLIO ID 15294398",
+      "files": [],
+      "expectations": [
+        "The single record endpoint was used (/catalog/15294398.json)",
+        "The title is identified",
+        "Author, publisher, and date are included",
+        "Subject terms or call number are provided"
+      ]
+    }
+  ]
+}

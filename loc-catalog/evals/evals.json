@@ -1,0 +1,44 @@
+{
+  "skill_name": "loc-catalog",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Search the Library of Congress for photographs of the Civil War taken between 1861 and 1865. I want to see what's available and get some image links.",
+      "expected_output": "LOC photo search results for Civil War with date range filter and image URLs",
+      "files": [],
+      "expectations": [
+        "The LOC API was queried at loc.gov with fo=json",
+        "The photos format endpoint or original-format facet was used",
+        "Date range 1861-1865 was applied (dates parameter)",
+        "Multiple results are listed with titles",
+        "Image URLs or thumbnail links are provided",
+        "Total result count is mentioned"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I have LCCN 95521789 from a Library of Congress reference. Can you look up the full item details and get me a citation?",
+      "expected_output": "Full item detail for LCCN 95521789 with pre-formatted citation",
+      "files": [],
+      "expectations": [
+        "The item endpoint was used (/item/95521789/?fo=json)",
+        "The item title is identified",
+        "A citation is provided (APA, Chicago, or MLA format)",
+        "Contributors/creators are listed",
+        "Subject terms or description are included"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What collections does the Library of Congress have related to maps? Can you search their map collection for items about China?",
+      "expected_output": "LOC map collections and search results for China-related maps",
+      "files": [],
+      "expectations": [
+        "The LOC API was used to search maps (maps endpoint or format facet)",
+        "China was used as a search term or location facet",
+        "Multiple map results are listed",
+        "Results include dates and/or descriptions"
+      ]
+    }
+  ]
+}
