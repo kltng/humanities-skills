@@ -1,0 +1,43 @@
+{
+  "skill_name": "nlb-singapore",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Search the NLB Singapore catalog for books about Singapore history published after 2010. I want to see titles, authors, and publication dates.",
+      "expected_output": "NLB catalog search results for Singapore history with post-2010 date filter",
+      "files": [],
+      "expectations": [
+        "The NLB Catalogue API was called (openweb.nlb.gov.sg)",
+        "Authentication headers X-API-KEY and X-APP-Code were included",
+        "Keywords 'singapore history' were used in the search",
+        "Date filter was applied (DateFrom=2010 or similar)",
+        "Multiple results are listed with titles, authors, and dates"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I have ISBN 9789814385169. Can you look it up in the NLB catalog and check if it's available at any library branch?",
+      "expected_output": "NLB title details and availability info for ISBN 9789814385169",
+      "files": [],
+      "expectations": [
+        "GetTitleDetails or GetTitles was called with the ISBN",
+        "The title is identified with author and publication info",
+        "GetAvailabilityInfo was called to check branch availability",
+        "Library locations and availability status are shown",
+        "BRN is extracted from the result"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Search NLB for Chinese-language books about the Dream of the Red Chamber (红楼梦). Show me what they have.",
+      "expected_output": "NLB search results for Dream of the Red Chamber in Chinese",
+      "files": [],
+      "expectations": [
+        "NLB was searched with relevant Chinese or English title terms",
+        "Language filter for Chinese was applied if available",
+        "Results include titles with native title fields (nativeTitle)",
+        "Multiple editions or copies are listed"
+      ]
+    }
+  ]
+}
