@@ -194,6 +194,45 @@ var att = await Zotero.Attachments.importFromFile({
 return JSON.stringify({key: att.key, title: att.getField('title')});
 ```
 
+**Example — create a collection:**
+```javascript
+var col = new Zotero.Collection();
+col.libraryID = Zotero.Libraries.userLibraryID;
+col.name = 'My Collection';
+await col.saveTx();
+return JSON.stringify({key: col.key, name: col.name});
+```
+
+**Example — create a sub-collection:**
+```javascript
+var parent = await Zotero.Collections.getByLibraryAndKeyAsync(
+    Zotero.Libraries.userLibraryID, 'PARENTKEY'
+);
+if (!parent) throw new Error('Parent not found');
+var col = new Zotero.Collection();
+col.libraryID = Zotero.Libraries.userLibraryID;
+col.name = 'Sub-Collection';
+col.parentID = parent.id;
+await col.saveTx();
+return JSON.stringify({key: col.key, name: col.name});
+```
+
+**Example — delete a collection:**
+```javascript
+var col = await Zotero.Collections.getByLibraryAndKeyAsync(
+    Zotero.Libraries.userLibraryID, 'COLLKEY'
+);
+if (!col) throw new Error('Collection not found');
+await col.eraseTx();
+return JSON.stringify({deleted: true});
+```
+
+**Example — check if BBT is available:**
+```javascript
+return 'ok';
+```
+If this returns 201, BBT is installed. If 404, it is not.
+
 ### POST /connector/saveStandaloneAttachment
 
 Import a file (PDF, EPUB, etc.) as a standalone attachment. Zotero auto-recognizes PDFs/EPUBs and creates a parent item with extracted metadata.

@@ -171,6 +171,32 @@ GET http://localhost:23119/api/users/0/collections/top?format=json
 GET http://localhost:23119/api/users/0/collections/{collectionKey}/items?format=json
 ```
 
+### Create / Delete Collections (requires BBT)
+
+These operations use the Better BibTeX debug-bridge. See the "Better BibTeX" section below.
+
+```python
+z = ZoteroLocal()
+
+# Check if BBT is available
+if not z.check_bbt():
+    print("Install Better BibTeX: https://retorque.re/zotero-better-bibtex/installation/")
+
+# Create a top-level collection
+col = z.create_collection("My Research")
+# Returns: {"key": "ABCD1234", "name": "My Research"}
+
+# Create a sub-collection
+sub = z.create_collection("Chapter 1", parent_key=col["key"])
+# Returns: {"key": "EFGH5678", "name": "Chapter 1", "parentKey": "ABCD1234"}
+
+# Delete a collection (items remain in library)
+z.delete_collection("ABCD1234")
+
+# Delete a collection and trash items only in that collection
+z.delete_collection("ABCD1234", delete_items=True)
+```
+
 ### List Tags
 
 ```
@@ -253,20 +279,45 @@ result = z.import_pdf("/path/to/paper.pdf")
 # Download an attachment
 path = z.download_attachment("ATTKEY12", "/tmp/")
 
-# Attach file to existing item (requires Better BibTeX)
-z.attach_file("/path/to/paper.pdf", "ITEMKEY1")
+# Check if Better BibTeX is available
+if z.check_bbt():
+    # Attach file to existing item (requires BBT)
+    z.attach_file("/path/to/paper.pdf", "ITEMKEY1")
+
+    # Create/delete collections (requires BBT)
+    col = z.create_collection("My Collection")
+    sub = z.create_collection("Sub-Collection", parent_key=col["key"])
+    z.delete_collection(sub["key"])
 
 # Export
 bibtex = z.export_items(format="bibtex")
 ```
 
+## Better BibTeX (BBT)
+
+Some features require the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) extension, which provides a debug-bridge for executing JavaScript inside Zotero. BBT is free and open-source — any user can install it.
+
+**Features requiring BBT:**
+- Creating and deleting collections/sub-collections
+- Attaching files to existing items
+
+**Check if BBT is installed:**
+```python
+z = ZoteroLocal()
+if z.check_bbt():
+    print("BBT is available")
+else:
+    print("Install BBT: https://retorque.re/zotero-better-bibtex/installation/")
+```
+
+**Install BBT:** Download the latest `.xpi` from [BBT releases](https://retorque.re/zotero-better-bibtex/installation/), then in Zotero: Tools → Add-ons → gear icon → Install Add-on From File.
+
 ## Limitations
 
 - **No PATCH/PUT/DELETE**: The local API is read-only. Items can only be created through connector endpoints, not updated or deleted programmatically.
-- **No collection creation**: Collections cannot be created via the API.
 - **Connector write format**: `saveItems` requires `uri` and `sessionID` wrapper fields around the items array.
 - **No item templates**: The `/api/items/new?itemType=` endpoint returns empty on the local API. Use `/api/itemTypeFields?itemType=` to discover fields instead.
-- **Attach to existing item**: Requires the Better BibTeX (BBT) extension for debug-bridge access. Without BBT, use `import_pdf()` to import as a standalone item with auto-recognition instead.
+- **Collection management and file attachment**: Requires Better BibTeX (BBT) extension. Without BBT, use `import_pdf()` to import files as standalone items with auto-recognition instead.
 
 ## Resources
 

@@ -374,11 +374,63 @@ class ZoteroLocal:
         except urllib.error.HTTPError:
             return None
 
+    # ── Better BibTeX Debug Bridge ──
+
+    def _debug_bridge(self, js_code: str) -> Any:
+        """Execute JavaScript inside Zotero via the Better BibTeX debug-bridge.
+
+        Requires the Better BibTeX (BBT) extension to be installed.
+
+        Args:
+            js_code: JavaScript code to execute (runs as async function body).
+
+        Returns:
+            Parsed JSON response, or raw string if not JSON.
+
+        Raises:
+            RuntimeError: If the debug-bridge is not available or returns an error.
+        """
+        url = f"{self._connector_base.rsplit('/', 1)[0]}/debug-bridge/execute"
+        self._rate_limit()
+        req = urllib.request.Request(
+            url, data=js_code.encode("utf-8"),
+            headers={
+                "Content-Type": "application/javascript",
+                "User-Agent": "ZoteroLocalSkill/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                try:
+                    return json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    return raw
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise RuntimeError(
+                    "debug-bridge not available. Install Better BibTeX (BBT): "
+                    "https://retorque.re/zotero-better-bibtex/installation/"
+                )
+            body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+            raise RuntimeError(f"debug-bridge error ({e.code}): {body}")
+
+    def check_bbt(self) -> bool:
+        """Check if Better BibTeX is installed and the debug-bridge is available.
+
+        Returns True if BBT is available, False otherwise.
+        """
+        try:
+            self._debug_bridge("return 'ok';")
+            return True
+        except (RuntimeError, Exception):
+            return False
+
     def attach_file(self, file_path: str, parent_key: str) -> bool:
         """Attach a file to an existing Zotero item.
 
         Requires the Better BibTeX (BBT) extension for its debug-bridge.
-        Falls back to error if debug-bridge is unavailable.
 
         Args:
             file_path: Absolute path to the file.
@@ -394,7 +446,6 @@ class ZoteroLocal:
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Escape backslashes and quotes in the path for JS
         escaped_path = file_path.replace("\\", "\\\\").replace("'", "\\'")
 
         js_code = f"""
@@ -408,30 +459,97 @@ class ZoteroLocal:
         }});
         return JSON.stringify({{key: attachment.key, title: attachment.getField('title')}});
         """
+        self._debug_bridge(js_code)
+        return True
 
-        url = f"{self._connector_base.rsplit('/', 1)[0]}/debug-bridge/execute"
-        self._rate_limit()
-        req = urllib.request.Request(
-            url, data=js_code.encode("utf-8"),
-            headers={
-                "Content-Type": "application/javascript",
-                "User-Agent": "ZoteroLocalSkill/1.0",
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read()
-                return True
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                raise RuntimeError(
-                    "debug-bridge not available. Install Better BibTeX (BBT) "
-                    "to attach files to existing items. Alternatively, use "
-                    "import_pdf() to import as a standalone item with auto-recognition."
-                )
-            body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-            raise RuntimeError(f"debug-bridge error ({e.code}): {body}")
+    # ── Write: Collections (requires BBT) ──
+
+    def create_collection(self, name: str, parent_key: Optional[str] = None) -> Dict:
+        """Create a collection or sub-collection.
+
+        Requires the Better BibTeX (BBT) extension for its debug-bridge.
+
+        Args:
+            name: Collection name.
+            parent_key: Parent collection key for creating a sub-collection.
+                        Omit or None for a top-level collection.
+
+        Returns:
+            Dict with 'key' and 'name' of the created collection.
+
+        Raises:
+            RuntimeError: If the debug-bridge is not available or the parent is not found.
+        """
+        escaped_name = name.replace("\\", "\\\\").replace("'", "\\'")
+
+        if parent_key:
+            js_code = f"""
+            var parent = await Zotero.Collections.getByLibraryAndKeyAsync(
+                Zotero.Libraries.userLibraryID, '{parent_key}'
+            );
+            if (!parent) throw new Error('Parent collection not found: {parent_key}');
+            var col = new Zotero.Collection();
+            col.libraryID = Zotero.Libraries.userLibraryID;
+            col.name = '{escaped_name}';
+            col.parentID = parent.id;
+            await col.saveTx();
+            return JSON.stringify({{key: col.key, name: col.name, parentKey: '{parent_key}'}});
+            """
+        else:
+            js_code = f"""
+            var col = new Zotero.Collection();
+            col.libraryID = Zotero.Libraries.userLibraryID;
+            col.name = '{escaped_name}';
+            await col.saveTx();
+            return JSON.stringify({{key: col.key, name: col.name}});
+            """
+
+        result = self._debug_bridge(js_code)
+        if isinstance(result, str):
+            return json.loads(result)
+        return result
+
+    def delete_collection(self, collection_key: str, delete_items: bool = False) -> bool:
+        """Delete a collection.
+
+        Requires the Better BibTeX (BBT) extension for its debug-bridge.
+
+        Args:
+            collection_key: The collection key to delete.
+            delete_items: If True, also trash items that are only in this collection.
+                          If False (default), items remain in the library.
+
+        Returns:
+            True on success.
+
+        Raises:
+            RuntimeError: If the debug-bridge is not available or the collection is not found.
+        """
+        delete_items_js = "true" if delete_items else "false"
+        js_code = f"""
+        var col = await Zotero.Collections.getByLibraryAndKeyAsync(
+            Zotero.Libraries.userLibraryID, '{collection_key}'
+        );
+        if (!col) throw new Error('Collection not found: {collection_key}');
+        if ({delete_items_js}) {{
+            var childItems = col.getChildItems();
+            var toTrash = [];
+            for (var item of childItems) {{
+                var cols = item.getCollections();
+                if (cols.length <= 1) {{
+                    toTrash.push(item);
+                }}
+            }}
+            for (var item of toTrash) {{
+                item.deleted = true;
+                await item.saveTx();
+            }}
+        }}
+        await col.eraseTx();
+        return JSON.stringify({{deleted: true, key: '{collection_key}'}});
+        """
+        self._debug_bridge(js_code)
+        return True
 
     def download_attachment(self, attachment_key: str, dest_path: str) -> str:
         """Download an attachment file from Zotero to a local path.
