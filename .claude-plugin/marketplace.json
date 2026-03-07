@@ -49,6 +49,16 @@
       }
     },
     {
+      "name": "cbdb-local",
+      "source": "./cbdb-local",
+      "description": "Query the China Biographical Database locally via SQLite for 656K+ historical Chinese figures — biographical data, kinship networks, official postings, social associations, and examination records (7th c. BCE to 19th c. CE)",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
       "name": "cjk-calendar",
       "source": "./cjk-calendar",
       "description": "Convert between Chinese, Japanese, Korean, and Vietnamese lunisolar calendar dates and Gregorian/Julian dates using a local SQLite database (~220 BCE to 1945 CE)",
