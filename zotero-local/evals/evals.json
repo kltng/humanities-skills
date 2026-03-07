@@ -1,0 +1,43 @@
+{
+  "skill_name": "zotero-local",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Search my Zotero library for anything related to 'machine learning' and show me the titles, authors, and dates.",
+      "expected_output": "List of matching Zotero items with titles, creators, and dates",
+      "files": [],
+      "expectations": [
+        "The local Zotero API was queried at localhost:23119",
+        "The search endpoint was used with q=machine learning or similar",
+        "Results are displayed with titles, authors/creators, and dates",
+        "Item keys are shown for follow-up operations"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add this book to my Zotero library: 'The Printing Press as an Agent of Change' by Elizabeth Eisenstein, published by Cambridge University Press in 1979, ISBN 978-0521299558. Tag it with 'history of printing' and 'media studies'.",
+      "expected_output": "Book created in Zotero with all metadata and tags",
+      "files": [],
+      "expectations": [
+        "The connector/saveItems endpoint was used to create the item",
+        "The item type is 'book'",
+        "Title, author, publisher, date, and ISBN were all included",
+        "Tags 'history of printing' and 'media studies' were added",
+        "Success was confirmed"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I have this BibTeX entry, can you import it into my Zotero?\n\n@article{moretti2013,\n  author = {Moretti, Franco},\n  title = {Distant Reading},\n  journal = {Verso Books},\n  year = {2013},\n  pages = {1-244}\n}",
+      "expected_output": "BibTeX successfully imported into Zotero",
+      "files": [],
+      "expectations": [
+        "The connector/import endpoint was used",
+        "The BibTeX was sent as text/plain",
+        "A session parameter was included",
+        "The created item details were shown back to the user",
+        "The import returned a 201 status"
+      ]
+    }
+  ]
+}
