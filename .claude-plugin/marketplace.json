@@ -47,6 +47,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
       }
+    },
+    {
+      "name": "cjk-calendar",
+      "source": "./cjk-calendar",
+      "description": "Convert between Chinese, Japanese, Korean, and Vietnamese lunisolar calendar dates and Gregorian/Julian dates using a local SQLite database (~220 BCE to 1945 CE)",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
