@@ -48,7 +48,7 @@ python3 scripts/cbdb_query.py person "Su Shi"
 python3 scripts/cbdb_query.py person --id 3767
 ```
 
-Single match returns a **full profile** (bio + alt names + kinship + offices + associations + addresses + entries + status). Multiple matches return a list of candidates.
+Single match returns a **full profile** (bio + alt names + kinship + offices + associations + addresses + entries + status + texts + institutions + posting addresses). Multiple matches return a list of candidates.
 
 ### Specific Data
 
@@ -60,6 +60,9 @@ python3 scripts/cbdb_query.py addresses 3767      # Places/addresses
 python3 scripts/cbdb_query.py entries 3767        # Exam/entry records
 python3 scripts/cbdb_query.py altnames 3767       # Alternative names
 python3 scripts/cbdb_query.py status 3767         # Social status
+python3 scripts/cbdb_query.py texts 3767          # Writings/texts
+python3 scripts/cbdb_query.py institutions 3767   # Academies, temples, etc.
+python3 scripts/cbdb_query.py postaddr 3767       # Places of official service
 ```
 
 ### Raw SQL
@@ -68,7 +71,7 @@ python3 scripts/cbdb_query.py status 3767         # Social status
 python3 scripts/cbdb_query.py sql "SELECT c_personid, c_name_chn, c_birthyear FROM BIOG_MAIN WHERE c_dy = 15 AND c_birthyear > 1000 LIMIT 10"
 ```
 
-Only SELECT queries are allowed.
+Only SELECT queries are allowed. For complex queries, use `ZZZ_` denormalized tables (e.g., `ZZZ_ENTRY_DATA`, `ZZZ_KIN_BIOG_ADDR`) which pre-join names and descriptions — much simpler than multi-table joins. See `references/database_schema.md` for the full list.
 
 ## Output Format
 
@@ -96,9 +99,130 @@ All commands output JSON. Example for `person "蘇軾"`:
   "associations": [...],
   "addresses": [...],
   "entries": [...],
-  "status": [...]
+  "status": [...],
+  "texts": [
+    { "title_chn": "東坡集", "role_chn": "撰著者", "role": "Author" }
+  ],
+  "institutions": [...],
+  "posted_addresses": [...]
 }
 ```
+
+## Kinship Tree Visualization
+
+Generate family tree diagrams from CBDB kinship data.
+
+### Tree Commands
+
+```bash
+# Graphviz DOT format (recommended for quality)
+python3 scripts/cbdb_query.py tree 3767 -d 2 -f dot -o su_shi.dot
+
+# Render DOT to image (requires: brew install graphviz)
+dot -Tsvg su_shi.dot -o su_shi.svg
+dot -Tpng su_shi.dot -o su_shi.png
+
+# Mermaid format (paste into GitHub, Obsidian, etc.)
+python3 scripts/cbdb_query.py tree 3767 -d 2 -f mermaid -o su_shi.md
+
+# Direct SVG (requires graphviz, falls back to DOT if missing)
+python3 scripts/cbdb_query.py tree 3767 -d 2 -f svg -o su_shi.svg
+```
+
+### Visual Conventions
+
+- **Gold** node = ego (the queried person)
+- **Blue** nodes = male, **Pink** nodes = female
+- **Solid arrows** = parent → child
+- **Dashed lines** = marriage / affinal relations
+- **Dotted lines** = siblings
+- Nodes show name and birth–death years when known
+- Generations are laid out top-to-bottom (ancestors above, descendants below)
+
+### Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `--depth` / `-d` | BFS expansion depth from ego | `2` |
+| `--format` / `-f` | `dot`, `mermaid`, or `svg` | `dot` |
+| `--output` / `-o` | Output file path | Auto-named |
+
+Depth 1 = ego's direct kin only. Depth 2 = kin of kin (recommended). Depth 3+ can produce very large trees.
+
+## Network Export (for Gephi / Graph Analysis)
+
+Export CBDB relationships as network graphs in GEXF (Gephi native), CSV (nodes + edges), or JSON.
+
+### Export Commands
+
+```bash
+# Kinship network from a person, expanding outward
+python3 scripts/cbdb_query.py export-kinship 3767 -d 2 -o su_shi_kin.gexf
+
+# Social association network
+python3 scripts/cbdb_query.py export-associations 3767 -d 1 -o su_shi_assoc.gexf
+
+# Combined kinship + associations
+python3 scripts/cbdb_query.py export-network 3767 -d 1 -o su_shi_full.gexf
+
+# Co-office network: people who held the same office
+python3 scripts/cbdb_query.py export-office "翰林學士" --dynasty 15 -o hanlin.gexf
+
+# Person-place bipartite network
+python3 scripts/cbdb_query.py export-place "眉山" -o meishan.gexf
+```
+
+### Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `--format` / `-f` | `gexf`, `csv`, or `json` | `gexf` |
+| `--depth` / `-d` | Expansion depth (1 = direct, 2 = friends-of-friends) | `1` |
+| `--output` / `-o` | Output file path | Auto-named |
+| `--dynasty` | Filter by dynasty code (e.g., 15 = Song) | All |
+| `--year-from` | Filter postings from this year | None |
+| `--year-to` | Filter postings up to this year | None |
+| `--addr-type` | Filter place network by address type (1 = 籍貫) | All |
+
+### Network Types
+
+| Command | Nodes | Edges | Use Case |
+|---|---|---|---|
+| `export-kinship` | Persons | Kin relations (labeled F, M, S, B, W, etc.) | Family tree / clan analysis |
+| `export-associations` | Persons | Social ties (friend, teacher, political ally) | Social network analysis |
+| `export-network` | Persons | Both kin + social | Combined prosopography |
+| `export-office` | Persons | Co-officeholding | Political elite networks |
+| `export-place` | Persons + Places | Affiliations | Spatial analysis, migration |
+
+### Multiple Seeds
+
+All person-based exports accept multiple person IDs:
+```bash
+python3 scripts/cbdb_query.py export-kinship 3767 1762 -d 1 -o su_wang.gexf
+```
+
+### Node Attributes (available in Gephi)
+
+`name_chn`, `name_pinyin`, `gender`, `dynasty_chn`, `dynasty`, `birth_year`, `death_year`, `index_year`. Place nodes add `longitude`, `latitude`, `node_type`.
+
+### Edge Attributes
+
+`type` (kinship/association/co-office/person-place), `relation_chn`, `relation`.
+
+### Tips
+
+- **Start with depth=1** — depth=2 can produce very large networks (thousands of nodes)
+- **CSV format** produces two files: `*_nodes.csv` and `*_edges.csv`, directly importable into Gephi via "Import Spreadsheet"
+- **GEXF** is recommended — preserves all attributes and is Gephi's native format
+- **Office codes are dynasty-specific** — use `--dynasty` to narrow results, or omit for cross-dynasty comparison
+
+## Important Caveats
+
+- **Index year is artificial**: Derived estimate of birth year, not a real date. Many people have 0 (unknown) and are excluded by year filters.
+- **Song dynasty = one code (15)**: Does not distinguish Northern from Southern Song.
+- **Office codes are dynasty-specific**: A Song office code won't match in a Ming query. Search by Chinese office name for cross-dynasty comparison.
+- **Association dates are usually empty**: Filter by index year of individuals instead.
+- **Extended kinship searches can be huge**: Start with conservative distance parameters.
 
 ## Using in Python
 
@@ -107,7 +231,11 @@ import sys
 sys.path.insert(0, "scripts")
 from cbdb_query import (
     get_connection, search_person, get_full_profile,
-    get_kinship, get_offices, get_associations, run_sql,
+    get_kinship, get_offices, get_associations,
+    get_texts, get_institutions, get_posted_addresses, run_sql,
+    build_kinship_network, build_association_network,
+    build_combined_network, build_office_network,
+    build_place_network, export_network,
 )
 
 conn = get_connection()
@@ -131,6 +259,10 @@ rows = run_sql(conn, """
     ORDER BY kin_count DESC
     LIMIT 10
 """)
+
+# Export network for Gephi
+network = build_kinship_network(conn, [3767], depth=2)
+export_network(network, "su_shi_kin.gexf", "gexf")
 ```
 
 ## Database Coverage
@@ -146,6 +278,8 @@ rows = run_sql(conn, """
 | ALTNAME_DATA | 206,132 | Alternative names (zi, hao, etc.) |
 | ASSOC_DATA | 186,876 | Social associations |
 | STATUS_DATA | 69,344 | Social status records |
+| BIOG_TEXT_DATA | ~50,000 | Person-text relations |
+| BIOG_INST_DATA | ~10,000 | Person-institution relations |
 | OFFICE_CODES | 34,052 | Office title lookup |
 | ADDR_CODES | 30,099 | Place name lookup (with coordinates) |
 | DYNASTIES | 85 | Dynasty lookup |
