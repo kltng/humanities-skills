@@ -10,6 +10,7 @@ to communicate with Zotero" enabled in preferences.
 """
 
 import json
+import re
 import time
 import uuid
 import urllib.request
@@ -19,6 +20,22 @@ from typing import Any, Dict, List, Optional
 
 API_BASE = "http://localhost:23119/api"
 CONNECTOR_BASE = "http://localhost:23119/connector"
+
+_ZOTERO_KEY_RE = re.compile(r'^[A-Za-z0-9]{8}$')
+
+
+def _validate_key(key: str, label: str = "key") -> str:
+    """Validate that a string is a valid Zotero 8-char alphanumeric key.
+
+    Prevents JavaScript injection when interpolating keys into
+    debug-bridge JS code strings.
+    """
+    if not _ZOTERO_KEY_RE.match(key):
+        raise ValueError(
+            f"Invalid Zotero {label}: {key!r} "
+            "(must be exactly 8 alphanumeric characters)"
+        )
+    return key
 
 
 class ZoteroLocal:
@@ -442,6 +459,7 @@ class ZoteroLocal:
         Raises:
             RuntimeError: If the debug-bridge is not available.
         """
+        _validate_key(parent_key, "parent item key")
         import os
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -483,6 +501,7 @@ class ZoteroLocal:
         escaped_name = name.replace("\\", "\\\\").replace("'", "\\'")
 
         if parent_key:
+            _validate_key(parent_key, "parent collection key")
             js_code = f"""
             var parent = await Zotero.Collections.getByLibraryAndKeyAsync(
                 Zotero.Libraries.userLibraryID, '{parent_key}'
@@ -525,6 +544,7 @@ class ZoteroLocal:
         Raises:
             RuntimeError: If the debug-bridge is not available or the collection is not found.
         """
+        _validate_key(collection_key, "collection key")
         delete_items_js = "true" if delete_items else "false"
         js_code = f"""
         var col = await Zotero.Collections.getByLibraryAndKeyAsync(
