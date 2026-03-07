@@ -77,6 +77,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "tgaz-sqlite",
+      "source": "./tgaz-sqlite",
+      "description": "Query the TGAZ (Temporal Gazetteer) SQLite database locally for 82,000+ historical Chinese placenames spanning 763 BCE to 1911 CE — name search, spatial bounding box, temporal filtering, full-text search, administrative hierarchies, and raw SQL",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
