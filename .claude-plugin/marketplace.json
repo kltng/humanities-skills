@@ -87,6 +87,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "arxiv-search",
+      "source": "./arxiv-search",
+      "description": "Search arXiv for preprints and scholarly articles across physics, mathematics, computer science, and more — field-specific queries, boolean logic, date filtering, and bulk retrieval with pagination",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
