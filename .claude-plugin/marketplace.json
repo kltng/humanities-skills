@@ -107,6 +107,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "historical-map",
+      "source": "./historical-map",
+      "description": "Generate interactive historical maps as standalone HTML files using Leaflet.js — markers, GeoJSON boundary overlays, historical tile layers, image overlays, WMS, and layer controls",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
