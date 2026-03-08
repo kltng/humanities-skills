@@ -97,6 +97,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "historical-timeline",
+      "source": "./historical-timeline",
+      "description": "Generate interactive historical timelines as standalone HTML files using TimelineJS3 — supports BCE/CE dates, eras, groups, media embedding, and rich text with zoom and navigation",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
