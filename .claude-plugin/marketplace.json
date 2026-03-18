@@ -117,6 +117,76 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "columbia-clio",
+      "source": "./columbia-clio",
+      "description": "Search Columbia University Libraries' CLIO catalog for books, journals, manuscripts, and other holdings via its Blacklight JSON API — faceted filtering by format/language/location, detailed catalog records with call numbers and holdings data",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "europeana-collections",
+      "source": "./europeana-collections",
+      "description": "Search Europeana's 50M+ cultural heritage items from 4,000+ European museums, galleries, libraries, and archives — art, manuscripts, photographs, maps, 3D objects, audio, and video",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "harvard-library-catalog",
+      "source": "./harvard-library-catalog",
+      "description": "Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO — books, manuscripts, finding aids, and digital collections",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "hathitrust-catalog",
+      "source": "./hathitrust-catalog",
+      "description": "Look up bibliographic records and digitized volumes in HathiTrust's 17M+ volume collection by ISBN, OCLC, LCCN, ISSN, or HathiTrust ID",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "loc-catalog",
+      "source": "./loc-catalog",
+      "description": "Search the Library of Congress digital collections via the loc.gov JSON API — digitized books, photos, maps, manuscripts, newspapers, audio, and film/video with date range filters",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "nlb-singapore",
+      "source": "./nlb-singapore",
+      "description": "Search the National Library Board Singapore catalog for books, audiovisual materials, and digital resources — availability across NLB branches, new arrivals, checkout trends, and detailed bibliographic records",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "zotero-local",
+      "source": "./zotero-local",
+      "description": "Interact with a local Zotero 8 desktop application through its HTTP API — search, fetch, add, edit, and organize bibliographic items, import citations, attach files, manage collections and tags",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
