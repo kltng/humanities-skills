@@ -22,3 +22,10 @@ env/
 ## Editor / tooling
 .idea/
 .vscode/
+
+## Workspace directories
+*-workspace/
+
+## SQLite temp files
+*.db-shm
+*.db-wal
