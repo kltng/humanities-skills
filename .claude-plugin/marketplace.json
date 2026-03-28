@@ -187,6 +187,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "argue-against-me",
+      "source": "./argue-against-me",
+      "description": "Structured academic debate — Claude adopts an opposing position from named historiographical schools and challenges your thesis through formal rounds with adjustable intensity, producing a scorecard, revised thesis, and bibliography gap analysis",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
