@@ -46,6 +46,13 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [wikidata-search](wikidata-search/) | Search Wikidata via keyword, semantic/hybrid search, SPARQL, and direct entity retrieval |
 | [zotero-local](zotero-local/) | Interact with local Zotero 8 desktop via HTTP API — search, fetch, add, organize references |
 
+### Research & Evaluation Tools
+
+| Skill | Description |
+|-------|-------------|
+| [human-eval-review](human-eval-review/) | Generate a single self-contained HTML file for human-in-the-loop evaluation — confirm candidate matches, pick, rate, judge, or correct model output, then export decisions as JSON |
+| [argue-against-me](argue-against-me/) | Structured academic debate — Claude challenges your thesis from a chosen historiographical school, producing a scorecard, revised thesis, and bibliography gaps |
+
 ## Setup
 
 Install as a Claude Code skill marketplace:

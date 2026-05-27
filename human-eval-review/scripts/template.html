@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="__LANG__">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__TITLE__</title>
+<style>
+  :root{
+    --bg:#f5f3ee; --ink:#2c2416; --ink-soft:#1a1208; --muted:#7a6a50; --muted2:#9a8870;
+    --card:#ffffff; --line:#d9d2c5; --line-soft:#ede8df; --panel:#ede8df;
+    --header-bg:#2c2416; --header-ink:#f5f3ee;
+    --accent:#c8a060; --accent-hi:#dfc08a; --accent-lo:#b8945a; --accent-ink:#2c2416;
+    --reviewed:#8aad6e; --mark:#fff0a0; --hover:#faf8f4;
+    --score-high:#5a8a30; --score-med:#c88020; --score-low:#a06030;
+    --serif:Georgia,"Times New Roman",serif; --mono:"Courier New",monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box;}
+  body{font-family:var(--serif);background:var(--bg);color:var(--ink);margin:0;padding:0;}
+
+  header{background:var(--header-bg);color:var(--header-ink);padding:0.9rem 1.5rem;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.35);}
+  .header-top{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+  header h1{margin:0;font-size:1.05rem;font-weight:normal;letter-spacing:0.03em;}
+  header .subtitle{margin:0.15rem 0 0;font-size:0.82rem;opacity:0.7;}
+  .header-actions{display:flex;align-items:center;gap:0.5rem;flex-shrink:0;}
+  .btn{background:var(--accent);color:var(--accent-ink);border:none;padding:0.4rem 0.9rem;border-radius:4px;font-size:0.82rem;font-weight:bold;font-family:var(--serif);cursor:pointer;white-space:nowrap;transition:background 0.15s;}
+  .btn:hover{background:var(--accent-hi);}
+  .btn:active{background:var(--accent-lo);}
+  .btn.ghost{background:rgba(255,255,255,0.12);color:var(--header-ink);font-weight:normal;}
+  .btn.ghost:hover{background:rgba(255,255,255,0.22);}
+  .header-progress-row{display:flex;align-items:center;gap:0.75rem;margin-top:0.55rem;}
+  #progress-counter{font-size:0.78rem;color:var(--accent);white-space:nowrap;flex-shrink:0;}
+  #progress-bar-wrap{flex:1;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;}
+  #progress-bar{height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width 0.25s ease;}
+
+  main{max-width:920px;margin:2rem auto;padding:0 1.25rem 5rem;}
+
+  .entry{background:var(--card);border:1px solid var(--line);border-radius:6px;margin-bottom:1.75rem;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);transition:box-shadow 0.2s,border-color 0.2s;scroll-margin-top:6.5rem;}
+  .entry.reviewed{border-color:var(--reviewed);box-shadow:0 1px 4px rgba(80,140,60,0.18);}
+  .entry.kbd-focus{box-shadow:0 0 0 2px var(--accent),0 1px 8px rgba(0,0,0,0.12);}
+
+  .entry-header{background:var(--panel);padding:0.5rem 1rem;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid var(--line);}
+  .entry-num{font-size:0.75rem;font-weight:bold;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
+  .reviewed-badge{font-size:0.7rem;background:var(--reviewed);color:#fff;border-radius:20px;padding:0.1rem 0.6rem;font-weight:bold;letter-spacing:0.04em;display:none;}
+  .entry.reviewed .reviewed-badge{display:inline-block;}
+
+  .source{padding:0.9rem 1.1rem 0.8rem;font-size:1.1rem;line-height:1.8;color:var(--ink-soft);border-bottom:1px solid var(--line-soft);}
+  .context{padding:0.35rem 1.1rem;font-size:0.82rem;color:var(--muted);background:var(--hover);border-bottom:1px solid var(--line-soft);}
+  .context .ctx-row{margin:0.1rem 0;}
+  .context .ctx-label{font-weight:bold;color:var(--muted2);}
+
+  .question{padding:0.6rem 0.85rem 0.7rem;border-bottom:1px solid var(--line-soft);}
+  .question:last-child{border-bottom:none;}
+  .q-prompt{font-size:0.92rem;font-weight:bold;color:#4a3c28;margin:0 0 0.4rem;padding:0.15rem 0.25rem;}
+  .question.reviewed .q-prompt{color:var(--reviewed);}
+
+  .cand-list{list-style:none;margin:0;padding:0;}
+  .cand{display:flex;align-items:baseline;gap:0.55rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:4px;transition:background 0.12s;margin:0;}
+  .cand:hover{background:var(--hover);}
+  .cand input{flex-shrink:0;margin:0;width:15px;height:15px;accent-color:var(--accent-lo);cursor:pointer;position:relative;top:2px;}
+  .cand-id{font-family:var(--mono);font-size:0.8rem;color:var(--muted);white-space:nowrap;flex-shrink:0;}
+  .cand-main{flex:1;min-width:0;}
+  .cand-title{font-size:0.97rem;color:var(--ink);line-height:1.4;}
+  .cand-excerpt{font-size:0.88rem;color:var(--ink);line-height:1.55;}
+  .cand-reason{margin-top:0.2rem;font-size:0.78rem;color:var(--muted);font-style:italic;}
+  .cand-score{font-size:0.78rem;white-space:nowrap;flex-shrink:0;}
+  .score-high{color:var(--score-high);} .score-med{color:var(--score-med);} .score-low{color:var(--score-low);}
+  mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px;}
+
+  .none-row{margin-top:0.2rem;border-top:1px dashed var(--line);padding-top:0.35rem;}
+  .none-row .cand-title{font-style:italic;color:var(--muted);}
+  .none-row:hover{background:#fdf2ef;}
+
+  .no-candidates{font-style:italic;color:var(--muted2);font-size:0.88rem;margin:0.3rem 0.5rem;}
+
+  details.excluded{margin:0.3rem 0.25rem 0;}
+  details.excluded>summary{font-size:0.78rem;color:var(--muted2);cursor:pointer;user-select:none;padding:0.25rem 0.25rem;list-style:none;}
+  details.excluded>summary::-webkit-details-marker{display:none;}
+  details.excluded>summary::before{content:"\25B8\00a0";color:var(--muted2);}
+  details.excluded[open]>summary::before{content:"\25BE\00a0";}
+  details.excluded .cand{opacity:0.75;}
+  details.excluded .cand-title,details.excluded .cand-excerpt{color:var(--muted);}
+
+  .rating-row{display:flex;flex-wrap:wrap;gap:0.4rem;padding:0.2rem 0.4rem;}
+  .rate-btn,.bool-btn{font-family:var(--serif);font-size:0.9rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:4px;padding:0.35rem 0.85rem;cursor:pointer;transition:all 0.12s;min-width:2.4rem;}
+  .rate-btn:hover,.bool-btn:hover{border-color:var(--accent);background:var(--hover);}
+  .rate-btn.active{background:var(--accent);border-color:var(--accent-lo);color:var(--accent-ink);font-weight:bold;}
+  .bool-btn.active-yes{background:var(--reviewed);border-color:var(--reviewed);color:#fff;font-weight:bold;}
+  .bool-btn.active-no{background:#c0603a;border-color:#a04a28;color:#fff;font-weight:bold;}
+  .rate-caption{font-size:0.76rem;color:var(--muted);padding:0.1rem 0.5rem 0;}
+
+  .text-answer,.notes-input{width:100%;font-family:var(--serif);font-size:0.9rem;color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:0.4rem 0.55rem;background:var(--hover);resize:vertical;line-height:1.5;}
+  .text-answer:focus,.notes-input:focus{outline:none;border-color:var(--accent);}
+  .notes-wrap{padding:0.4rem 0.5rem 0.1rem;}
+  .notes-label{font-size:0.74rem;color:var(--muted2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem;}
+
+  #restore-banner{display:none;max-width:920px;margin:1rem auto -0.5rem;padding:0.55rem 1rem;background:#fbf3df;border:1px solid var(--accent);border-radius:5px;font-size:0.84rem;color:var(--ink);align-items:center;gap:0.75rem;}
+  #restore-banner.show{display:flex;}
+  #restore-banner .spacer{flex:1;}
+  .link-btn{background:none;border:none;color:var(--accent-lo);text-decoration:underline;cursor:pointer;font-family:var(--serif);font-size:0.84rem;padding:0;}
+
+  #help-overlay{display:none;position:fixed;inset:0;background:rgba(20,16,8,0.55);z-index:200;align-items:center;justify-content:center;}
+  #help-overlay.show{display:flex;}
+  .help-card{background:var(--card);color:var(--ink);max-width:440px;width:90%;border-radius:8px;padding:1.3rem 1.5rem;box-shadow:0 8px 40px rgba(0,0,0,0.4);}
+  .help-card h2{margin:0 0 0.8rem;font-size:1.05rem;font-weight:normal;}
+  .help-card table{width:100%;border-collapse:collapse;font-size:0.86rem;}
+  .help-card td{padding:0.25rem 0.3rem;border-bottom:1px solid var(--line-soft);vertical-align:top;}
+  .help-card kbd{font-family:var(--mono);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:0.05rem 0.4rem;font-size:0.8rem;}
+  .help-close{margin-top:1rem;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div>
+      <h1 id="doc-title"></h1>
+      <p class="subtitle" id="doc-subtitle"></p>
+    </div>
+    <div class="header-actions">
+      <button class="btn ghost" id="help-btn" title="Keyboard shortcuts (?)">?</button>
+      <button class="btn ghost" id="load-btn" title="Load a previously downloaded results file">Load</button>
+      <button class="btn" id="download-btn">Download Results</button>
+      <input type="file" id="load-input" accept="application/json,.json" style="display:none">
+    </div>
+  </div>
+  <div class="header-progress-row">
+    <span id="progress-counter">0 / 0 reviewed</span>
+    <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+  </div>
+</header>
+
+<div id="restore-banner">
+  <span id="restore-text">Restored your in-progress review from this browser.</span>
+  <span class="spacer"></span>
+  <button class="link-btn" id="restore-discard">Start over</button>
+</div>
+
+<main id="root"></main>
+
+<div id="help-overlay">
+  <div class="help-card">
+    <h2>Keyboard shortcuts</h2>
+    <table>
+      <tr><td><kbd>j</kbd> / <kbd>&darr;</kbd></td><td>Next question</td></tr>
+      <tr><td><kbd>k</kbd> / <kbd>&uarr;</kbd></td><td>Previous question</td></tr>
+      <tr><td><kbd>1</kbd>&ndash;<kbd>9</kbd></td><td>Select / toggle the Nth option (or rating)</td></tr>
+      <tr><td><kbd>n</kbd></td><td>Toggle &ldquo;None of the above&rdquo;</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close help</td></tr>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted);margin:0.8rem 0 0;">Your progress is saved automatically in this browser. Use <b>Download Results</b> to export, and <b>Load</b> to resume from a downloaded file.</p>
+    <button class="btn help-close" id="help-close">Close</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const CONFIG = __CONFIG__;
+const DATA = __DATA__;
+
+// ---- theme + locale ----------------------------------------------------------
+if (CONFIG.theme) { for (const k in CONFIG.theme) document.documentElement.style.setProperty(k, CONFIG.theme[k]); }
+if (CONFIG.cjk) {
+  const s = document.createElement('style');
+  s.textContent = '.source,.cand-title,.cand-excerpt,.q-prompt,.context{word-break:break-all;}';
+  document.head.appendChild(s);
+}
+document.getElementById('doc-title').textContent = CONFIG.title || 'Review';
+const subEl = document.getElementById('doc-subtitle');
+if (CONFIG.subtitle) subEl.textContent = CONFIG.subtitle; else subEl.style.display = 'none';
+document.title = CONFIG.title || 'Review';
+
+const STORAGE_KEY = 'her::' + (CONFIG.storage_key || CONFIG.title || 'review');
+
+// ---- state -------------------------------------------------------------------
+const state = {};                         // qi -> answer object
+const QLIST = [];                         // {qi,item,q,block}
+function defState(){ return {selected:{}, none:false, rating:null, value:null, notes:''}; }
+
+DATA.forEach(item => (item.questions || []).forEach(q => {
+  const qi = QLIST.length;
+  const s = defState();
+  (q.candidates || []).concat(q.excluded || []).forEach(c => { if (c.preselected) s.selected[c.id] = true; });
+  if (q.type === 'boolean' && (q.default === true || q.default === false)) s.value = q.default;
+  if (q.type === 'rating' && q.default != null) s.rating = q.default;
+  if (q.type === 'text' && q.default) s.value = q.default;
+  state[qi] = s;
+  QLIST.push({ qi, item, q, block: null });
+}));
+const TOTAL = QLIST.length;
+
+// ---- helpers -----------------------------------------------------------------
+function el(tag, cls){ const e = document.createElement(tag); if (cls) e.className = cls; return e; }
+function scoreClass(s){ return s >= 80 ? 'score-high' : s >= 50 ? 'score-med' : 'score-low'; }
+function isReviewed(qi){
+  const s = state[qi], t = QLIST[qi].q.type;
+  if (t === 'match' || t === 'single') return Object.values(s.selected).some(Boolean) || s.none;
+  if (t === 'rating') return s.rating != null;
+  if (t === 'boolean') return s.value === true || s.value === false;
+  if (t === 'text') return (s.value || '').trim().length > 0;
+  return false;
+}
+
+// ---- render ------------------------------------------------------------------
+const root = document.getElementById('root');
+
+function render(){
+  root.innerHTML = '';
+  DATA.forEach((item, idx) => {
+    const card = el('div', 'entry');
+    card.id = 'entry-' + idx;
+
+    const head = el('div', 'entry-header');
+    const num = el('span', 'entry-num');
+    num.textContent = item.heading || ('Item ' + (idx + 1));
+    head.appendChild(num);
+    const badge = el('span', 'reviewed-badge'); badge.textContent = 'Reviewed';
+    head.appendChild(badge);
+    card.appendChild(head);
+
+    if (item.source != null && item.source !== '') {
+      const src = el('div', 'source');
+      if (item.source_html) src.innerHTML = item.source; else src.textContent = item.source;
+      card.appendChild(src);
+    }
+    if (Array.isArray(item.context) && item.context.length) {
+      const ctx = el('div', 'context');
+      item.context.forEach(c => {
+        const row = el('div', 'ctx-row');
+        const lab = el('span', 'ctx-label'); lab.textContent = c.label + ': ';
+        row.appendChild(lab); row.appendChild(document.createTextNode(c.value));
+        ctx.appendChild(row);
+      });
+      card.appendChild(ctx);
+    }
+
+    (item.questions || []).forEach(q => {
+      const qi = QLIST.findIndex(e => e.item === item && e.q === q);
+      const qBlock = renderQuestion(qi, q);
+      QLIST[qi].block = card;          // focus highlights at card level
+      card.appendChild(qBlock);
+    });
+
+    updateCardReviewed(card, item);
+    root.appendChild(card);
+  });
+  updateProgress();
+}
+
+function renderQuestion(qi, q){
+  const block = el('div', 'question');
+  block.dataset.qi = qi;
+  if (q.prompt) { const p = el('div', 'q-prompt'); p.textContent = q.prompt; block.appendChild(p); }
+
+  if (q.type === 'match' || q.type === 'single') renderCandidates(block, qi, q);
+  else if (q.type === 'rating') renderRating(block, qi, q);
+  else if (q.type === 'boolean') renderBoolean(block, qi, q);
+  else if (q.type === 'text') renderText(block, qi, q);
+
+  if (q.notes) renderNotes(block, qi);
+  if (isReviewed(qi)) block.classList.add('reviewed');
+  return block;
+}
+
+function candRow(qi, q, cand, input_type){
+  const li = el('li');
+  const label = el('label', 'cand');
+  const input = el('input');
+  input.type = input_type;
+  input.className = 'cand-input';
+  input.dataset.qi = qi;
+  input.dataset.id = cand.id;
+  if (input_type === 'radio') input.name = 'q-' + qi;
+  input.checked = !!state[qi].selected[cand.id];
+  input.addEventListener('change', () => onCandChange(qi, q));
+  label.appendChild(input);
+
+  if (cand.label != null && cand.label !== '') {
+    const d = el('span', 'cand-id'); d.textContent = cand.label; label.appendChild(d);
+  }
+  const main = el('div', 'cand-main');
+  if (cand.title) { const t = el('div', 'cand-title'); t.textContent = cand.title; main.appendChild(t); }
+  if (cand.excerpt) { const e = el('div', 'cand-excerpt'); e.innerHTML = cand.excerpt; main.appendChild(e); }
+  if (cand.reason) { const r = el('div', 'cand-reason'); r.textContent = cand.reason; main.appendChild(r); }
+  label.appendChild(main);
+  if (typeof cand.score === 'number') {
+    const sc = el('span', 'cand-score ' + scoreClass(cand.score)); sc.textContent = '(' + cand.score + ')';
+    label.appendChild(sc);
+  }
+  li.appendChild(label);
+  return li;
+}
+
+function renderCandidates(block, qi, q){
+  const list = el('ul', 'cand-list');
+  const cands = q.candidates || [];
+  const itype = q.type === 'single' ? 'radio' : 'checkbox';
+  if (!cands.length && !(q.excluded && q.excluded.length)) {
+    const nc = el('div', 'no-candidates'); nc.textContent = 'No candidates.'; block.appendChild(nc);
+  }
+  cands.forEach(c => list.appendChild(candRow(qi, q, c, itype)));
+
+  if (q.allow_none) {
+    const li = candRow(qi, q, { id: '__none__', title: 'None of the above' }, itype);
+    li.firstChild.classList.add('none-row');
+    li.querySelector('.cand-input').classList.remove('cand-input');
+    li.querySelector('input').classList.add('none-input');
+    li.querySelector('input').addEventListener('change', () => onNoneChange(qi, q));
+    li.querySelector('input').checked = !!state[qi].none;
+    li.firstChild.classList.add('none-host');
+    list.appendChild(li);
+  }
+  block.appendChild(list);
+
+  if (q.excluded && q.excluded.length) {
+    const det = el('details', 'excluded');
+    const sum = el('summary'); sum.textContent = 'Show ' + q.excluded.length + ' excluded candidate' + (q.excluded.length > 1 ? 's' : '');
+    det.appendChild(sum);
+    const exList = el('ul', 'cand-list');
+    q.excluded.forEach(c => exList.appendChild(candRow(qi, q, c, itype)));
+    det.appendChild(exList);
+    block.appendChild(det);
+  }
+}
+
+function renderRating(block, qi, q){
+  const scale = q.scale || { min: 1, max: 5 };
+  const row = el('div', 'rating-row');
+  for (let v = scale.min; v <= scale.max; v++) {
+    const b = el('button', 'rate-btn'); b.type = 'button'; b.dataset.val = v;
+    b.textContent = (scale.labels && scale.labels[v]) ? scale.labels[v] : v;
+    if (state[qi].rating === v) b.classList.add('active');
+    b.addEventListener('click', () => { state[qi].rating = v; afterChange(qi); refreshRating(block, qi); });
+    row.appendChild(b);
+  }
+  block.appendChild(row);
+  if (scale.caption) { const c = el('div', 'rate-caption'); c.textContent = scale.caption; block.appendChild(c); }
+}
+function refreshRating(block, qi){ block.querySelectorAll('.rate-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.val) === state[qi].rating)); }
+
+function renderBoolean(block, qi, q){
+  const labels = q.labels || { yes: 'Yes', no: 'No' };
+  const row = el('div', 'rating-row');
+  const mk = (val, text, cls) => {
+    const b = el('button', 'bool-btn'); b.type = 'button'; b.dataset.bool = val ? '1' : '0'; b.textContent = text;
+    if (state[qi].value === val) b.classList.add(cls);
+    b.addEventListener('click', () => { state[qi].value = (state[qi].value === val ? null : val); afterChange(qi); refreshBool(block, qi, labels); });
+    return b;
+  };
+  row.appendChild(mk(true, labels.yes, 'active-yes'));
+  row.appendChild(mk(false, labels.no, 'active-no'));
+  block.appendChild(row);
+}
+function refreshBool(block, qi, labels){
+  block.querySelectorAll('.bool-btn').forEach(b => {
+    const val = b.dataset.bool === '1';
+    b.classList.toggle('active-yes', val === true && state[qi].value === true);
+    b.classList.toggle('active-no', val === false && state[qi].value === false);
+  });
+}
+
+function renderText(block, qi, q){
+  const ta = el('textarea', 'text-answer'); ta.rows = q.rows || 2;
+  ta.placeholder = q.placeholder || 'Enter your answer…';
+  ta.value = state[qi].value || '';
+  ta.addEventListener('input', () => { state[qi].value = ta.value; afterChange(qi, true); });
+  block.appendChild(ta);
+}
+
+function renderNotes(block, qi){
+  const wrap = el('div', 'notes-wrap');
+  const lab = el('div', 'notes-label'); lab.textContent = 'Notes'; wrap.appendChild(lab);
+  const ta = el('textarea', 'notes-input'); ta.rows = 1;
+  ta.placeholder = 'Optional notes…';
+  ta.value = state[qi].notes || '';
+  ta.addEventListener('input', () => { state[qi].notes = ta.value; save(); });
+  wrap.appendChild(ta);
+  block.appendChild(wrap);
+}
+
+// ---- change handlers ---------------------------------------------------------
+function onCandChange(qi, q){
+  if (q.type === 'single') {
+    state[qi].selected = {};
+    const checked = document.querySelector('.cand-input[data-qi="' + qi + '"]:checked');
+    if (checked) state[qi].selected[checked.dataset.id] = true;
+    state[qi].none = false;
+    const none = document.querySelector('.none-input[data-qi="' + qi + '"]'); if (none) none.checked = false;
+  } else {
+    state[qi].selected = {};
+    document.querySelectorAll('.cand-input[data-qi="' + qi + '"]').forEach(i => { if (i.checked) state[qi].selected[i.dataset.id] = true; });
+    if (Object.keys(state[qi].selected).length) {
+      state[qi].none = false;
+      const none = document.querySelector('.none-input[data-qi="' + qi + '"]'); if (none) none.checked = false;
+    }
+  }
+  afterChange(qi);
+}
+
+function onNoneChange(qi, q){
+  const none = document.querySelector('.none-input[data-qi="' + qi + '"]');
+  state[qi].none = none ? none.checked : false;
+  if (state[qi].none) {
+    state[qi].selected = {};
+    document.querySelectorAll('.cand-input[data-qi="' + qi + '"]').forEach(i => i.checked = false);
+  }
+  afterChange(qi);
+}
+
+function afterChange(qi, skipProgressFlash){
+  const block = document.querySelector('.question[data-qi="' + qi + '"]');
+  if (block) block.classList.toggle('reviewed', isReviewed(qi));
+  const card = document.getElementById('entry-' + DATA.indexOf(QLIST[qi].item));
+  if (card) updateCardReviewed(card, QLIST[qi].item);
+  updateProgress();
+  save();
+}
+
+function updateCardReviewed(card, item){
+  const qis = QLIST.filter(e => e.item === item).map(e => e.qi);
+  const allDone = qis.length > 0 && qis.every(isReviewed);
+  card.classList.toggle('reviewed', allDone);
+}
+
+function updateProgress(){
+  let done = 0;
+  for (let i = 0; i < TOTAL; i++) if (isReviewed(i)) done++;
+  document.getElementById('progress-counter').textContent = done + ' / ' + TOTAL + ' reviewed';
+  document.getElementById('progress-bar').style.width = (TOTAL ? (done / TOTAL * 100) : 0) + '%';
+}
+
+// ---- results: serialize / apply ----------------------------------------------
+function serialize(){
+  const results = QLIST.map(e => {
+    const s = state[e.qi], q = e.q;
+    const r = { item_id: e.item.id, question_id: q.id, type: q.type, reviewed: isReviewed(e.qi) };
+    if (e.item.heading) r.item_heading = e.item.heading;
+    if (e.item.source != null) r.source = e.item.source;
+    if (q.prompt) r.prompt = q.prompt;
+    if (q.type === 'match' || q.type === 'single') {
+      r.selected = Object.keys(s.selected).filter(k => s.selected[k]);
+      r.none = !!s.none;
+    } else if (q.type === 'rating') r.rating = s.rating;
+    else if (q.type === 'boolean') r.value = s.value;
+    else if (q.type === 'text') r.text = s.value || '';
+    if (q.notes) r.notes = s.notes || '';
+    return r;
+  });
+  const reviewed = results.filter(r => r.reviewed).length;
+  return { title: CONFIG.title, subtitle: CONFIG.subtitle || null, exported_at: new Date().toISOString(),
+           reviewed_count: reviewed, total: TOTAL, results };
+}
+
+function applyResults(obj){
+  if (!obj || !Array.isArray(obj.results)) return 0;
+  const byKey = {};
+  QLIST.forEach(e => { byKey[e.item.id + ' ' + e.q.id] = e.qi; });
+  let n = 0;
+  obj.results.forEach(r => {
+    const qi = byKey[r.item_id + ' ' + r.question_id];
+    if (qi == null) return;
+    const s = state[qi];
+    s.selected = {}; (r.selected || []).forEach(id => s.selected[id] = true);
+    s.none = !!r.none;
+    if ('rating' in r) s.rating = r.rating;
+    if ('value' in r) s.value = r.value;
+    if ('text' in r) s.value = r.text;
+    if ('notes' in r) s.notes = r.notes;
+    n++;
+  });
+  render();
+  return n;
+}
+
+// ---- persistence -------------------------------------------------------------
+function save(){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize())); } catch (e) {} }
+
+function download(){
+  const json = JSON.stringify(serialize(), null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = el('a'); a.href = url; a.download = CONFIG.result_filename || 'review_results.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+document.getElementById('download-btn').addEventListener('click', download);
+document.getElementById('load-btn').addEventListener('click', () => document.getElementById('load-input').click());
+document.getElementById('load-input').addEventListener('change', ev => {
+  const file = ev.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { try { const n = applyResults(JSON.parse(reader.result)); flash('Loaded ' + n + ' answer' + (n === 1 ? '' : 's') + ' from file.'); save(); } catch (e) { flash('Could not read that file.'); } };
+  reader.readAsText(file);
+  ev.target.value = '';
+});
+
+// ---- restore banner ----------------------------------------------------------
+const banner = document.getElementById('restore-banner');
+function flash(msg){ document.getElementById('restore-text').textContent = msg; banner.classList.add('show'); }
+document.getElementById('restore-discard').addEventListener('click', () => {
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  for (let i = 0; i < TOTAL; i++) state[i] = defState();
+  DATA.forEach(item => (item.questions || []).forEach(q => {
+    const qi = QLIST.findIndex(e => e.item === item && e.q === q);
+    (q.candidates || []).concat(q.excluded || []).forEach(c => { if (c.preselected) state[qi].selected[c.id] = true; });
+  }));
+  render(); banner.classList.remove('show');
+});
+
+// ---- keyboard navigation -----------------------------------------------------
+let focusIdx = -1;
+function setFocus(i){
+  if (!TOTAL) return;
+  focusIdx = Math.max(0, Math.min(TOTAL - 1, i));
+  const card = QLIST[focusIdx].block;
+  document.querySelectorAll('.entry.kbd-focus').forEach(c => { if (c !== card) c.classList.remove('kbd-focus'); });
+  if (card) { card.classList.add('kbd-focus'); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+function actDigit(d){
+  if (focusIdx < 0) return;
+  const e = QLIST[focusIdx], q = e.q, qi = e.qi;
+  if (q.type === 'rating') {
+    const scale = q.scale || { min: 1, max: 5 };
+    const v = scale.min + (d - 1);
+    if (v <= scale.max) { const b = QLIST[focusIdx].block.querySelector('.rate-btn[data-val="' + v + '"]'); if (b) b.click(); }
+  } else if (q.type === 'boolean') {
+    const b = QLIST[focusIdx].block.querySelectorAll('.bool-btn')[d - 1]; if (b) b.click();
+  } else if (q.type === 'match' || q.type === 'single') {
+    const inputs = QLIST[focusIdx].block.querySelectorAll('.cand-input,.none-input');
+    const inp = inputs[d - 1]; if (inp) inp.click();
+  }
+}
+document.addEventListener('keydown', ev => {
+  const tag = (ev.target.tagName || '').toLowerCase();
+  const typing = tag === 'textarea' || tag === 'input' || tag === 'select';
+  if (ev.key === 'Escape') { document.getElementById('help-overlay').classList.remove('show'); if (typing) ev.target.blur(); return; }
+  if (typing) return;
+  if (ev.key === '?' || (ev.shiftKey && ev.key === '/')) { ev.preventDefault(); toggleHelp(); return; }
+  if (ev.key === 'j' || ev.key === 'ArrowDown') { ev.preventDefault(); setFocus(focusIdx < 0 ? 0 : focusIdx + 1); }
+  else if (ev.key === 'k' || ev.key === 'ArrowUp') { ev.preventDefault(); setFocus(focusIdx < 0 ? 0 : focusIdx - 1); }
+  else if (ev.key === 'n') { if (focusIdx >= 0) { const none = QLIST[focusIdx].block.querySelector('.none-input'); if (none) none.click(); } }
+  else if (/^[1-9]$/.test(ev.key)) { actDigit(Number(ev.key)); }
+});
+
+// ---- help overlay ------------------------------------------------------------
+function toggleHelp(){ document.getElementById('help-overlay').classList.toggle('show'); }
+document.getElementById('help-btn').addEventListener('click', toggleHelp);
+document.getElementById('help-close').addEventListener('click', toggleHelp);
+document.getElementById('help-overlay').addEventListener('click', ev => { if (ev.target.id === 'help-overlay') toggleHelp(); });
+
+// ---- boot --------------------------------------------------------------------
+render();
+try {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) { const n = applyResults(JSON.parse(saved)); if (n) flash('Restored your in-progress review from this browser.'); }
+} catch (e) {}
+</script>
+</body>
+</html>

@@ -197,6 +197,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "human-eval-review",
+      "source": "./human-eval-review",
+      "description": "Generate a single self-contained HTML file for human-in-the-loop evaluation of model output — confirm candidate matches, pick one, rate on a scale, judge yes/no, or free-text correct, with progress tracking, keyboard nav, browser autosave, and JSON export/resume",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
