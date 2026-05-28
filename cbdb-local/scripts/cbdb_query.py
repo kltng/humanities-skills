@@ -7,6 +7,9 @@ Zero external dependencies — stdlib only (except 7z for initial setup).
 
 Usage:
     python3 cbdb_query.py setup                        # Download & extract database
+    python3 cbdb_query.py setup --force                # Re-download (e.g. to update)
+    python3 cbdb_query.py setup --zzz                  # Denormalized ZZZ_* variant (needs 7z)
+    python3 cbdb_query.py check                        # Check for a newer release
     python3 cbdb_query.py person "蘇軾"                # Search by Chinese name
     python3 cbdb_query.py person "Su Shi"              # Search by pinyin name
     python3 cbdb_query.py person --id 3767             # Look up by person ID
@@ -40,6 +43,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -50,6 +54,7 @@ import subprocess
 import sys
 import urllib.request
 import urllib.error
+import zipfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -59,9 +64,25 @@ from typing import Any, Optional
 
 DB_DIR = Path(__file__).resolve().parent
 DB_PATH = DB_DIR / "cbdb.db"
+# Sidecar recording which release produced the local cbdb.db (for `check`).
+META_PATH = DB_DIR / "cbdb.db.release.json"
 
-DB_DOWNLOAD_URL = (
-    "https://media.githubusercontent.com/media/cbdb-project/cbdb_sqlite/master/latest.7z"
+# CBDB no longer ships the database via GitHub LFS. The current download URL,
+# filename, checksum, and release date live in this metadata file in the repo;
+# we resolve the URL from it at setup time instead of hardcoding it.
+LATEST_JSON_URL = (
+    "https://raw.githubusercontent.com/cbdb-project/cbdb_sqlite/master/latest.json"
+)
+
+# Used only if latest.json cannot be fetched (offline / repo layout changed).
+DB_DOWNLOAD_URL_FALLBACK = (
+    "https://huggingface.co/datasets/cbdb/cbdb-sqlite/resolve/main/latest.zip"
+)
+
+# Denormalized variant (the deprecated ZZZ_* tables) — opt-in via `setup --zzz`.
+# Not described by latest.json; needed only for raw SQL against ZZZ_* tables.
+ZZZ_DOWNLOAD_URL = (
+    "https://huggingface.co/datasets/cbdb/cbdb-sqlite/resolve/main/latest_ZZZ_tables.7z"
 )
 
 
@@ -86,40 +107,43 @@ def _find_7z() -> Optional[str]:
     return None
 
 
-def download_db(dest: Optional[Path] = None) -> Path:
-    """Download and extract CBDB SQLite database."""
-    dest = dest or DB_PATH
-    if dest.exists():
-        print(f"Database already exists: {dest}")
-        return dest
+def fetch_latest_metadata() -> Optional[dict]:
+    """Fetch latest.json from the cbdb_sqlite repo to discover the current release.
 
-    # Check for 7z
-    sevenz = _find_7z()
-    if not sevenz:
-        print("ERROR: 7z/7zz not found.", file=sys.stderr)
-        print("", file=sys.stderr)
-        if platform.system() == "Darwin":
-            print("  macOS:   brew install 7zip", file=sys.stderr)
-        elif platform.system() == "Windows":
-            print("  Windows: winget install 7zip.7zip", file=sys.stderr)
-            print("       or: choco install 7zip", file=sys.stderr)
-            print("       or: download from https://www.7-zip.org/", file=sys.stderr)
-        else:
-            print("  Linux:   sudo apt install p7zip-full  (Debian/Ubuntu)", file=sys.stderr)
-            print("       or: sudo dnf install p7zip-plugins  (Fedora)", file=sys.stderr)
-        sys.exit(1)
-
-    archive_path = dest.parent / "latest.7z"
-
-    # Download
-    print(f"Downloading CBDB database (~69 MB compressed) ...")
+    Returns the parsed metadata dict (download_url, sqlite_filename, sha256,
+    generated_at_utc, format) or None if it can't be retrieved/parsed.
+    """
     req = urllib.request.Request(
-        DB_DOWNLOAD_URL,
+        LATEST_JSON_URL,
         headers={"User-Agent": "cbdb-local-skill/1.0"},
     )
     try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, json.JSONDecodeError, ValueError) as e:
+        print(f"Warning: could not fetch release metadata: {e}", file=sys.stderr)
+        return None
+
+
+def _print_7z_install_help() -> None:
+    print("", file=sys.stderr)
+    if platform.system() == "Darwin":
+        print("  macOS:   brew install 7zip", file=sys.stderr)
+    elif platform.system() == "Windows":
+        print("  Windows: winget install 7zip.7zip", file=sys.stderr)
+        print("       or: choco install 7zip", file=sys.stderr)
+        print("       or: download from https://www.7-zip.org/", file=sys.stderr)
+    else:
+        print("  Linux:   sudo apt install p7zip-full  (Debian/Ubuntu)", file=sys.stderr)
+        print("       or: sudo dnf install p7zip-plugins  (Fedora)", file=sys.stderr)
+
+
+def _download_file(url: str, archive_path: Path) -> None:
+    """Stream a URL to disk with a progress indicator."""
+    req = urllib.request.Request(url, headers={"User-Agent": "cbdb-local-skill/1.0"})
+    try:
         with urllib.request.urlopen(req, timeout=120) as resp:
-            dest.parent.mkdir(parents=True, exist_ok=True)
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
             total = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
             with open(archive_path, "wb") as f:
@@ -137,24 +161,131 @@ def download_db(dest: Optional[Path] = None) -> Path:
         print(f"\nDownload failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Extract
-    print(f"Extracting (expands to ~556 MB) ...")
-    try:
-        subprocess.run(
-            [sevenz, "x", str(archive_path), f"-o{dest.parent}", "-y"],
-            check=True, capture_output=True,
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"Extraction failed: {e.stderr.decode()}", file=sys.stderr)
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1048576), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _locate_db_file(directory: Path, dest: Path, inner_name: Optional[str]) -> Optional[Path]:
+    """Find the extracted SQLite file in `directory`, excluding the final dest."""
+    if inner_name:
+        candidate = directory / inner_name
+        if candidate.exists():
+            return candidate
+    for pattern in ("*.sqlite3", "*.sqlite", "latest.db", "*.db"):
+        matches = [m for m in sorted(directory.glob(pattern)) if m.resolve() != dest.resolve()]
+        if matches:
+            return matches[0]
+    return None
+
+
+def _extract_archive(archive_path: Path, dest: Path, inner_name: Optional[str]) -> None:
+    """Extract a .zip (stdlib) or .7z (requires 7z) archive into dest's directory."""
+    out_dir = dest.parent
+    if archive_path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(archive_path) as zf:
+            members = [n for n in zf.namelist() if not n.endswith("/")]
+            target = inner_name if inner_name in members else None
+            if not target:
+                target = next(
+                    (n for n in members if n.lower().endswith((".sqlite3", ".sqlite", ".db"))),
+                    members[0] if members else None,
+                )
+            if not target:
+                print("Extraction failed: archive is empty.", file=sys.stderr)
+                sys.exit(1)
+            zf.extract(target, out_dir)
+    else:
+        sevenz = _find_7z()
+        if not sevenz:
+            print("ERROR: 7z/7zz not found (required for the .7z ZZZ variant).", file=sys.stderr)
+            _print_7z_install_help()
+            sys.exit(1)
+        try:
+            subprocess.run(
+                [sevenz, "x", str(archive_path), f"-o{out_dir}", "-y"],
+                check=True, capture_output=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Extraction failed: {e.stderr.decode()}", file=sys.stderr)
+            sys.exit(1)
+
+
+def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = False) -> Path:
+    """Download and extract the CBDB SQLite database.
+
+    Resolves the current download URL from the repo's latest.json (falling back
+    to a known URL if that fails). Pass zzz=True for the denormalized ZZZ_* variant.
+    """
+    dest = dest or DB_PATH
+    if dest.exists() and not force:
+        print(f"Database already exists: {dest}")
+        print("Use `setup --force` to re-download.")
+        return dest
+
+    # Resolve download URL, expected filename, and checksum.
+    meta: Optional[dict] = None
+    expected_sha: Optional[str] = None
+    inner_name: Optional[str] = None
+    if zzz:
+        url = ZZZ_DOWNLOAD_URL
+        print("Resolving ZZZ (denormalized) release URL ...")
+    else:
+        meta = fetch_latest_metadata()
+        if meta and meta.get("download_url"):
+            url = meta["download_url"]
+            inner_name = meta.get("sqlite_filename")
+            expected_sha = meta.get("sha256")
+            print(f"Current release: {inner_name or '?'} "
+                  f"({meta.get('generated_at_utc', 'date unknown')})")
+            print(f"Download URL:    {url}")
+        else:
+            url = DB_DOWNLOAD_URL_FALLBACK
+            print(f"Using fallback download URL: {url}")
+
+    archive_ext = ".7z" if url.lower().endswith(".7z") else ".zip"
+    archive_path = dest.parent / f"cbdb_download{archive_ext}"
+
+    print("Downloading CBDB database ...")
+    _download_file(url, archive_path)
+
+    print("Extracting ...")
+    _extract_archive(archive_path, dest, inner_name)
+
+    extracted = _locate_db_file(dest.parent, dest, inner_name)
+    if not extracted:
+        print("Extraction failed: no SQLite file found in archive.", file=sys.stderr)
         sys.exit(1)
 
-    # Rename extracted file
-    extracted = dest.parent / "latest.db"
-    if extracted.exists():
-        extracted.rename(dest)
+    # Verify checksum against latest.json (warn but don't abort on mismatch,
+    # since the published hash may cover a different artifact in future releases).
+    if expected_sha:
+        print("Verifying SHA-256 ...")
+        actual_sha = _sha256(extracted)
+        if actual_sha.lower() == expected_sha.lower():
+            print("  checksum OK")
+        else:
+            print(f"  WARNING: checksum mismatch\n    expected {expected_sha}\n    actual   {actual_sha}",
+                  file=sys.stderr)
 
-    # Clean up archive
+    if extracted.resolve() != dest.resolve():
+        extracted.replace(dest)
+
     archive_path.unlink(missing_ok=True)
+
+    # Record the release that produced this database (for `check`).
+    if meta:
+        try:
+            META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+    elif zzz:
+        META_PATH.write_text(json.dumps({"variant": "zzz", "download_url": url},
+                                        ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Create indexes for fast name lookups
     print("Creating indexes for fast queries ...")
@@ -181,6 +312,48 @@ def download_db(dest: Optional[Path] = None) -> Path:
 
     print(f"Ready: {dest}")
     return dest
+
+
+def check_release() -> None:
+    """Report the current remote release and whether the local database is current."""
+    meta = fetch_latest_metadata()
+    if not meta:
+        print("Could not retrieve release metadata from:", file=sys.stderr)
+        print(f"  {LATEST_JSON_URL}", file=sys.stderr)
+        sys.exit(1)
+
+    remote_date = meta.get("generated_at_utc", "unknown")
+    print("Latest CBDB release (from latest.json):")
+    print(f"  filename:     {meta.get('sqlite_filename', '?')}")
+    print(f"  released:     {remote_date}")
+    print(f"  format:       {meta.get('format', '?')}")
+    print(f"  download_url: {meta.get('download_url', '?')}")
+    print(f"  sha256:       {meta.get('sha256', '?')}")
+
+    if not DB_PATH.exists():
+        print("\nLocal database: not downloaded. Run `python3 cbdb_query.py setup`.")
+        return
+
+    local: dict = {}
+    if META_PATH.exists():
+        try:
+            local = json.loads(META_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            local = {}
+
+    local_date = local.get("generated_at_utc")
+    print(f"\nLocal database: {DB_PATH}")
+    if local.get("variant") == "zzz":
+        print("  variant: ZZZ (denormalized); not tracked by latest.json.")
+    elif not local_date:
+        print("  release date unknown (downloaded before version tracking).")
+        print("  Run `setup --force` to refresh and start tracking the version.")
+    elif local_date == remote_date:
+        print("  up to date.")
+    else:
+        print(f"  installed: {local_date}")
+        print(f"  available: {remote_date}")
+        print("  Update available — run `python3 cbdb_query.py setup --force`.")
 
 
 def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
@@ -1397,7 +1570,12 @@ def main() -> None:
     cmd = sys.argv[1]
 
     if cmd == "setup":
-        download_db()
+        rest = sys.argv[2:]
+        download_db(force="--force" in rest, zzz="--zzz" in rest)
+        return
+
+    if cmd == "check":
+        check_release()
         return
 
     conn = get_connection()

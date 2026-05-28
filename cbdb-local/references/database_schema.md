@@ -222,9 +222,11 @@ Links people to social institutions (academies, monasteries, temples) with their
 | `OFFICE_CODE_TYPE_REL` | Junction: office → hierarchy |
 | `STATUS_CODE_TYPE_REL` | Junction: status → category |
 
-## ZZZ_ Denormalized Tables (Recommended for Queries)
+## ZZZ_ Denormalized Tables
 
-These tables pre-join coded IDs with human-readable text strings. **Use these for raw SQL queries** — they simplify joins significantly.
+These tables pre-join coded IDs with human-readable text strings, which simplifies raw SQL queries significantly.
+
+> **Availability:** ZZZ_ tables are deprecated upstream (replaced by SQL views) and are **not** in the default database. They are present only if you ran `python3 scripts/cbdb_query.py setup --zzz`. Without them, write queries against the standard tables documented above.
 
 | Table | Description |
 |---|---|

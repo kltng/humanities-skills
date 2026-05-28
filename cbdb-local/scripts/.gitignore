@@ -1,3 +1,7 @@
 cbdb.db
+cbdb.db.release.json
+cbdb_download.zip
+cbdb_download.7z
 latest.7z
 latest.db
+*.sqlite3
