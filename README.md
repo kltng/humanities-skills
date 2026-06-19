@@ -46,6 +46,13 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [wikidata-search](wikidata-search/) | Search Wikidata via keyword, semantic/hybrid search, SPARQL, and direct entity retrieval |
 | [zotero-local](zotero-local/) | Interact with local Zotero 8 desktop via HTTP API — search, fetch, add, organize references |
 
+### Text Encoding & Entity Linking
+
+| Skill | Description |
+|-------|-------------|
+| [archival-entity-linking](archival-entity-linking/) | Determinism-first agentic workflow turning historical archives into Wikidata-linked TEI P5 — disambiguate entities, build a self-deterministizing dictionary, trace and review the model-decided minority |
+| [tei-validator](tei-validator/) | Validate TEI P5 XML for archival materials — well-formedness, schema, entity markup, dates, authority refs, with basic/standard/strict levels |
+
 ### Research & Evaluation Tools
 
 | Skill | Description |

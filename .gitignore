@@ -29,3 +29,7 @@ env/
 ## SQLite temp files
 *.db-shm
 *.db-wal
+
+## Temporarily ignored skills (pending publish)
+archival-entity-linking/
+tei-validator/

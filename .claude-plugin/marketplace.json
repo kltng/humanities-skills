@@ -207,6 +207,26 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "archival-entity-linking",
+      "source": "./archival-entity-linking",
+      "description": "Determinism-first agentic workflow for turning a corpus of historical archival documents into Wikidata-linked, TEI P5-encoded records — extract and disambiguate named entities, build a self-deterministizing dictionary, and encode authority-linked TEI with full tracing and review of the model-decided minority",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "tei-validator",
+      "source": "./tei-validator",
+      "description": "Validate TEI P5 XML documents for archival materials — well-formedness, schema compliance, named entity markup, date normalization, authority file references, and archival best practices, with basic/standard/strict validation levels",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
