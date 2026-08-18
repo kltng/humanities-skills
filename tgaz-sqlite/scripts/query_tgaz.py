@@ -17,14 +17,58 @@ Usage:
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
+from pathlib import Path
 
-DB_PATH = "tgaz.db"
+# tgaz.db is 228 MB and is not stored in the repo. Keep one copy in the shared
+# cache below; everything else finds it from there. See SKILL.md for how to
+# download it.
+CACHE_DB = Path.home() / ".local" / "share" / "sino-authorities" / "tgaz.db"
+
+DOWNLOAD_HINT = f"""Download it once (requires git-lfs):
+
+  mkdir -p {CACHE_DB.parent}
+  git lfs install
+  git clone https://github.com/kltng/tgaz-sqlite.git /tmp/tgaz-sqlite
+  mv /tmp/tgaz-sqlite/tgaz.db {CACHE_DB}
+  rm -rf /tmp/tgaz-sqlite"""
+
+
+def db_candidates():
+    """Places to look for tgaz.db, in order of preference."""
+    paths = []
+    env = os.environ.get("TGAZ_DB")
+    if env:
+        paths.append(Path(env).expanduser())
+    paths.append(Path.cwd() / "tgaz.db")
+    paths.append(Path(__file__).resolve().parent / "tgaz.db")
+    paths.append(CACHE_DB)
+    return paths
+
+
+def resolve_db(explicit=None):
+    """Return the first tgaz.db that exists, or exit with instructions."""
+    if explicit:
+        path = Path(explicit).expanduser()
+        if not path.exists():
+            sys.exit(f"Error: no database at {path}")
+        return path
+
+    seen = []
+    for path in db_candidates():
+        if path.exists():
+            return path
+        if path not in seen:
+            seen.append(path)
+
+    looked = "\n".join(f"  {p}" for p in seen)
+    sys.exit(f"Error: tgaz.db not found. Looked in:\n{looked}\n\n{DOWNLOAD_HINT}")
 
 
 def get_conn(db_path):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -251,7 +295,7 @@ def format_rows(rows, fmt="table"):
 def main():
     parser = argparse.ArgumentParser(description="Query the TGAZ SQLite database")
     parser.add_argument("search", nargs="?", help="Quick search (name or FTS)")
-    parser.add_argument("--db", default=DB_PATH)
+    parser.add_argument("--db", help="Path to tgaz.db (default: auto-detect)")
     parser.add_argument("--name", help="Search by name prefix")
     parser.add_argument("--fts", help="Full-text search")
     parser.add_argument("--year", type=int, help="Filter to places existing in this year")
@@ -266,7 +310,7 @@ def main():
     parser.add_argument("--limit", type=int, default=50)
 
     args = parser.parse_args()
-    conn = get_conn(args.db)
+    conn = get_conn(resolve_db(args.db))
 
     if args.stats:
         print(json.dumps(get_stats(conn), ensure_ascii=False, indent=2))

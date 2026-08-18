@@ -10,6 +10,10 @@ import sys
 import time
 
 MYSQL_DUMP = "/tmp/tgaz_repo/mysql-init/02-tgaz-dev-2018.sql"
+# Output database. Defaults to ./tgaz.db in the current directory so a rebuild
+# never overwrites the shared copy by accident. When the new build checks out,
+# install it with:
+#   mv tgaz.db ~/.local/share/sino-authorities/tgaz.db
 DB_PATH = "tgaz.db"
 
 # Hand-written SQLite schema from the MySQL definitions

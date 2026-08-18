@@ -17,19 +17,37 @@ description: >
 
 ## Setup: Get the Database
 
-Before running any queries, check that `tgaz.db` and `query_tgaz.py` exist in the current directory. If they don't, clone the repo:
+The database is 228 MB, so it is not stored in this repo. Keep one copy on the
+machine at `~/.local/share/sino-authorities/tgaz.db` and point everything there.
+
+`query_tgaz.py` finds it on its own. It looks in this order and uses the first
+one that exists:
+
+1. the path given with `--db`
+2. `$TGAZ_DB`, if that variable is set
+3. `tgaz.db` in the current directory
+4. `tgaz.db` next to `query_tgaz.py`
+5. `~/.local/share/sino-authorities/tgaz.db` (the shared copy)
+
+Check whether the shared copy is already there:
 
 ```bash
-# Check if files exist
-ls tgaz.db query_tgaz.py 2>/dev/null
-
-# If not found, clone the repo (requires git-lfs for the 228 MB database)
-git lfs install
-git clone https://github.com/kltng/tgaz-sqlite.git /tmp/tgaz-sqlite
-cp /tmp/tgaz-sqlite/tgaz.db /tmp/tgaz-sqlite/query_tgaz.py .
+ls -lh ~/.local/share/sino-authorities/tgaz.db 2>/dev/null
 ```
 
-If the user is already inside the `tgaz-sqlite` repo directory, everything is ready — skip the clone.
+If it is missing, download it once (requires git-lfs):
+
+```bash
+mkdir -p ~/.local/share/sino-authorities
+git lfs install
+git clone https://github.com/kltng/tgaz-sqlite.git /tmp/tgaz-sqlite
+mv /tmp/tgaz-sqlite/tgaz.db ~/.local/share/sino-authorities/tgaz.db
+rm -rf /tmp/tgaz-sqlite
+```
+
+Download it only once. The file is 228 MB and GitHub gives 1 GB of free LFS
+traffic per month, so about four downloads use up the whole monthly quota.
+After that, LFS clones fail until the quota resets.
 
 ---
 

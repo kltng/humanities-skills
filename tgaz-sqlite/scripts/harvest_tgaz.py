@@ -21,6 +21,10 @@ import urllib.parse
 import urllib.error
 
 API_BASE = "https://chgis.hudci.org/tgaz/placename"
+# Output database. Defaults to ./tgaz.db in the current directory so a rebuild
+# never overwrites the shared copy by accident. When the new build checks out,
+# install it with:
+#   mv tgaz.db ~/.local/share/sino-authorities/tgaz.db
 DB_PATH = "tgaz.db"
 MAX_RESULTS = 200
 DELAY = 0.35

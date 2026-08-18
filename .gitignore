@@ -29,6 +29,8 @@ env/
 ## SQLite temp files
 *.db-shm
 *.db-wal
+## TGAZ database (228 MB, downloaded separately — see tgaz-sqlite/SKILL.md)
+tgaz.db
 
 ## Temporarily ignored skills (pending publish)
 archival-entity-linking/
