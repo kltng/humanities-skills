@@ -24,7 +24,7 @@ A review file is rendered from a single structure:
 | `cjk` | bool | `false` | Enables `word-break: break-all` for long unbroken CJK strings. |
 | `theme` | object | – | CSS variable overrides, e.g. `{"--accent": "#3b82f6"}`. See **Theming**. |
 | `result_filename` | string | `"review_results.json"` | Filename used by **Download Results**. |
-| `storage_key` | string | falls back to `title` | Key for browser autosave. Set explicitly to keep autosave stable when the title changes between runs. |
+| `storage_key` | string | title + hash of items | Key for browser autosave. Set explicitly to keep autosave stable when you regenerate the file with a new title or changed items. |
 
 ---
 
@@ -141,6 +141,9 @@ Per-question result fields:
 
 **Load** re-imports this file: it matches each result by `item_id` + `question_id` and restores
 the selection. Items/questions not present are left untouched, so a partial file resumes fine.
+A result is skipped (not applied) if its `type` differs from the question's type, if it selects a
+candidate id the question does not have, or if a value has the wrong shape (e.g. a rating
+outside the scale). The page reports how many answers were loaded.
 
 ---
 
@@ -187,4 +190,6 @@ Example — a cooler, modern palette:
 | `?` | Toggle the help overlay |
 | `Esc` | Close help / blur the current field |
 
-Shortcuts are ignored while typing in a textarea or input, so notes and corrections type normally.
+Shortcuts are ignored while typing in a textarea or text input, so notes and corrections type
+normally. They still work when a checkbox or radio has focus. Key presses with Ctrl, Cmd, or Alt
+are left to the browser.

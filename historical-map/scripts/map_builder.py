@@ -13,6 +13,9 @@ from typing import Any, Optional
 # CDN URLs
 _LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
 _LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+# Subresource Integrity hashes for the pinned Leaflet 1.9.4 files
+_LEAFLET_CSS_SRI = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+_LEAFLET_JS_SRI = "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
 
 # Pre-configured basemap tile URLs
 BASEMAPS = {
@@ -112,8 +115,10 @@ class HistoricalMapBuilder:
         basemap: str = "carto_light",
     ) -> None:
         self.title = title
-        self.center = center
-        self.zoom = zoom
+        # Cast now: these are written into the page as raw JS numbers, so a
+        # None or a stray string would break the whole script.
+        self.center = (float(center[0]), float(center[1]))
+        self.zoom = int(zoom)
         self.basemap = basemap
 
         self._markers: list[dict[str, Any]] = []
@@ -147,9 +152,10 @@ class HistoricalMapBuilder:
         label : str
             Internal label (used as default tooltip if tooltip not set).
         popup : str, optional
-            HTML content shown on click.
+            HTML content shown on click (trusted HTML; not escaped).
+            Defaults to the escaped ``label`` in bold.
         tooltip : str, optional
-            Text shown on hover.
+            Plain text shown on hover (HTML-escaped). Defaults to ``label``.
         color : str
             Marker color. One of: blue, gold, red, green, orange, yellow,
             violet, grey, black.
@@ -157,11 +163,11 @@ class HistoricalMapBuilder:
             Layer group name (for layer control toggle).
         """
         self._markers.append({
-            "lat": lat,
-            "lng": lng,
+            "lat": float(lat),
+            "lng": float(lng),
             "label": label,
-            "popup": popup or f"<b>{label}</b>",
-            "tooltip": tooltip or label,
+            "popup": popup or f"<b>{_escape_html(label)}</b>",
+            "tooltip": _escape_html(tooltip or label),
             "color": color,
             "group": group,
         })
@@ -251,7 +257,7 @@ class HistoricalMapBuilder:
         ----------
         period : str
             Key from ``HISTORICAL_BOUNDARIES``, e.g. ``"200_bce"``,
-            ``"618_ce"``, ``"1400_ce"``.
+            ``"700_ce"``, ``"1400_ce"``.
         name : str, optional
             Layer name (defaults to formatted period).
         style : dict, optional
@@ -305,8 +311,8 @@ class HistoricalMapBuilder:
             "url": url,
             "name": name,
             "attribution": attribution,
-            "max_zoom": max_zoom,
-            "opacity": opacity,
+            "max_zoom": int(max_zoom),
+            "opacity": float(opacity),
             "overlay": overlay,
         })
         return self
@@ -369,7 +375,7 @@ class HistoricalMapBuilder:
             "name": name,
             "format": fmt,
             "transparent": transparent,
-            "opacity": opacity,
+            "opacity": float(opacity),
             "attribution": attribution,
         })
         return self
@@ -401,9 +407,9 @@ class HistoricalMapBuilder:
         """
         self._image_overlays.append({
             "url": url,
-            "bounds": [list(bounds[0]), list(bounds[1])],
+            "bounds": [[float(v) for v in bounds[0]], [float(v) for v in bounds[1]]],
             "name": name,
-            "opacity": opacity,
+            "opacity": float(opacity),
         })
         return self
 
@@ -415,15 +421,23 @@ class HistoricalMapBuilder:
         """Generate the JavaScript for the map."""
         lines: list[str] = []
 
+        # Escape GeoJSON property values before Leaflet inserts them as HTML
+        lines.append("""
+    function escHtml(v) {
+        return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+""")
+
         # Basemap
         if self.basemap != "none" and self.basemap in BASEMAPS:
             bm = BASEMAPS[self.basemap]
             lines.append(f"""
-    var basemap = L.tileLayer({json.dumps(bm['url'])}, {{
-        attribution: {json.dumps(bm['attribution'])},
+    var basemap = L.tileLayer({_js(bm['url'])}, {{
+        attribution: {_js(bm['attribution'])},
         maxZoom: {bm['max_zoom']}
     }});
-    var baseMaps = {{{json.dumps(bm['name'])}: basemap}};
+    var baseMaps = {{{_js(_escape_html(bm['name']))}: basemap}};
 """)
         else:
             lines.append("    var baseMaps = {};\n")
@@ -432,16 +446,16 @@ class HistoricalMapBuilder:
         for i, tl in enumerate(self._tile_layers):
             if not tl["overlay"]:
                 lines.append(f"""
-    var tileBase_{i} = L.tileLayer({json.dumps(tl['url'])}, {{
-        attribution: {json.dumps(tl['attribution'])},
+    var tileBase_{i} = L.tileLayer({_js(tl['url'])}, {{
+        attribution: {_js(tl['attribution'])},
         maxZoom: {tl['max_zoom']},
         opacity: {tl['opacity']}
     }});
-    baseMaps[{json.dumps(tl['name'])}] = tileBase_{i};
+    baseMaps[{_js(_escape_html(tl['name']))}] = tileBase_{i};
 """)
 
         # Map init
-        center_js = json.dumps(list(self.center))
+        center_js = _js(list(self.center))
         default_layers = "basemap" if (self.basemap != "none" and self.basemap in BASEMAPS) else ""
         lines.append(f"""
     var map = L.map('map', {{
@@ -456,87 +470,69 @@ class HistoricalMapBuilder:
         for i, tl in enumerate(self._tile_layers):
             if tl["overlay"]:
                 lines.append(f"""
-    var tileOverlay_{i} = L.tileLayer({json.dumps(tl['url'])}, {{
-        attribution: {json.dumps(tl['attribution'])},
+    var tileOverlay_{i} = L.tileLayer({_js(tl['url'])}, {{
+        attribution: {_js(tl['attribution'])},
         maxZoom: {tl['max_zoom']},
         opacity: {tl['opacity']}
     }}).addTo(map);
-    overlayMaps[{json.dumps(tl['name'])}] = tileOverlay_{i};
+    overlayMaps[{_js(_escape_html(tl['name']))}] = tileOverlay_{i};
 """)
 
         # WMS layers
         for i, wms in enumerate(self._wms_layers):
             lines.append(f"""
-    var wms_{i} = L.tileLayer.wms({json.dumps(wms['url'])}, {{
-        layers: {json.dumps(wms['layers'])},
-        format: {json.dumps(wms['format'])},
-        transparent: {json.dumps(wms['transparent'])},
+    var wms_{i} = L.tileLayer.wms({_js(wms['url'])}, {{
+        layers: {_js(wms['layers'])},
+        format: {_js(wms['format'])},
+        transparent: {_js(wms['transparent'])},
         opacity: {wms['opacity']},
-        attribution: {json.dumps(wms['attribution'])}
+        attribution: {_js(wms['attribution'])}
     }}).addTo(map);
-    overlayMaps[{json.dumps(wms['name'])}] = wms_{i};
+    overlayMaps[{_js(_escape_html(wms['name']))}] = wms_{i};
 """)
 
         # Image overlays
         for i, img in enumerate(self._image_overlays):
-            bounds_js = json.dumps(img["bounds"])
+            bounds_js = _js(img["bounds"])
             lines.append(f"""
-    var imgOverlay_{i} = L.imageOverlay({json.dumps(img['url'])}, {bounds_js}, {{
+    var imgOverlay_{i} = L.imageOverlay({_js(img['url'])}, {bounds_js}, {{
         opacity: {img['opacity']}
     }}).addTo(map);
-    overlayMaps[{json.dumps(img['name'])}] = imgOverlay_{i};
+    overlayMaps[{_js(_escape_html(img['name']))}] = imgOverlay_{i};
 """)
 
         # Inline GeoJSON layers
         for i, gj in enumerate(self._geojson_layers):
-            data_js = json.dumps(gj["data"], ensure_ascii=False)
-            style_js = json.dumps(gj["style"])
+            data_js = _js(gj["data"])
+            style_js = _js(gj["style"])
             lines.append(f"""
     var geojsonData_{i} = {data_js};
     var geojson_{i} = L.geoJSON(geojsonData_{i}, {{
         style: function() {{ return {style_js}; }},
 """)
-            if gj["popup_property"]:
-                lines.append(f"""        onEachFeature: function(feature, layer) {{
-            if (feature.properties) {{
-                var pp = feature.properties[{json.dumps(gj['popup_property'])}];
-                var tp = feature.properties[{json.dumps(gj.get('tooltip_property') or gj['popup_property'])}];
-                if (pp) layer.bindPopup('<b>' + pp + '</b>');
-                if (tp) layer.bindTooltip(tp);
-            }}
-        }}
-""")
+            if gj["popup_property"] or gj["tooltip_property"]:
+                lines.append(_feature_binding_js(gj))
             lines.append(f"""    }}).addTo(map);
-    overlayMaps[{json.dumps(gj['name'])}] = geojson_{i};
+    overlayMaps[{_js(_escape_html(gj['name']))}] = geojson_{i};
 """)
 
         # Remote GeoJSON layers (fetched at runtime)
         for i, gj in enumerate(self._geojson_url_layers):
-            style_js = json.dumps(gj["style"])
+            style_js = _js(gj["style"])
             lines.append(f"""
     (function() {{
         var idx = {i};
-        fetch({json.dumps(gj['url'])})
+        fetch({_js(gj['url'])})
             .then(function(r) {{ return r.json(); }})
             .then(function(data) {{
                 var layer = L.geoJSON(data, {{
                     style: function() {{ return {style_js}; }},
 """)
-            if gj["popup_property"]:
-                pp = json.dumps(gj["popup_property"])
-                tp = json.dumps(gj.get("tooltip_property") or gj["popup_property"])
-                lines.append(f"""                    onEachFeature: function(feature, layer) {{
-                        if (feature.properties) {{
-                            var pp = feature.properties[{pp}];
-                            var tp = feature.properties[{tp}];
-                            if (pp) layer.bindPopup('<b>' + pp + '</b>');
-                            if (tp) layer.bindTooltip(tp);
-                        }}
-                    }}
-""")
+            if gj["popup_property"] or gj["tooltip_property"]:
+                lines.append(_feature_binding_js(gj))
             lines.append(f"""                }}).addTo(map);
-                overlayMaps[{json.dumps(gj['name'])}] = layer;
-                controlLayer.addOverlay(layer, {json.dumps(gj['name'])});
+                overlayMaps[{_js(_escape_html(gj['name']))}] = layer;
+                controlLayer.addOverlay(layer, {_js(_escape_html(gj['name']))});
             }});
     }})();
 """)
@@ -566,13 +562,13 @@ class HistoricalMapBuilder:
             for i in indices:
                 m = self._markers[i]
                 lines.append(f"""
-    L.marker([{m['lat']}, {m['lng']}], {{icon: colorIcon({json.dumps(m['color'])})}})
-        .bindPopup({json.dumps(m['popup'])})
-        .bindTooltip({json.dumps(m['tooltip'])})
+    L.marker([{m['lat']}, {m['lng']}], {{icon: colorIcon({_js(m['color'])})}})
+        .bindPopup({_js(m['popup'])})
+        .bindTooltip({_js(m['tooltip'])})
         .addTo({var_name});""")
             if group_name != "__default__":
                 lines.append(
-                    f"    overlayMaps[{json.dumps(group_name)}] = {var_name};"
+                    f"    overlayMaps[{_js(_escape_html(group_name))}] = {var_name};"
                 )
 
         # Layer control
@@ -606,8 +602,8 @@ class HistoricalMapBuilder:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{_escape_html(self.title)}</title>
-  <link rel="stylesheet" href="{_LEAFLET_CSS}">
-  <script src="{_LEAFLET_JS}"></script>
+  <link rel="stylesheet" href="{_LEAFLET_CSS}" integrity="{_LEAFLET_CSS_SRI}" crossorigin="">
+  <script src="{_LEAFLET_JS}" integrity="{_LEAFLET_JS_SRI}" crossorigin=""></script>
   <style>
     html, body {{ height: 100%; margin: 0; padding: 0; }}
     #map {{ width: 100%; height: 100%; }}
@@ -637,12 +633,56 @@ class HistoricalMapBuilder:
 
 
 def _escape_html(text: str) -> str:
-    """Minimal HTML escaping for title text."""
+    """Minimal HTML escaping for plain text inserted into HTML."""
     return (
         text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
+    )
+
+
+def _feature_binding_js(gj: dict[str, Any]) -> str:
+    """Build the ``onEachFeature`` option that binds property popups/tooltips.
+
+    Property values come from the GeoJSON data (often a remote file), so they
+    are HTML-escaped in the browser before Leaflet renders them.
+    """
+    popup_prop = gj.get("popup_property")
+    tooltip_prop = gj.get("tooltip_property") or popup_prop
+    parts = []
+    if popup_prop:
+        parts.append(
+            f"var pp = feature.properties[{_js(popup_prop)}]; "
+            "if (pp != null && pp !== '') layer.bindPopup('<b>' + escHtml(pp) + '</b>');"
+        )
+    if tooltip_prop:
+        parts.append(
+            f"var tp = feature.properties[{_js(tooltip_prop)}]; "
+            "if (tp != null && tp !== '') layer.bindTooltip(escHtml(tp));"
+        )
+    body = " ".join(parts)
+    return (
+        "        onEachFeature: function(feature, layer) {\n"
+        f"            if (feature.properties) {{ {body} }}\n"
+        "        }\n"
+    )
+
+
+def _js(obj: Any) -> str:
+    """Serialize to a JS literal that is safe inside an inline <script> block.
+
+    ``json.dumps`` alone lets a string such as ``</script>`` end the script
+    early. Escaping ``<``, ``>``, ``&`` and U+2028/U+2029 prevents that; the
+    JS engine turns the escapes back into the original characters.
+    """
+    s = json.dumps(obj, ensure_ascii=False)
+    return (
+        s.replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
     )
 
 

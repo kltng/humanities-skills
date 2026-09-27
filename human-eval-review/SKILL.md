@@ -39,12 +39,14 @@ The renderer is data-driven. You produce a `{"config": {...}, "items": [...]}` s
 (directly, or via the `ReviewBuilder` API), and the page builds itself. To support a new
 review task you change the **data**, never the template.
 
-### `excerpt` is the only field rendered as HTML — use `<mark>` for highlights
+### Only `excerpt` (and `source` with `source_html`) is rendered as HTML — use `<mark>` for highlights
 
 In a candidate, `excerpt` is injected as HTML so you can wrap matched spans in `<mark>…</mark>`
-(rendered as a yellow highlight, exactly like the examples). All other fields (`title`,
-`reason`, `source`, notes) are inserted as plain text and are safe. Only put trusted,
-builder-generated HTML in `excerpt`.
+(rendered as a yellow highlight, exactly like the examples). An item's `source` is also HTML,
+but only when you set `source_html: true`. All other fields (`title`, `reason`, `heading`,
+`prompt`, labels, notes, and `source` by default) are inserted as plain text and are safe.
+Only put trusted, builder-generated HTML in `excerpt` / HTML `source`; escape any text that
+comes from outside data before you wrap it in `<mark>`.
 
 ### Five question types cover most eval shapes
 
@@ -176,8 +178,9 @@ type-specific answer. Use it to build gold labels, compute agreement, or feed th
 - **Keep the visible candidate list short** (top ~5) and push the long tail into `excluded`.
 - **One question per decision.** For sub-entry tasks, add multiple questions to one item rather
   than cramming choices together — progress and results stay clean.
-- **Set a stable `storage_key`** in config if the title changes between runs but you want the
-  browser autosave to carry over (otherwise autosave keys off the title).
+- **Set a stable `storage_key`** in config if you regenerate the file (new title or changed
+  items) and want the browser autosave to carry over. Without it, autosave keys off the title
+  plus a hash of the items, so two different review files never share saved answers.
 
 ## Related Skills
 

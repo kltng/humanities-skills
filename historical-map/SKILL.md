@@ -30,7 +30,7 @@ from scripts.map_builder import BASEMAPS
 
 ### Historical world boundaries are one method call away
 
-54 pre-built GeoJSON boundary files (123,000 BCE – 2010 CE) from `aourednik/historical-basemaps`:
+36 pre-configured GeoJSON boundary files (2000 BCE – 1994 CE) from `aourednik/historical-basemaps` (keys in `HISTORICAL_BOUNDARIES`):
 
 ```python
 m.add_historical_boundaries("200_bce")   # World c. 200 BCE
@@ -46,21 +46,31 @@ BCE: `2000_bce`, `1000_bce`, `500_bce`, `323_bce`, `200_bce`, `100_bce`, `1_bce`
 
 CE: `100_ce` through `1994_ce` in ~100-year increments, plus special years: `1279_ce`, `1492_ce`, `1783_ce`, `1815_ce`, `1880_ce`, `1920_ce`, `1938_ce`, `1945_ce`, `1960_ce`
 
+### What is HTML and what is plain text
+
+`popup` and `attribution` strings are inserted as **HTML** (so `<b>`, `<br>`, links work). Only pass trusted HTML there; escape any text that comes from outside data. Everything else is treated as plain text and escaped for you: `label`, `tooltip`, layer and group names, and GeoJSON property values shown by `popup_property` / `tooltip_property`.
+
 ### Colored marker icons are loaded from GitHub
 
 Marker colors: `blue`, `gold`, `red`, `green`, `orange`, `yellow`, `violet`, `grey`, `black`. These use the `pointhi/leaflet-color-markers` CDN icons.
 
 ### Academia Sinica provides Chinese historical map tiles
 
-WMTS tiles based on Tan Qixiang's Historical Atlas of China (谭其骧《中国历史地图集》), covering 222 BCE – 1911 CE:
+WMTS tiles based on Tan Qixiang's Historical Atlas of China (谭其骧《中国历史地图集》), covering 222 BCE – 1911 CE.
+The server is WMTS only (it does not answer WMS `GetMap`), so do **not** use `add_wms_layer`.
+Its tiles use the Google/XYZ grid, so load them with `add_tile_layer`:
 
 ```python
-m.add_wms_layer(
-    "https://gis.sinica.edu.tw/tileserver/wmts",
-    layers="LAYER_ID",
-    name="Tang Dynasty Map",
+m.add_tile_layer(
+    "https://gis.sinica.edu.tw/ccts/file-exists.php?img=LAYER_ID-png-{z}-{x}-{y}",
+    name="Beijing 1928",
+    attribution='<a href="https://gis.sinica.edu.tw/">Academia Sinica</a>',
 )
 ```
+
+Find `LAYER_ID` and its image format (`png` or `jpg`) in the capabilities file:
+`https://gis.sinica.edu.tw/ccts/wmts?SERVICE=WMTS&REQUEST=GetCapabilities`
+(each layer's `ResourceURL template`, e.g. `Beijing_50K_1928b-png-...`).
 
 ### MapWarper provides crowdsourced georeferenced historical maps
 
@@ -174,7 +184,7 @@ HistoricalMapBuilder(
 | `add_historical_boundaries(period, *, name, style)` | World boundaries from historical-basemaps |
 | `add_tile_layer(url, name, *, attribution, max_zoom, opacity, overlay)` | XYZ tile layer |
 | `add_mapwarper_layer(map_id, name, *, opacity)` | MapWarper georeferenced map |
-| `add_wms_layer(url, layers, name, *, fmt, transparent, opacity)` | WMS tile layer |
+| `add_wms_layer(url, layers, name, *, fmt, transparent, opacity, attribution)` | WMS tile layer (real WMS servers only) |
 | `add_image_overlay(url, bounds, name, *, opacity)` | Georeferenced image overlay |
 | `save_html(path)` | Write standalone HTML file |
 

@@ -141,10 +141,7 @@ canal infrastructure.
 
 Claude would:
 1. Select an opposing lens (likely quantitative/cliometric or world-systems theory)
-2. Attack the state-primacy framing — e.g., arguing that demographic growth, iron production advances, and Southeastern Asian trade networks preceded and enabled state reforms
+2. Attack the state-primacy framing — e.g., arguing that demographic growth, iron production advances, and Southeast Asian trade networks preceded and enabled state reforms
 3. Challenge the evidence — e.g., questioning whether currency expansion was state-led or a response to existing commercial demand
 4. Run 3 rounds of structured debate
 5. Produce scorecard, revised thesis, and bibliography gaps
-```
-
-**Step 2: Do NOT commit.** Just create the file. The controller will handle commits.

@@ -30,16 +30,20 @@ m.add_tile_layer(
 
 Based on Tan Qixiang's Historical Atlas of China (谭其骧《中国历史地图集》). Coverage: 222 BCE – 1911 CE.
 
-**WMTS endpoint:**
+**WMTS capabilities (layer list):**
 ```
-https://gis.sinica.edu.tw/ccts/wmts
+https://gis.sinica.edu.tw/ccts/wmts?SERVICE=WMTS&REQUEST=GetCapabilities
 ```
+
+The server speaks WMTS only; WMS `GetMap` requests get an XML reply, not an image, so
+`add_wms_layer` does not work here. Tiles use the Google/XYZ grid. Each layer's
+`ResourceURL template` in the capabilities file gives the layer ID and format
+(e.g. `...?img=Beijing_50K_1928b-png-{TileMatrix}-{TileCol}-{TileRow}`).
 
 **Usage with builder:**
 ```python
-m.add_wms_layer(
-    "https://gis.sinica.edu.tw/ccts/wmts",
-    layers="LAYER_ID",
+m.add_tile_layer(
+    "https://gis.sinica.edu.tw/ccts/file-exists.php?img=LAYER_ID-png-{z}-{x}-{y}",
     name="Historical China",
     attribution='<a href="https://gis.sinica.edu.tw/">Academia Sinica</a>',
 )
@@ -89,7 +93,7 @@ https://maps.nypl.org/warper/maps/tile/{map_id}/{z}/{x}/{y}.png
 
 ### aourednik/historical-basemaps (Built-in)
 
-Pre-configured in `HISTORICAL_BOUNDARIES` dict. 54 GeoJSON files from 123,000 BCE to 2010 CE.
+Pre-configured in `HISTORICAL_BOUNDARIES` dict: 36 of the repository's GeoJSON files, from 2000 BCE to 1994 CE. (The upstream repository has more periods; add them with `add_geojson_url`.)
 
 **Source:** https://github.com/aourednik/historical-basemaps
 **Format:** GeoJSON (WGS 84 / EPSG:4326)
@@ -181,6 +185,8 @@ L.geoJSON(geojsonData, {
         return {color: '#e63946', weight: 2, fillOpacity: 0.2};
     },
     onEachFeature: function(feature, layer) {
+        // Leaflet inserts popup/tooltip strings as HTML. The builder escapes
+        // property values first; do the same if you copy this snippet.
         if (feature.properties && feature.properties.name) {
             layer.bindPopup('<b>' + feature.properties.name + '</b>');
             layer.bindTooltip(feature.properties.name);

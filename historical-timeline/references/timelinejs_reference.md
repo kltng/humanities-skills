@@ -40,7 +40,7 @@ Complete reference for the TimelineJS3 JSON format, configuration options, and H
 
 | Property | Required | Type | Description |
 |----------|----------|------|-------------|
-| `year` | Yes | Number | Negative for BCE (e.g., `-551` → "551 BCE") |
+| `year` | Yes | Number | Negative for BCE (e.g., `-551` → "551 BCE"). No year 0: `-1` = 1 BCE, `1` = 1 CE |
 | `month` | No | Number | 1–12 |
 | `day` | No | Number | 1–31 |
 | `hour` | No | Number | 0–23 |
@@ -155,8 +155,11 @@ Minimal standalone HTML:
 <head>
   <meta charset="utf-8">
   <title>Timeline</title>
-  <link rel="stylesheet" href="https://cdn.knightlab.com/libs/timeline3/latest/css/timeline.css">
-  <script src="https://cdn.knightlab.com/libs/timeline3/latest/js/timeline.js"></script>
+  <!-- Pinned release + SRI hashes (same as timeline_builder.py). -->
+  <link rel="stylesheet" href="https://unpkg.com/@knight-lab/timelinejs@3.9.13/dist/css/timeline.css"
+        integrity="sha384-boDF6Nd/No9fGBo1BlF2eLCnex+ILqI/6O7gE0MoOioYo7gWdq9LbFxD94ebGlBB" crossorigin="anonymous">
+  <script src="https://unpkg.com/@knight-lab/timelinejs@3.9.13/dist/js/timeline.js"
+          integrity="sha384-8B07YaZB/m0vvHtA7yBc7N0svMpYBCCxo524I0vCNdPNkb0FOU5g9ouDlQ1G3NSh" crossorigin="anonymous"></script>
   <style>
     html, body { height: 100%; margin: 0; padding: 0; }
     #timeline-embed { width: 100%; height: 100%; }
@@ -165,8 +168,11 @@ Minimal standalone HTML:
 <body>
   <div id="timeline-embed"></div>
   <script>
+    // Escape "<", ">", "&" as \u003c, \u003e, \u0026 in the JSON, or a "</script>"
+    // inside any field ends this block early.
     var timelineData = { /* JSON here */ };
-    var options = { /* options here */ };
+    // script_path: where locale files and fonts load from (defaults to knightlab "latest").
+    var options = { script_path: "https://unpkg.com/@knight-lab/timelinejs@3.9.13/dist/js/" };
     new TL.Timeline('timeline-embed', timelineData, options);
   </script>
 </body>

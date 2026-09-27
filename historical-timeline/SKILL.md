@@ -21,11 +21,20 @@ Generate interactive historical timelines as self-contained HTML files powered b
 {"year": -551, "month": 9, "day": 28}
 ```
 
-This renders as "551 BCE". No special syntax — just negative integers.
+This renders as "551 BCE". No special syntax — just negative integers. There is no year 0:
+`-1` is 1 BCE and `1` is 1 CE (the builder raises `ValueError` for year 0). If your source gives
+astronomical years (where 0 = 1 BCE), subtract 1 from every year ≤ 0 first.
 
 ### The `scale` property matters for ancient dates
 
 For timelines spanning thousands of years or BCE dates, set `"scale": "human"` (the default). Use `"scale": "cosmological"` only for astronomical/geological timescales.
+
+### Headlines and text are HTML
+
+`headline`, `text`, `caption`, and `credit` accept HTML. TimelineJS3 cleans this HTML with its
+built-in sanitizer (DOMPurify) before showing it, and the builder escapes the embedded JSON so
+no field can break out of the page's `<script>` block. Still, escape plain text that comes
+from outside data if you do not want it read as markup.
 
 ### The output is a single standalone HTML file
 
@@ -68,7 +77,7 @@ tl = TimelineBuilder(title="The Tang Dynasty", subtitle="618–907 CE")
 
 # Add eras (colored background spans)
 tl.add_era(-221, 220, "Imperial China Begins", end_month=12)
-tl.add_era(618, 907, "Tang Dynasty", color="#2a9d8f")
+tl.add_era(618, 907, "Tang Dynasty")   # era colors are set by TimelineJS3
 
 # Add events
 tl.add_event(
@@ -191,7 +200,7 @@ TimelineJS3 auto-detects media type from URL:
 
 ## API Etiquette
 
-- TimelineJS3 loads from `cdn.knightlab.com` — no rate limiting for the CDN itself
+- TimelineJS3 loads from `unpkg.com`, pinned to `@knight-lab/timelinejs@3.9.13` with Subresource Integrity (SRI) hashes, so the browser refuses a changed file. To upgrade, change the version and both hashes in `timeline_builder.py` together.
 - If embedding media from external sources (Wikipedia, Wikimedia Commons), follow their usage policies
 - Generated HTML files are fully offline-capable after first load (browser caches CDN assets)
 

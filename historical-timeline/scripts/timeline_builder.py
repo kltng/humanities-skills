@@ -6,12 +6,22 @@ files that render interactive historical timelines in any browser.
 """
 
 import json
+import re
 from typing import Any, Optional
 
 
-# CDN URLs for TimelineJS3
-_CSS_CDN = "https://cdn.knightlab.com/libs/timeline3/latest/css/timeline.css"
-_JS_CDN = "https://cdn.knightlab.com/libs/timeline3/latest/js/timeline.js"
+# CDN URLs for TimelineJS3, pinned to one npm release so the SRI hashes hold.
+# (cdn.knightlab.com "latest" changes without notice and cannot be pinned.)
+_TL_BASE = "https://unpkg.com/@knight-lab/timelinejs@3.9.13/dist/"
+_CSS_CDN = _TL_BASE + "css/timeline.css"
+_JS_CDN = _TL_BASE + "js/timeline.js"
+_CSS_SRI = "sha384-boDF6Nd/No9fGBo1BlF2eLCnex+ILqI/6O7gE0MoOioYo7gWdq9LbFxD94ebGlBB"
+_JS_SRI = "sha384-8B07YaZB/m0vvHtA7yBc7N0svMpYBCCxo524I0vCNdPNkb0FOU5g9ouDlQ1G3NSh"
+# Where TimelineJS loads locale files and fonts from (same pinned release).
+_SCRIPT_PATH = _TL_BASE + "js/"
+
+# Safe characters for a CSS color value written into the <style> block.
+_CSS_COLOR_RE = re.compile(r"^[#\w\s(),.%+-]+$")
 
 _HTML_TEMPLATE = """\
 <!DOCTYPE html>
@@ -20,8 +30,8 @@ _HTML_TEMPLATE = """\
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title}</title>
-  <link rel="stylesheet" href="{css_cdn}">
-  <script src="{js_cdn}"></script>
+  <link rel="stylesheet" href="{css_cdn}" integrity="{css_sri}" crossorigin="anonymous">
+  <script src="{js_cdn}" integrity="{js_sri}" crossorigin="anonymous"></script>
   <style>
     html, body {{ height: 100%; margin: 0; padding: 0; background: {bg_color}; }}
     #timeline-embed {{ width: 100%; height: 100%; }}
@@ -46,6 +56,10 @@ def _make_date(
     display_date: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build a TimelineJS3 date object."""
+    if year == 0:
+        raise ValueError(
+            "year 0 does not exist: use -1 for 1 BCE and 1 for 1 CE"
+        )
     d: dict[str, Any] = {"year": year}
     if month is not None:
         d["month"] = month
@@ -182,8 +196,8 @@ class TimelineBuilder:
         headline : str
             Era label displayed on the timeline.
         color : str, optional
-            Background color (hex or CSS name). Note: era colors are
-            auto-assigned by TimelineJS3; this sets the text headline only.
+            Currently ignored. TimelineJS3 assigns era colors itself and
+            has no per-era color field.
         """
         era: dict[str, Any] = {
             "start_date": _make_date(start_year, start_month, start_day),
@@ -271,23 +285,56 @@ class TimelineBuilder:
             options["font"] = font
         if initial_zoom is not None:
             options["initial_zoom"] = initial_zoom
+        options["script_path"] = _SCRIPT_PATH
+
+        if not _CSS_COLOR_RE.match(default_bg_color):
+            raise ValueError(f"Invalid CSS color: {default_bg_color!r}")
 
         title_text = self._title.get("text", {}).get("headline", "Timeline")
 
         html = _HTML_TEMPLATE.format(
-            lang=language[:2],
-            title=title_text,
+            lang=_escape_html(language[:2]),
+            title=_escape_html(re.sub(r"<[^>]*>", "", title_text)),
             css_cdn=_CSS_CDN,
+            css_sri=_CSS_SRI,
             js_cdn=_JS_CDN,
+            js_sri=_JS_SRI,
             bg_color=default_bg_color,
-            json_data=self.to_json(),
-            options=json.dumps(options, ensure_ascii=False),
+            json_data=_js(self.to_dict()),
+            options=_js(options),
         )
 
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
 
         return path
+
+
+def _escape_html(text: str) -> str:
+    """Minimal HTML escaping for plain text inserted into HTML."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _js(obj: Any) -> str:
+    """Serialize to a JS literal that is safe inside an inline <script> block.
+
+    ``json.dumps`` alone lets a string such as ``</script>`` end the script
+    early. Escaping ``<``, ``>``, ``&`` and U+2028/U+2029 prevents that; the
+    JS engine turns the escapes back, so HTML in headlines and text survives.
+    """
+    s = json.dumps(obj, ensure_ascii=False, indent=2)
+    return (
+        s.replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
 
 
 # ------------------------------------------------------------------

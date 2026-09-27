@@ -170,21 +170,34 @@ const subEl = document.getElementById('doc-subtitle');
 if (CONFIG.subtitle) subEl.textContent = CONFIG.subtitle; else subEl.style.display = 'none';
 document.title = CONFIG.title || 'Review';
 
-const STORAGE_KEY = 'her::' + (CONFIG.storage_key || CONFIG.title || 'review');
+// Default ids, same as the Python builder: items "1","2"…, questions "q1","q2"…
+// (without them every result shares the key "undefined" and autosave/Load break).
+DATA.forEach((item, idx) => {
+  if (item.id == null || item.id === '') item.id = String(idx + 1);
+  (item.questions || []).forEach((q, j) => { if (q.id == null || q.id === '') q.id = 'q' + (j + 1); });
+});
+
+// Autosave key. Without an explicit storage_key, include a hash of the items so
+// two different review files with the same title do not share saved answers.
+function hashStr(str){ let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); }
+const STORAGE_KEY = 'her::' + (CONFIG.storage_key || ((CONFIG.title || 'review') + '::' + hashStr(JSON.stringify(DATA))));
 
 // ---- state -------------------------------------------------------------------
 const state = {};                         // qi -> answer object
 const QLIST = [];                         // {qi,item,q,block}
 function defState(){ return {selected:{}, none:false, rating:null, value:null, notes:''}; }
-
-DATA.forEach(item => (item.questions || []).forEach(q => {
-  const qi = QLIST.length;
+function initState(q){
   const s = defState();
   (q.candidates || []).concat(q.excluded || []).forEach(c => { if (c.preselected) s.selected[c.id] = true; });
   if (q.type === 'boolean' && (q.default === true || q.default === false)) s.value = q.default;
   if (q.type === 'rating' && q.default != null) s.rating = q.default;
   if (q.type === 'text' && q.default) s.value = q.default;
-  state[qi] = s;
+  return s;
+}
+
+DATA.forEach(item => (item.questions || []).forEach(q => {
+  const qi = QLIST.length;
+  state[qi] = initState(q);
   QLIST.push({ qi, item, q, block: null });
 }));
 const TOTAL = QLIST.length;
@@ -451,25 +464,52 @@ function serialize(){
            reviewed_count: reviewed, total: TOTAL, results };
 }
 
+// Build the new answer for one question from one result row, or return null if
+// the row does not fit this question (wrong type, unknown candidate ids, bad
+// values). Validating first means a malformed or mismatched file never leaves
+// the page half-updated.
+function resultToState(r, q){
+  if (!r || typeof r !== 'object' || r.type !== q.type) return null;
+  const s = defState();
+  if (q.type === 'match' || q.type === 'single') {
+    const sel = r.selected == null ? [] : r.selected;
+    if (!Array.isArray(sel)) return null;
+    const known = new Set((q.candidates || []).concat(q.excluded || []).map(c => String(c.id)));
+    if (!sel.every(id => known.has(String(id)))) return null;
+    if (q.type === 'single' && sel.length > 1) return null;
+    sel.forEach(id => { s.selected[String(id)] = true; });
+    s.none = !!r.none && !!q.allow_none && sel.length === 0;
+  } else if (q.type === 'rating') {
+    const scale = q.scale || { min: 1, max: 5 };
+    if (r.rating != null && !(Number.isInteger(r.rating) && r.rating >= scale.min && r.rating <= scale.max)) return null;
+    s.rating = r.rating == null ? null : r.rating;
+  } else if (q.type === 'boolean') {
+    if (r.value != null && typeof r.value !== 'boolean') return null;
+    s.value = r.value == null ? null : r.value;
+  } else if (q.type === 'text') {
+    if (r.text != null && typeof r.text !== 'string') return null;
+    s.value = r.text || '';
+  }
+  if (r.notes != null && typeof r.notes !== 'string') return null;
+  s.notes = r.notes || '';
+  return s;
+}
+
 function applyResults(obj){
   if (!obj || !Array.isArray(obj.results)) return 0;
   const byKey = {};
-  QLIST.forEach(e => { byKey[e.item.id + ' ' + e.q.id] = e.qi; });
-  let n = 0;
+  QLIST.forEach(e => { byKey[JSON.stringify([String(e.item.id), String(e.q.id)])] = e.qi; });
+  const updates = [];
   obj.results.forEach(r => {
-    const qi = byKey[r.item_id + ' ' + r.question_id];
+    if (!r || typeof r !== 'object') return;
+    const qi = byKey[JSON.stringify([String(r.item_id), String(r.question_id)])];
     if (qi == null) return;
-    const s = state[qi];
-    s.selected = {}; (r.selected || []).forEach(id => s.selected[id] = true);
-    s.none = !!r.none;
-    if ('rating' in r) s.rating = r.rating;
-    if ('value' in r) s.value = r.value;
-    if ('text' in r) s.value = r.text;
-    if ('notes' in r) s.notes = r.notes;
-    n++;
+    const s = resultToState(r, QLIST[qi].q);
+    if (s) updates.push([qi, s]);
   });
+  updates.forEach(([qi, s]) => { state[qi] = s; });
   render();
-  return n;
+  return updates.length;
 }
 
 // ---- persistence -------------------------------------------------------------
@@ -498,11 +538,7 @@ const banner = document.getElementById('restore-banner');
 function flash(msg){ document.getElementById('restore-text').textContent = msg; banner.classList.add('show'); }
 document.getElementById('restore-discard').addEventListener('click', () => {
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-  for (let i = 0; i < TOTAL; i++) state[i] = defState();
-  DATA.forEach(item => (item.questions || []).forEach(q => {
-    const qi = QLIST.findIndex(e => e.item === item && e.q === q);
-    (q.candidates || []).concat(q.excluded || []).forEach(c => { if (c.preselected) state[qi].selected[c.id] = true; });
-  }));
+  QLIST.forEach(e => { state[e.qi] = initState(e.q); });
   render(); banner.classList.remove('show');
 });
 
@@ -531,9 +567,14 @@ function actDigit(d){
 }
 document.addEventListener('keydown', ev => {
   const tag = (ev.target.tagName || '').toLowerCase();
-  const typing = tag === 'textarea' || tag === 'input' || tag === 'select';
+  // Checkboxes/radios keep focus after a click; they are not text fields, so
+  // shortcuts must keep working there.
+  const typing = tag === 'textarea' || tag === 'select' || ev.target.isContentEditable ||
+    (tag === 'input' && !/^(checkbox|radio|button|submit|reset|file)$/.test(ev.target.type));
   if (ev.key === 'Escape') { document.getElementById('help-overlay').classList.remove('show'); if (typing) ev.target.blur(); return; }
   if (typing) return;
+  // Leave browser shortcuts (Cmd/Ctrl+1..9 switch tabs, Ctrl+N, …) alone.
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (ev.key === '?' || (ev.shiftKey && ev.key === '/')) { ev.preventDefault(); toggleHelp(); return; }
   if (ev.key === 'j' || ev.key === 'ArrowDown') { ev.preventDefault(); setFocus(focusIdx < 0 ? 0 : focusIdx + 1); }
   else if (ev.key === 'k' || ev.key === 'ArrowUp') { ev.preventDefault(); setFocus(focusIdx < 0 ? 0 : focusIdx - 1); }

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any, Optional
 
 _TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template.html")
@@ -80,12 +81,15 @@ def render_html(data: dict[str, Any], out_path: Optional[str] = None) -> str:
     with open(_TEMPLATE_PATH, encoding="utf-8") as f:
         template = f.read()
 
-    html = (
-        template.replace("__LANG__", _attr(str(config.get("lang", "en"))))
-        .replace("__TITLE__", _attr(str(config["title"])))
-        .replace("__CONFIG__", _js_embed(config))
-        .replace("__DATA__", _js_embed(items))
-    )
+    # One pass, so a title or field that contains a placeholder token
+    # (e.g. "__DATA__") is never substituted a second time.
+    values = {
+        "__LANG__": _attr(str(config.get("lang", "en"))),
+        "__TITLE__": _attr(str(config["title"])),
+        "__CONFIG__": _js_embed(config),
+        "__DATA__": _js_embed(items),
+    }
+    html = re.sub(r"__(?:LANG|TITLE|CONFIG|DATA)__", lambda m: values[m.group(0)], template)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f:
