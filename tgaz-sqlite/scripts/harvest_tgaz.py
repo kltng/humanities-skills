@@ -21,17 +21,26 @@ import urllib.parse
 import urllib.error
 
 API_BASE = "https://chgis.hudci.org/tgaz/placename"
-# Output database. Defaults to ./tgaz.db in the current directory so a rebuild
-# never overwrites the shared copy by accident. When the new build checks out,
-# install it with:
-#   mv tgaz.db ~/.local/share/sino-authorities/tgaz.db
-DB_PATH = "tgaz.db"
+# Output database. This harvest uses its own simple schema (one `placenames`
+# table), NOT the full relational schema that query_tgaz.py expects, so it is
+# written to a different file name. Do not install it as tgaz.db: query_tgaz.py
+# would fail with "no such table: mv_pn_srch". Build tgaz.db with
+# mysql2sqlite.py instead.
+DB_PATH = "tgaz_harvest.db"
 MAX_RESULTS = 200
-DELAY = 0.35
+DELAY = 0.5  # seconds between API calls (API etiquette: 0.5-1 s minimum)
+USER_AGENT = "humanities-skills-tgaz-harvest/1.0 (https://github.com/kltng/humanities-skills)"
 
 
 def create_db(db_path):
     conn = sqlite3.connect(db_path)
+    has_full_schema = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name = 'mv_pn_srch'"
+    ).fetchone()
+    if has_full_schema:
+        conn.close()
+        sys.exit(f"Error: {db_path} is a full tgaz.db (has mv_pn_srch). "
+                 "Refusing to write harvest tables into it.")
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     c = conn.cursor()
@@ -109,12 +118,23 @@ def parse_feature_type(s):
 def fetch_json(url, retries=3):
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            req = urllib.request.Request(url, headers={
+                "Accept": "application/json", "User-Agent": USER_AGENT,
+            })
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as e:
+            code = getattr(e, "code", None)
+            # 4xx other than 429 will not change on retry.
+            if code is not None and 400 <= code < 500 and code != 429:
+                print(f"  FAILED: {url} -> {e}")
+                return None
             if attempt < retries - 1:
-                time.sleep(2 ** (attempt + 1))
+                delay = 2 ** (attempt + 1)
+                retry_after = e.headers.get("Retry-After") if getattr(e, "headers", None) else None
+                if retry_after and retry_after.strip().isdigit():
+                    delay = max(delay, min(300, int(retry_after.strip())))
+                time.sleep(delay)
             else:
                 print(f"  FAILED: {url} -> {e}")
                 return None
@@ -163,14 +183,14 @@ def get_subdivision_chars(placenames, prefix):
     """Extract unique next characters from returned placename names to guide subdivision."""
     chars = set()
     plen = len(prefix)
+    low = prefix.lower()
     for p in placenames:
-        name = p.get("name", "")
-        if len(name) > plen:
-            chars.add(name[plen])
-        # Also check transcription
-        trans = p.get("transcription", "")
-        if len(trans) > plen:
-            chars.add(trans[plen])
+        # Only use a field that actually starts with the prefix; otherwise a
+        # Chinese prefix gets Latin letters appended (and vice versa), which
+        # only produces empty queries.
+        for field in (p.get("name", ""), p.get("transcription", "")):
+            if len(field) > plen and field[:plen].lower() == low:
+                chars.add(field[plen])
     return sorted(chars)
 
 

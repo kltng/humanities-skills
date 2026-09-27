@@ -4,6 +4,7 @@ Convert the TGAZ MySQL dump to SQLite, preserving the full relational schema.
 Then create denormalized views and FTS5 indexes for easy querying.
 """
 
+import os
 import re
 import sqlite3
 import sys
@@ -437,6 +438,53 @@ def process_inserts(conn, dump_path):
     return table_rows
 
 
+# MySQL backslash escapes inside string literals. \% and \_ keep the
+# backslash (MySQL does the same); any other \x becomes x. \0 (NUL) is
+# dropped because SQLite SQL text cannot contain NUL.
+_MYSQL_ESCAPES = {
+    "0": "", "b": "\b", "n": "\n", "r": "\r", "t": "\t", "Z": "\x1a",
+    "%": "\\%", "_": "\\_",
+}
+_STRING = "'(?:[^'\\\\]|\\\\.|'')*'" + '|"(?:[^"\\\\]|\\\\.|"")*"'
+_STRING_RE = re.compile(_STRING, re.S)
+# A string literal, a backtick, or a hex literal (geometry blob).
+_TOKEN_RE = re.compile(_STRING + r"|`|\b0x[0-9A-Fa-f]+\b", re.S)
+# Inside a literal: a backslash escape, or a doubled quote.
+_INNER_RE = {q: re.compile(r"\\(.)|" + q + q, re.S) for q in ("'", '"')}
+
+
+def _unescape(m):
+    if m.group(1) is None:
+        return m.group(0)[0]  # doubled quote -> one quote
+    return _MYSQL_ESCAPES.get(m.group(1), m.group(1))
+
+
+def _convert_token(m):
+    tok = m.group(0)
+    if tok == "`":
+        return ""
+    if tok.startswith("0x"):
+        return "NULL"
+    quote, body = tok[0], tok[1:-1]
+    body = _INNER_RE[quote].sub(_unescape, body)
+    return "'" + body.replace("'", "''") + "'"
+
+
+def _mysql_to_sqlite(sql):
+    """Convert one MySQL INSERT statement to SQLite syntax.
+
+    String literals are parsed as whole tokens, so quotes, backslashes,
+    backticks and "0x..." inside values are kept as data. Outside strings,
+    backticks are dropped and hex literals become NULL.
+
+    Returns (converted_sql, row_count).
+    """
+    skeleton = _STRING_RE.sub("", sql)
+    values_at = skeleton.upper().find("VALUES")
+    rows = skeleton.count("(", values_at) if values_at >= 0 else 0
+    return _TOKEN_RE.sub(_convert_token, sql), rows
+
+
 def _exec_insert(conn, sql, table_rows):
     """Execute a single INSERT statement, converting MySQL syntax to SQLite."""
     m = re.match(r"INSERT INTO `(\w+)`", sql)
@@ -444,32 +492,16 @@ def _exec_insert(conn, sql, table_rows):
         return
     table = m.group(1)
 
-    # Convert MySQL to SQLite syntax
-    sql = sql.replace("`", "")
-
-    # Replace hex geometry data with NULL
-    sql = re.sub(r"0x[0-9A-Fa-f]+", "NULL", sql)
-
-    # Fix MySQL string escaping for SQLite
-    # We need to be careful: replace \' with '' but NOT inside already-doubled quotes
-    sql = sql.replace("\\'", "''")
-    sql = sql.replace('\\"', '"')
-    sql = sql.replace("\\r\\n", "\n")
-    sql = sql.replace("\\n", "\n")
-    sql = sql.replace("\\r", "\r")
-    sql = sql.replace("\\t", "\t")
-    sql = sql.replace("\\\\", "\\")
+    sql, count = _mysql_to_sqlite(sql)
 
     try:
         conn.executescript(sql)
-        count = sql.count("),(") + 1
         table_rows[table] = table_rows.get(table, 0) + count
     except sqlite3.Error as e:
         # Try with OR IGNORE
         try:
             sql2 = sql.replace(f"INSERT INTO {table}", f"INSERT OR IGNORE INTO {table}", 1)
             conn.executescript(sql2)
-            count = sql2.count("),(") + 1
             table_rows[table] = table_rows.get(table, 0) + count
         except sqlite3.Error as e2:
             print(f"  WARNING: {table}: {str(e2)[:80]}")
@@ -723,9 +755,23 @@ def main():
     print(f"  Source: {dump_path}")
     print(f"  Target: {db_path}\n")
 
+    if os.path.exists(db_path):
+        # Importing into an existing file appends duplicate rows to tables
+        # without a primary key and can leave a good DB half-rewritten.
+        sys.exit(f"Error: {db_path} already exists. Move it away or pick another path.")
+    if not os.path.exists(dump_path):
+        sys.exit(f"Error: MySQL dump not found: {dump_path}")
+
     start = time.time()
 
-    conn = sqlite3.connect(db_path)
+    # Build into a temporary file and rename only when everything succeeded,
+    # so a crash never leaves a half-built tgaz.db behind.
+    tmp_path = db_path + ".partial"
+    for suffix in ("", "-wal", "-shm"):
+        if os.path.exists(tmp_path + suffix):
+            os.remove(tmp_path + suffix)
+
+    conn = sqlite3.connect(tmp_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=OFF")
     conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
@@ -746,11 +792,14 @@ def main():
     create_fts(conn)
     print_stats(conn)
 
-    # Reset pragmas for normal use
+    # Reset pragmas for normal use. Leave WAL so the result is one
+    # self-contained file (a WAL DB cannot be opened read-only in a
+    # read-only directory).
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA journal_mode=DELETE")
     conn.close()
+    os.replace(tmp_path, db_path)
 
-    import os
     size_mb = os.path.getsize(db_path) / (1024 * 1024)
     print(f"\nDatabase saved to: {db_path} ({size_mb:.1f} MB)")
 

@@ -7,7 +7,7 @@ Usage:
   python query_tgaz.py "Chang'an" --year -200              # Name + year filter
   python query_tgaz.py --fts "Beijing county"              # Full-text search
   python query_tgaz.py --bbox 108,34,110,35                # Bounding box
-  python query_tgaz.py --feature-type county --year 1820   # Feature type + year
+  python query_tgaz.py --feature-type xian --year 1820     # Feature type + year
   python query_tgaz.py --parent hvd_9659                   # Children of a jurisdiction
   python query_tgaz.py --spellings hvd_70626               # All spellings for a place
   python query_tgaz.py --history hvd_70626                 # Full history of a place
@@ -68,13 +68,38 @@ def resolve_db(explicit=None):
 
 
 def get_conn(db_path):
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    # as_uri() percent-encodes '?', '#' and '%' so odd paths still open read-only.
+    conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
 
+def _fts_phrase(query):
+    """Quote each word so FTS5 treats punctuation (' - " :) as plain text."""
+    return " ".join('"' + w.replace('"', '""') + '"' for w in query.split())
+
+
+def _like_escape(text):
+    """Escape LIKE wildcards so '%' and '_' in user input match literally."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def search_fts(conn, query, limit=50):
-    """Full-text search across names, transcriptions, feature types."""
+    """Full-text search across names, transcriptions, feature types.
+
+    The query is tried as FTS5 syntax first (so AND/OR/NEAR/prefix* work).
+    If that is a syntax error, it is retried as plain quoted words.
+    """
+    try:
+        return _search_fts(conn, query, limit)
+    except sqlite3.OperationalError:
+        phrase = _fts_phrase(query)
+        if not phrase:
+            return []
+        return _search_fts(conn, phrase, limit)
+
+
+def _search_fts(conn, query, limit):
     return conn.execute("""
         SELECT f.sys_id, f.name, f.ftype_vn, f.ftype_tr,
                f.parent_vn, f.parent_tr, f.data_src, f.beg_yr, f.end_yr,
@@ -94,15 +119,16 @@ def search_name(conn, name, year=None, feature_type=None, limit=50):
                x_coord AS longitude, y_coord AS latitude,
                ftype_vn, ftype_tr, parent_sys_id, parent_vn, parent_tr, data_src
         FROM mv_pn_srch
-        WHERE (name LIKE ? OR transcription LIKE ?)
+        WHERE (name LIKE ? ESCAPE '\\' OR transcription LIKE ? ESCAPE '\\')
     """
-    params = [f"{name}%", f"{name}%"]
+    params = [f"{_like_escape(name)}%", f"{_like_escape(name)}%"]
     if year is not None:
         sql += " AND beg_yr <= ? AND end_yr >= ?"
         params.extend([year, year])
     if feature_type:
-        sql += " AND (ftype_tr LIKE ? OR ftype_vn LIKE ?)"
-        params.extend([f"%{feature_type}%", f"%{feature_type}%"])
+        sql += " AND (ftype_tr LIKE ? ESCAPE '\\' OR ftype_vn LIKE ? ESCAPE '\\')"
+        ft = _like_escape(feature_type)
+        params.extend([f"%{ft}%", f"%{ft}%"])
     sql += " ORDER BY beg_yr LIMIT ?"
     params.append(limit)
     return conn.execute(sql, params).fetchall()
@@ -113,8 +139,9 @@ def search_by_year(conn, year, feature_type=None, limit=50):
     sql = "SELECT * FROM mv_pn_srch WHERE beg_yr <= ? AND end_yr >= ?"
     params = [year, year]
     if feature_type:
-        sql += " AND (ftype_tr LIKE ? OR ftype_vn LIKE ?)"
-        params.extend([f"%{feature_type}%", f"%{feature_type}%"])
+        sql += " AND (ftype_tr LIKE ? ESCAPE '\\' OR ftype_vn LIKE ? ESCAPE '\\')"
+        ft = _like_escape(feature_type)
+        params.extend([f"%{ft}%", f"%{ft}%"])
     sql += " ORDER BY name LIMIT ?"
     params.append(limit)
     return conn.execute(sql, params).fetchall()
@@ -317,10 +344,14 @@ def main():
         return
 
     if args.sql:
-        if not args.sql.strip().upper().startswith("SELECT"):
-            print("Error: only SELECT allowed")
-            return
-        format_rows(conn.execute(args.sql).fetchall(), args.format)
+        # The connection is read-only; this check also blocks ATTACH/PRAGMA.
+        if not args.sql.strip().upper().startswith(("SELECT", "WITH")):
+            sys.exit("Error: only SELECT (or WITH ... SELECT) allowed")
+        try:
+            rows = conn.execute(args.sql).fetchall()
+        except sqlite3.Error as e:
+            sys.exit(f"SQL error: {e}")
+        format_rows(rows, args.format)
         return
 
     if args.history:
@@ -340,11 +371,16 @@ def main():
         return
 
     if args.bbox:
-        parts = [float(x) for x in args.bbox.split(",")]
+        try:
+            parts = [float(x) for x in args.bbox.split(",")]
+        except ValueError:
+            parts = []
+        if len(parts) != 4:
+            sys.exit("Error: --bbox needs 4 numbers: lon_min,lat_min,lon_max,lat_max")
         format_rows(search_bbox(conn, *parts, args.year, args.limit), args.format)
         return
 
-    if args.year and not args.search and not args.name:
+    if args.year is not None and not args.search and not args.name:
         format_rows(search_by_year(conn, args.year, args.feature_type, args.limit), args.format)
         return
 

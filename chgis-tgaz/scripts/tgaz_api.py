@@ -19,6 +19,8 @@ class TGAZAPI:
     """
 
     BASE_URL = "https://chgis.hudci.org/tgaz/placename"
+    USER_AGENT = "humanities-skills-chgis-tgaz/1.1 (https://github.com/kltng/humanities-skills)"
+    FORMATS = ("json", "xml", "rdf")
 
     def __init__(self, min_request_interval: float = 1.0, max_retries: int = 3):
         self._last_request_time = 0.0
@@ -31,21 +33,39 @@ class TGAZAPI:
             time.sleep(self._min_request_interval - elapsed)
         self._last_request_time = time.time()
 
-    def _request(self, url: str, params: Optional[dict] = None, timeout: int = 30) -> Any:
+    @staticmethod
+    def _retry_delay(error: HTTPError, attempt: int) -> float:
+        """Honor Retry-After (seconds) on 429/503; else exponential backoff."""
+        retry_after = error.headers.get("Retry-After") if error.headers else None
+        if retry_after and retry_after.strip().isdigit():
+            return min(60.0, float(retry_after.strip()))
+        return min(8.0, 0.5 * (2 ** attempt))
+
+    def _request(self, url: str, params: Optional[dict] = None, timeout: int = 30,
+                 raw: bool = False) -> Any:
         if params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
 
         last_error: Optional[Exception] = None
         for attempt in range(self._max_retries + 1):
             self._rate_limit()
-            req = urllib.request.Request(url)
+            req = urllib.request.Request(url, headers={"User-Agent": self.USER_AGENT})
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
-            except (HTTPError, URLError) as e:
+                    body = resp.read().decode("utf-8")
+                return body if raw else json.loads(body)
+            except HTTPError as e:
                 last_error = e
-                time.sleep(min(8.0, 0.5 * (2 ** attempt)))
-                continue
+                # 4xx other than 429 (e.g. 404 for an unknown ID) will not
+                # change on retry, so fail at once.
+                if 400 <= e.code < 500 and e.code != 429:
+                    raise
+                if attempt < self._max_retries:
+                    time.sleep(self._retry_delay(e, attempt))
+            except (URLError, TimeoutError) as e:
+                last_error = e
+                if attempt < self._max_retries:
+                    time.sleep(min(8.0, 0.5 * (2 ** attempt)))
 
         if last_error:
             raise last_error
@@ -96,25 +116,29 @@ class TGAZAPI:
         /placename?id={id}&fmt=json — WRONG (fmt only works for faceted search)
 
         Args:
-            tgaz_id: TGAZ ID (e.g., "hvd_32180"). If a bare number is given,
-                     "hvd_" prefix is added automatically.
+            tgaz_id: TGAZ ID (e.g., "hvd_32180", "TBRC_G123"). If a bare number
+                     is given, "hvd_" prefix is added automatically.
             fmt: Output format — "json", "xml", or "rdf" (default: "json").
 
         Returns:
-            Placename record dict.
+            Placename record dict for "json"; the raw text for "xml"/"rdf".
         """
-        if not tgaz_id.startswith("hvd_"):
+        if fmt not in self.FORMATS:
+            raise ValueError(f"fmt must be one of {self.FORMATS}, got {fmt!r}")
+        tgaz_id = str(tgaz_id).strip()
+        if tgaz_id.isdigit():
             tgaz_id = f"hvd_{tgaz_id}"
 
-        url = f"{self.BASE_URL}/{fmt}/{tgaz_id}"
-        return self._request(url)
+        url = f"{self.BASE_URL}/{fmt}/{urllib.parse.quote(tgaz_id, safe='')}"
+        return self._request(url, raw=(fmt != "json"))
 
     def get_name(self, record: dict) -> str:
         """Extract the primary Chinese name from a record."""
         spellings = record.get("spellings", [])
-        for s in spellings:
-            if s.get("script") == "漢" or s.get("writing.system") == "Chinese Traditional":
-                return s.get("written.form", "")
+        for script in ("traditional Chinese", "simplified Chinese"):
+            for s in spellings:
+                if s.get("script") == script:
+                    return s.get("written form", "")
         # Fallback
         return record.get("name", "")
 
@@ -122,8 +146,11 @@ class TGAZAPI:
         """Extract the romanized transcription from a record."""
         spellings = record.get("spellings", [])
         for s in spellings:
-            if s.get("script") == "Latn" or s.get("writing.system") == "Pinyin":
-                return s.get("written.form", "")
+            if s.get("transcribed in") == "Pinyin":
+                return s.get("written form", "")
+        for s in spellings:
+            if "transcribed in" in s:
+                return s.get("written form", "")
         return record.get("transcription", "")
 
     def get_temporal_span(self, record: dict) -> tuple:
@@ -136,13 +163,19 @@ class TGAZAPI:
     def get_modern_location(self, record: dict) -> str:
         """Extract the modern equivalent location."""
         spatial = record.get("spatial", {})
-        return spatial.get("present_location", "")
+        present = spatial.get("present_location", "")
+        # The API returns a list of {"country code", "text", ...} entries.
+        if isinstance(present, dict):
+            present = [present]
+        if isinstance(present, list):
+            return "; ".join(p.get("text", "") for p in present if p.get("text"))
+        return str(present)
 
     def get_feature_type(self, record: dict) -> str:
         """Extract the feature type (administrative type)."""
-        ftype = record.get("feature.type", {})
+        ftype = record.get("feature_type", {})
         if isinstance(ftype, dict):
-            return ftype.get("name.en", ftype.get("name.ch", ""))
+            return ftype.get("English") or ftype.get("transcription") or ftype.get("name", "")
         return str(ftype)
 
     def get_subordinates(self, record: dict) -> list:
@@ -152,7 +185,7 @@ class TGAZAPI:
         using the ipar search parameter.
         """
         context = record.get("historical_context", {})
-        parts = context.get("has parts", [])
+        parts = context.get("subordinate units", [])
         if isinstance(parts, dict):
             return [parts]
         return parts

@@ -47,6 +47,7 @@ results = api.search("北京", feature_type="fu")
 
 # ID lookup (correct URL format handled automatically)
 record = api.get_by_id("hvd_32180")
+xml_text = api.get_by_id("hvd_32180", fmt="xml")  # xml/rdf return raw text
 
 # Extract structured data
 name = api.get_name(record)                    # Chinese name
@@ -85,7 +86,7 @@ Since `ipar` is unreliable, use this pattern for "find all X in Y" queries:
 
 1. Search for the parent region to get its TGAZ ID
 2. Look up the parent's canonical record via `/placename/json/{id}`
-3. Read the `historical_context.has parts` field for subordinate units
+3. Read the `historical_context.subordinate units` field (each entry has `child id`, `name`, `transcribed`, `begin_year`, `end_year`)
 4. Filter subordinates by year range and feature type
 
 ```python
@@ -100,8 +101,8 @@ subordinates = api.get_subordinates(record)
 
 # Filter to active units in 1850
 for sub in subordinates:
-    # Check temporal range overlaps with 1850
-    ...
+    if int(sub["begin_year"]) <= 1850 <= int(sub["end_year"]):
+        print(sub["child id"], sub["name"], sub["transcribed"])
 ```
 
 ## Encoding

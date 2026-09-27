@@ -37,7 +37,7 @@ Each row represents one lunar month within an era.
 | `id` | INTEGER PK | Month record ID |
 | `year` | INTEGER | Ordinal year within era (1 = 元年) |
 | `month` | INTEGER | Month number (1-12) |
-| `month_name` | TEXT | Chinese month name (e.g., 四月) |
+| `month_name` | TEXT | Chinese month name without 月 (e.g., 四, 正, 臘, 閏六) |
 | `leap_month` | INTEGER | 1 if leap month, 0 otherwise |
 | `era_id` | INTEGER FK | References era(id) |
 | `first_jdn` | INTEGER | JDN of first day of month |
@@ -127,8 +127,8 @@ ORDER BY start_jdn;
 |---|---|---|
 | 4713 BCE Jan 1 (Julian) | 0 | JDN epoch |
 | 1582 Oct 15 (Gregorian) | 2,299,161 | Gregorian reform |
-| 1644 Mar 19 (Gregorian) | 2,321,605 | Fall of Ming |
-| 1868 Jan 25 (Gregorian) | 2,403,400 | Meiji era start |
+| 1644 Mar 19 (Gregorian) | 2,321,597 | Fall of Ming |
+| 1868 Oct 23 (Gregorian) | 2,403,629 | Meiji era proclaimed (first Meiji month row in the DB) |
 
 ## Day Counting
 

@@ -20,7 +20,7 @@ Convert between East Asian lunisolar calendars (Chinese, Japanese, Korean, Vietn
 - Looking up era metadata (date ranges, dynasties, emperors)
 - Computing sexagenary cycle (干支) for a given date
 - Working with Julian Day Numbers (JDN)
-- Japanese era shorthand (M45.7.30, H26.6.8)
+- Japanese era shorthand for lunisolar Meiji dates (M1.9.8 to M5.12.2, e.g. M2.1.1)
 
 ## Setup
 
@@ -40,7 +40,7 @@ This downloads `calendar.db` into the `scripts/` directory. Only needed once.
 python3 scripts/calendar_converter.py convert "崇禎三年四月初三"
 python3 scripts/calendar_converter.py convert "康熙六十一年十二月二十九日"
 python3 scripts/calendar_converter.py convert "天保三年閏十一月十五日"
-python3 scripts/calendar_converter.py convert "M1.1.1"
+python3 scripts/calendar_converter.py convert "M2.1.1"
 ```
 
 ### Gregorian → CJK Dates
@@ -68,13 +68,13 @@ python3 scripts/calendar_converter.py eras --country japanese
 | Format | Example | Notes |
 |---|---|---|
 | Chinese numerals | 崇禎三年四月初三 | Standard CJK date |
-| Leap month | 天保三年閏九月十五日 | 閏 prefix marks leap |
+| Leap month | 天保三年閏十一月十五日 | 閏 prefix marks leap |
 | 元年 (year 1) | 康熙元年正月初一 | 元 = 1, 正 = month 1 |
 | 廿/卅 shorthand | 光緒廿八年三月卅日 | 廿 = 20, 卅 = 30 |
 | Arabic numerals | 康熙61年12月29日 | Mixed format |
-| Japanese shorthand | M1.1.1 | M/T/S/H/R for eras (lunisolar years only) |
-| Ganzhi year | 嘉慶甲午年三月初五 | Sexagenary year cycle |
-| Full ganzhi | 嘉慶甲午年丁亥月丙子日 | Year + month + day ganzhi |
+| Japanese shorthand | M2.1.1 | M/T/S/H/R accepted, but only lunisolar Meiji dates (M1.9.8 to M5.12.2) are in the database |
+| Ganzhi year | 嘉慶甲子年三月初五 | Sexagenary year cycle (the year must fall in that era) |
+| Full ganzhi | 嘉慶甲子年戊辰月甲午日 | Year + month + day ganzhi |
 
 ## Output Format
 
@@ -85,27 +85,32 @@ All commands output JSON. Example for `convert`:
   {
     "input_era": {
       "era_name": "崇禎",
-      "era_id": 371,
+      "era_id": 650,
       "emperor_name": "思宗",
       "dynasty_name": "明",
       "country": "chinese",
       "year_in_era": 3,
       "month": 4,
-      "month_name": "四月",
+      "month_name": "四",
       "is_leap_month": false,
       "day": 3
     },
-    "jdn": 2316520,
+    "jdn": 2316539,
     "gregorian": "1630-05-14",
-    "julian": "1630-05-04",
-    "ganzhi": { "year": "庚午", "month": "辛巳", "day": "丙子" },
+    "julian": null,
+    "ganzhi": { "year": "庚午", "month": "辛巳", "day": "壬子" },
     "all_cjk_dates": [
       { "era_name": "崇禎", "country": "chinese", "year_in_era": 3, ... },
+      { "era_name": "天聰", "country": "chinese", "year_in_era": 4, ... },
       { "era_name": "寛永", "country": "japanese", "year_in_era": 7, ... }
     ]
   }
 ]
 ```
+
+- `julian` is filled only for dates before the Gregorian reform (JDN < 2299161, i.e. before 1582-10-15); otherwise it is `null`.
+- Years use astronomical numbering: `0000` = 1 BCE, `-0001` = 2 BCE.
+- The `gregorian` command takes a proleptic Gregorian date. For a Western date before 1582 written in the Julian calendar, convert it to JDN first and use the `jdn` command.
 
 ## Key Concepts
 
@@ -136,7 +141,7 @@ The same era name can appear in different dynasties or countries (e.g., 建武 w
 
 Total: 1,637 eras, 131,808 lunar month records.
 
-**Note**: Japanese dates after Meiji 5 (1872) are not in the database because Japan adopted the Gregorian calendar in 1873. Japanese shorthand (M/T/S/H/R) only works for lunisolar-era dates.
+**Note**: Japanese dates after Meiji 5 (1872) are not in the database because Japan adopted the Gregorian calendar in 1873. Japanese shorthand (M/T/S/H/R) only works for lunisolar-era dates, so T/S/H/R inputs return "No matching dates found".
 
 ## Using in Python
 
@@ -163,7 +168,7 @@ for jdn, era_info in results:
 jdn = gregorian_to_jdn(1644, 3, 19)
 conversion = convert_jdn(conn, jdn)
 for cjk in conversion.cjk_dates:
-    print(f"{cjk.era_name}{cjk.year_in_era}年{cjk.month_name}{cjk.day}日 ({cjk.country})")
+    print(f"{cjk.era_name}{cjk.year_in_era}年{cjk.month_name}月{cjk.day}日 ({cjk.country})")
 ```
 
 ## Database Schema

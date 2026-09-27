@@ -54,17 +54,25 @@ def download_db(dest: Path | None = None) -> Path:
         DB_DOWNLOAD_URL,
         headers={"User-Agent": "cjk-calendar-skill/1.0"},
     )
+    # Download to a temporary file and rename at the end, so an interrupted
+    # download never leaves a truncated calendar.db that `setup` then skips.
+    tmp = dest.with_name(dest.name + ".part")
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            with open(dest, "wb") as f:
+            with open(tmp, "wb") as f:
                 while True:
                     chunk = resp.read(65536)
                     if not chunk:
                         break
                     f.write(chunk)
+        with open(tmp, "rb") as f:
+            if f.read(16) != b"SQLite format 3\x00":
+                raise OSError("downloaded file is not a SQLite database")
+        os.replace(tmp, dest)
         print(f"Downloaded to {dest}")
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, OSError) as e:
+        tmp.unlink(missing_ok=True)
         print(f"Download failed: {e}", file=sys.stderr)
         print("Manual download: visit the GitHub repo and copy data/calendar.db", file=sys.stderr)
         sys.exit(1)
@@ -78,10 +86,10 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
         print(f"Database not found: {path}", file=sys.stderr)
         print("Run: python3 calendar_converter.py setup", file=sys.stderr)
         sys.exit(1)
-    conn = sqlite3.connect(str(path))
+    # Read-only: the converter never writes, and a read-only file (e.g. a
+    # shared or installed copy) must still open.
+    conn = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
@@ -208,12 +216,14 @@ def _parse_chinese_number(s: str) -> int | None:
 _CJK_PATTERN = re.compile(
     r"^"
     r"(?P<era>[^\d\s年]{1,10}?)"
-    r"(?P<year>[元一二三四五六七八九十百廿卅\d]+)年"
+    # 元 only stands alone (元年). Otherwise eras ending in 元 (開元, 至元,
+    # 永元, 建武中元 ...) would lose that character to the year number.
+    r"(?P<year>元|[一二三四五六七八九十百廿卅〇零\d]+)年"
     r"(?:"
     r"(?P<leap>閏)?"
-    r"(?P<month>[正一二三四五六七八九十廿]+)月"
+    r"(?P<month>[正一二三四五六七八九十廿]+|\d{1,2})月"
     r"(?:"
-    r"(?P<day>[初一二三四五六七八九十廿卅]+)"
+    r"(?P<day>[初一二三四五六七八九十廿卅]+|\d{1,2})"
     r"日?"
     r")?"
     r")?"
@@ -296,7 +306,7 @@ def parse_cjk_date(text: str) -> ParsedDate | None:
         day_str = m.group("day")
         if year_str == "元":
             year = 1
-        elif year_str.isascii() and year_str.isdigit():
+        elif year_str.isdecimal():
             year = int(year_str)
         else:
             year = _parse_chinese_number(year_str)
@@ -304,10 +314,10 @@ def parse_cjk_date(text: str) -> ParsedDate | None:
                 return None
         month: int | None = None
         if month_str:
-            month = _parse_chinese_number(month_str)
+            month = int(month_str) if month_str.isdecimal() else _parse_chinese_number(month_str)
         day: int | None = None
         if day_str:
-            day = _parse_chinese_number(day_str)
+            day = int(day_str) if day_str.isdecimal() else _parse_chinese_number(day_str)
         return ParsedDate(era=era, year=year, month=month, day=day, is_leap_month=is_leap)
 
     return None
@@ -504,6 +514,8 @@ def convert_cjk_to_jdn(conn: sqlite3.Connection, parsed: ParsedDate) -> list[tup
                         continue
 
                 if day is not None:
+                    if day < 1:
+                        continue
                     day_offset = day - month_row["start_from"]
                     jdn = month_row["first_jdn"] + day_offset
                     if jdn > month_row["last_jdn"]:
@@ -680,7 +692,11 @@ def main():
         if len(sys.argv) < 3:
             print("Usage: calendar_converter.py jdn <JDN>", file=sys.stderr)
             sys.exit(1)
-        jdn = int(sys.argv[2])
+        try:
+            jdn = int(sys.argv[2])
+        except ValueError:
+            print(f"JDN must be an integer: {sys.argv[2]}", file=sys.stderr)
+            sys.exit(1)
         result = convert_jdn(conn, jdn)
         _print_json(result)
 
@@ -688,8 +704,16 @@ def main():
         if len(sys.argv) < 5:
             print("Usage: calendar_converter.py gregorian <year> <month> <day>", file=sys.stderr)
             sys.exit(1)
-        year, month, day = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+        try:
+            year, month, day = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+        except ValueError:
+            print("Year, month and day must be integers (astronomical years: 0 = 1 BCE)",
+                  file=sys.stderr)
+            sys.exit(1)
         jdn = gregorian_to_jdn(year, month, day)
+        if jdn_to_gregorian(jdn) != (year, month, day):
+            print(f"Invalid Gregorian date: {year}-{month}-{day}", file=sys.stderr)
+            sys.exit(1)
         result = convert_jdn(conn, jdn)
         _print_json(result)
 

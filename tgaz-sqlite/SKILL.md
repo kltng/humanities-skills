@@ -1,5 +1,5 @@
 ---
-name: tgaz-query
+name: tgaz-sqlite
 description: >
   Query and explore the TGAZ (Temporal Gazetteer) SQLite database of 82,000+
   historical Chinese placenames spanning 763 BCE to 1911 CE. Use this skill
@@ -58,42 +58,43 @@ and 25,655 historical notes covering 763 BCE to 1911 CE.
 
 ## Quick Start: Use the CLI
 
-For common lookups, `query_tgaz.py` is fastest. Run it via Bash:
+For common lookups, `scripts/query_tgaz.py` is fastest. Run it via Bash from the skill directory:
 
 ```bash
 # Search by name (Chinese or romanized)
-python3 query_tgaz.py "北京"
-python3 query_tgaz.py "Chang'an"
+python3 scripts/query_tgaz.py "北京"
+python3 scripts/query_tgaz.py "Chang'an"
 
 # Name + temporal filter
-python3 query_tgaz.py "长安" --year -200
+python3 scripts/query_tgaz.py "长安" --year -200
 
 # Full-text search (searches names, feature types, parent names)
-python3 query_tgaz.py --fts "county Beijing"
+python3 scripts/query_tgaz.py --fts "county Beijing"
 
 # Spatial query: bounding box (lon_min,lat_min,lon_max,lat_max)
-python3 query_tgaz.py --bbox 108,34,110,36 --year -200
+python3 scripts/query_tgaz.py --bbox 108,34,110,36 --year -200
 
 # Feature type + year
-python3 query_tgaz.py --feature-type county --year 1820 --limit 20
+# (--feature-type matches ftype_tr / ftype_vn, e.g. xian or 县; not English "county")
+python3 scripts/query_tgaz.py --feature-type xian --year 1820 --limit 20
 
 # Children of a jurisdiction
-python3 query_tgaz.py --parent hvd_9659 --year 1820
+python3 scripts/query_tgaz.py --parent hvd_9659 --year 1820
 
 # All name forms for a place (simplified, traditional, pinyin)
-python3 query_tgaz.py --spellings hvd_70621
+python3 scripts/query_tgaz.py --spellings hvd_70621
 
 # Full history: parents, predecessors, present location, notes
-python3 query_tgaz.py --history hvd_70621
+python3 scripts/query_tgaz.py --history hvd_70621
 
 # Output as JSON (for further processing or LLM context)
-python3 query_tgaz.py "长安" --format json
+python3 scripts/query_tgaz.py "长安" --format json
 
 # Database statistics
-python3 query_tgaz.py --stats
+python3 scripts/query_tgaz.py --stats
 
-# Raw SQL
-python3 query_tgaz.py --sql "SELECT name, transcription, beg_yr, end_yr FROM mv_pn_srch WHERE ftype_tr = 'fu' AND beg_yr <= 1400 AND end_yr >= 1400 ORDER BY name"
+# Raw SQL (read-only; must start with SELECT or WITH)
+python3 scripts/query_tgaz.py --sql "SELECT name, transcription, beg_yr, end_yr FROM mv_pn_srch WHERE ftype_tr = 'fu' AND beg_yr <= 1400 AND end_yr >= 1400 ORDER BY name"
 ```
 
 ## When to Use SQL Directly

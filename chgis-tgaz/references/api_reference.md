@@ -169,11 +169,22 @@ Historical Chinese administrative units include:
   "historical_context": {
     "part of": [
       {"begin year": "758", "end year": "769", "parent id": "hvd_30083", "name": "浙江东道节度使"}
+    ],
+    "subordinate units": [
+      {"begin_year": "1645", "end_year": "1911", "child id": "hvd_32164", "name": "严州府", "transcribed": "Yanzhou Fu"}
+    ],
+    "preceded by": [
+      {"preceded by id": "hvd_30037", "name": "浙江布政使司", "transcribed": "Zhejiang Buzhe"}
     ]
   },
   "data_source": "CHGIS"
 }
 ```
+
+Notes on the canonical record:
+- `subordinate units` and `preceded by` appear only when the place has them (the `subordinate units` sample above is from `hvd_30015`, Zhejiang Sheng).
+- `subordinate units` entries use `begin_year`/`end_year` (underscore); `part of` entries use `begin year`/`end year` (space).
+- An unknown ID returns HTTP 404 with an HTML body, not JSON.
 
 ### XML Response (Default)
 
