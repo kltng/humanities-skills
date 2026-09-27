@@ -99,14 +99,16 @@ The `item` object adds: `call_number`, `created_published`, `rights`, `summary`,
 from scripts.loc_api import LocAPI
 loc = LocAPI()
 
-# Keyword search
-results = loc.search("hamlet shakespeare", limit=10)
+# Keyword search (search() returns the full response dict;
+# search_results() returns just the list of result dicts)
+data = loc.search("hamlet shakespeare", limit=10)
+results = loc.search_results(q="hamlet shakespeare", limit=10)
 
 # Format-specific
 photos = loc.search("civil war", format="photos", dates="1860/1865")
 
 # Faceted search
-results = loc.search("wildlife", facets={"subject": "birds", "location": "yellowstone"})
+data = loc.search("wildlife", facets={"subject": "birds", "location": "yellowstone"})
 
 # Item lookup
 item = loc.get_item("95521789")

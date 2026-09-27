@@ -22,9 +22,11 @@ GET /api/volumes/brief/json/<spec1>|<spec2>|...|<specN>
 GET /api/volumes/full/json/<spec1>|<spec2>|...|<specN>
 ```
 
-Each spec: `id:<id_type>:<id_value>` (pipe-separated).
+Each spec: `<id_type>:<id_value>` (pipe-separated). The response is keyed by the spec string, e.g. `"isbn:0140268863"`.
 
-For multi-identifier matching: `id:<type1>:<val1>;<type2>:<val2>` (semicolon-separated within a spec).
+Optional label and multi-identifier matching: `id:<label>;<type1>:<val1>;<type2>:<val2>` (semicolon-separated within a spec). The response is then keyed by `<label>`.
+
+Do not percent-encode `/` in identifiers (the server returns 404 for `%2F`). Ark-style htids such as `ucbk.ark:/28722/h28s4k694` must keep their slashes.
 
 ## Identifier Types
 
@@ -32,7 +34,7 @@ For multi-identifier matching: `id:<type1>:<val1>;<type2>:<val2>` (semicolon-sep
 |------|-------------|---------------|
 | `isbn` | ISBN-10 or ISBN-13 | Stripped to digits (+ trailing X) |
 | `oclc` | OCLC number | Stripped to digits |
-| `lccn` | Library of Congress Control Number | URL-encode spaces/slashes |
+| `lccn` | Library of Congress Control Number | URL-encode spaces; do not encode `/` (404) |
 | `issn` | ISSN | Stripped to digits |
 | `htid` | HathiTrust volume ID | e.g., `mdp.39015058510069` |
 | `recordnumber` | 9-digit HathiTrust record number | e.g., `009058846` |

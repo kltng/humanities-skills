@@ -5,6 +5,7 @@ Wraps LibraryCloud Item API and PRESTO Data Lookup for searching and
 retrieving bibliographic records from Harvard Library's 13M+ catalog.
 """
 
+import email.utils
 import json
 import time
 import urllib.request
@@ -63,6 +64,32 @@ class HarvardLibraryAPI:
             time.sleep(self._min_interval - elapsed)
         self._last_request = time.time()
 
+    @staticmethod
+    def _retry_after_seconds(e: urllib.error.HTTPError, default: float) -> float:
+        """Parse a Retry-After header (seconds or HTTP date), capped at 10 min."""
+        value = e.headers.get("Retry-After") if e.headers else None
+        if value:
+            try:
+                return min(600.0, max(0.0, float(value)))
+            except ValueError:
+                try:
+                    when = email.utils.parsedate_to_datetime(value)
+                    return min(600.0, max(0.0, when.timestamp() - time.time()))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        return default
+
+    @staticmethod
+    def _field_params(fields: Dict[str, Any]) -> Dict[str, str]:
+        """Validate search field kwargs and return them as string params."""
+        params = {}
+        for key, val in fields.items():
+            if key in SEARCH_FIELDS or key.endswith("_exact"):
+                params[key] = str(val)
+            else:
+                raise ValueError(f"Unknown search field: {key}. Use q= for keyword search.")
+        return params
+
     def _get(self, url: str, accept: str = "application/json") -> bytes:
         self._rate_limit()
         req = urllib.request.Request(url, headers={
@@ -74,8 +101,8 @@ class HarvardLibraryAPI:
                 return resp.read()
         except urllib.error.HTTPError as e:
             if e.code == 429:
-                # Rate limited — wait and retry once
-                time.sleep(300)
+                # Rate limited (5-minute lockout) — wait and retry once
+                time.sleep(self._retry_after_seconds(e, 300.0))
                 self._rate_limit()
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     return resp.read()
@@ -97,12 +124,7 @@ class HarvardLibraryAPI:
 
         Returns a list of MODS records (dicts).
         """
-        params = {}
-        for key, val in fields.items():
-            if key in SEARCH_FIELDS or key.endswith("_exact"):
-                params[key] = val
-            else:
-                raise ValueError(f"Unknown search field: {key}. Use q= for keyword search.")
+        params = self._field_params(fields)
         params["limit"] = str(limit)
         if start > 0:
             params["start"] = str(start)
@@ -124,10 +146,7 @@ class HarvardLibraryAPI:
         Search with facets. Returns (records, facet_dict).
         facet_dict maps facet name to list of {value, count} dicts.
         """
-        params = {}
-        for key, val in fields.items():
-            if key in SEARCH_FIELDS or key.endswith("_exact"):
-                params[key] = str(val)
+        params = self._field_params(fields)
         params["limit"] = str(limit)
         params["facets"] = ",".join(facets)
 
@@ -180,10 +199,7 @@ class HarvardLibraryAPI:
 
     def get_num_found(self, **fields) -> int:
         """Return total number of matching records without fetching them."""
-        params = {}
-        for key, val in fields.items():
-            if key in SEARCH_FIELDS or key.endswith("_exact"):
-                params[key] = val
+        params = self._field_params(fields)
         params["limit"] = "0"
 
         qs = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
@@ -202,7 +218,10 @@ class HarvardLibraryAPI:
         """
         if format not in ("marc", "mods", "dc"):
             raise ValueError(f"Unsupported format: {format}. Use marc, mods, or dc.")
-        url = f"{PRESTO_BASE}/{format}/hollis/{hollis_id}"
+        hollis_id = str(hollis_id)
+        if hollis_id in ("", ".", ".."):
+            raise ValueError(f"Invalid HOLLIS ID: {hollis_id!r}")
+        url = f"{PRESTO_BASE}/{format}/hollis/{urllib.parse.quote(hollis_id, safe='')}"
         data = self._get(url, accept="application/xml")
         return data.decode("utf-8")
 
@@ -216,7 +235,9 @@ class HarvardLibraryAPI:
             ti = ti[0]
         parts = []
         non_sort = ti.get("nonSort", "")
-        if non_sort:
+        if isinstance(non_sort, dict):
+            non_sort = non_sort.get("#text", "")
+        if isinstance(non_sort, str) and non_sort:
             parts.append(non_sort.strip())
         title = ti.get("title", "")
         if title:
@@ -234,6 +255,8 @@ class HarvardLibraryAPI:
             names_raw = [names_raw]
         results = []
         for n in names_raw:
+            if not isinstance(n, dict):
+                continue
             np = n.get("namePart", "")
             if isinstance(np, list):
                 # Filter to string parts only (skip date dicts etc.)
@@ -264,7 +287,10 @@ class HarvardLibraryAPI:
                     for v in val:
                         if isinstance(v, str):
                             return v
-                    return str(val[0]) if val else ""
+                    for v in val:
+                        if isinstance(v, dict) and v.get("#text"):
+                            return str(v["#text"])
+                    return ""
                 if isinstance(val, dict):
                     return val.get("#text", "")
                 return str(val)
@@ -289,6 +315,8 @@ class HarvardLibraryAPI:
             subjects_raw = [subjects_raw]
         results = []
         for s in subjects_raw:
+            if not isinstance(s, dict):
+                continue
             topic = s.get("topic", "")
             if isinstance(topic, list):
                 results.extend(str(t) for t in topic)
@@ -361,6 +389,10 @@ class HarvardLibraryAPI:
         if isinstance(phys, list):
             phys = phys[0]
         extent = phys.get("extent", "")
+        if isinstance(extent, list):
+            extent = "; ".join(
+                e.get("#text", "") if isinstance(e, dict) else str(e) for e in extent
+            )
         if isinstance(extent, dict):
             extent = extent.get("#text", "")
 

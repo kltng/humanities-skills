@@ -5,6 +5,7 @@ Searches LOC's digitized collections (books, photos, maps, manuscripts,
 newspapers, audio, film/video) and retrieves item details by LCCN/ID.
 """
 
+import email.utils
 import json
 import time
 import urllib.request
@@ -31,6 +32,14 @@ VALID_SORTS = {
 }
 
 
+def _path_segment(value: str) -> str:
+    """Percent-encode a single URL path segment; reject '.'/'..'."""
+    value = str(value)
+    if value in ("", ".", ".."):
+        raise ValueError(f"Invalid path segment: {value!r}")
+    return urllib.parse.quote(value, safe="")
+
+
 class LocAPI:
     """Client for the Library of Congress loc.gov JSON API."""
 
@@ -44,13 +53,35 @@ class LocAPI:
             time.sleep(self._min_interval - elapsed)
         self._last_request = time.time()
 
+    @staticmethod
+    def _retry_after_seconds(e: urllib.error.HTTPError, default: float) -> float:
+        """Parse a Retry-After header (seconds or HTTP date), capped at 5 min."""
+        value = e.headers.get("Retry-After") if e.headers else None
+        if value:
+            try:
+                return min(300.0, max(0.0, float(value)))
+            except ValueError:
+                try:
+                    when = email.utils.parsedate_to_datetime(value)
+                    return min(300.0, max(0.0, when.timestamp() - time.time()))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        return default
+
     def _get_json(self, url: str) -> Dict[str, Any]:
-        self._rate_limit()
         req = urllib.request.Request(url, headers={
             "User-Agent": "LocCatalogSkill/1.0 (Claude Code skill; research use)",
         })
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        for attempt in range(3):
+            self._rate_limit()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 2:
+                    raise
+                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+        raise RuntimeError("unreachable")
 
     # ── Search ──
 
@@ -117,7 +148,7 @@ class LocAPI:
 
     def get_total(self, **kwargs) -> int:
         """Get total number of matching results."""
-        kwargs["limit"] = 0
+        kwargs["limit"] = 1  # c=0 is rejected with HTTP 400
         data = self.search(**kwargs)
         return data.get("pagination", {}).get("of", 0)
 
@@ -128,7 +159,7 @@ class LocAPI:
         Look up a specific item by LCCN or LOC ID.
         Returns the full API response, or None if not found.
         """
-        url = f"{BASE_URL}/item/{item_id}/?fo=json"
+        url = f"{BASE_URL}/item/{_path_segment(item_id)}/?fo=json"
         try:
             return self._get_json(url)
         except urllib.error.HTTPError as e:
@@ -162,7 +193,7 @@ class LocAPI:
         if page > 1:
             params["sp"] = str(page)
         qs = urllib.parse.urlencode(params)
-        url = f"{BASE_URL}/collections/{slug}/?{qs}"
+        url = f"{BASE_URL}/collections/{_path_segment(slug)}/?{qs}"
         return self._get_json(url)
 
     # ── Extraction Helpers ──

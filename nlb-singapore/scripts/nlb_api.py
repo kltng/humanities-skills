@@ -11,6 +11,7 @@ Requires API key and app code. Set environment variables:
 Apply for free keys at https://go.gov.sg/nlblabs-form
 """
 
+import email.utils
 import json
 import os
 import time
@@ -49,6 +50,21 @@ class NlbAPI:
             time.sleep(self._min_interval - elapsed)
         self._last_request = time.time()
 
+    @staticmethod
+    def _retry_after_seconds(e: urllib.error.HTTPError, default: float) -> float:
+        """Parse a Retry-After header (seconds or HTTP date), capped at 5 min."""
+        value = e.headers.get("Retry-After") if e.headers else None
+        if value:
+            try:
+                return min(300.0, max(0.0, float(value)))
+            except ValueError:
+                try:
+                    when = email.utils.parsedate_to_datetime(value)
+                    return min(300.0, max(0.0, when.timestamp() - time.time()))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        return default
+
     def _get_json(self, url: str) -> Dict[str, Any]:
         self._rate_limit()
         req = urllib.request.Request(url, headers={
@@ -62,7 +78,7 @@ class NlbAPI:
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 # Rate limited — wait and retry once
-                time.sleep(5)
+                time.sleep(self._retry_after_seconds(e, 5.0))
                 self._rate_limit()
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     return json.loads(resp.read())
@@ -266,7 +282,10 @@ class NlbAPI:
             all_titles.extend(titles)
             if not data.get("hasMoreRecords", False):
                 break
-            offset = data.get("nextRecordsOffset", offset + page_size)
+            next_offset = data.get("nextRecordsOffset")
+            if not isinstance(next_offset, int) or next_offset <= offset:
+                next_offset = offset + len(titles)
+            offset = next_offset
 
         return all_titles[:max_results]
 
@@ -332,8 +351,8 @@ class NlbAPI:
 
     @staticmethod
     def get_format(record: Dict) -> str:
-        fmt = record.get("format", {})
-        if isinstance(fmt, dict):
+        fmt = record.get("format")
+        if isinstance(fmt, dict) and fmt:
             return fmt.get("name", "")
         records = record.get("records", [])
         if records:

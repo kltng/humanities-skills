@@ -2,10 +2,13 @@
 Europeana Collections API client — zero external dependencies.
 
 Searches 50M+ cultural heritage items from 4,000+ European institutions.
-Requires an API key (free demo key 'api2demo' works for testing).
+Requires an API key. Reads EUROPEANA_API_KEY from the environment and
+falls back to the public demo key 'api2demo' (testing only).
 """
 
+import email.utils
 import json
+import os
 import time
 import urllib.request
 import urllib.parse
@@ -21,8 +24,8 @@ VALID_REUSABILITY = {"open", "restricted", "permission"}
 class EuropeanaAPI:
     """Client for the Europeana Search and Record APIs."""
 
-    def __init__(self, api_key: str = "api2demo", min_interval: float = 0.5):
-        self._api_key = api_key
+    def __init__(self, api_key: Optional[str] = None, min_interval: float = 0.5):
+        self._api_key = api_key or os.environ.get("EUROPEANA_API_KEY") or "api2demo"
         self._min_interval = min_interval
         self._last_request = 0.0
 
@@ -32,13 +35,35 @@ class EuropeanaAPI:
             time.sleep(self._min_interval - elapsed)
         self._last_request = time.time()
 
+    @staticmethod
+    def _retry_after_seconds(e: urllib.error.HTTPError, default: float) -> float:
+        """Parse a Retry-After header (seconds or HTTP date), capped at 5 min."""
+        value = e.headers.get("Retry-After") if e.headers else None
+        if value:
+            try:
+                return min(300.0, max(0.0, float(value)))
+            except ValueError:
+                try:
+                    when = email.utils.parsedate_to_datetime(value)
+                    return min(300.0, max(0.0, when.timestamp() - time.time()))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        return default
+
     def _get_json(self, url: str) -> Dict[str, Any]:
-        self._rate_limit()
         req = urllib.request.Request(url, headers={
             "User-Agent": "EuropeanaSkill/1.0 (Claude Code skill; research use)",
         })
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        for attempt in range(3):
+            self._rate_limit()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 2:
+                    raise
+                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+        raise RuntimeError("unreachable")
 
     # ── Search ──
 
@@ -128,9 +153,15 @@ class EuropeanaAPI:
         for key in ("type", "country", "language", "provider", "data_provider"):
             val = kwargs.get(key)
             if val:
-                qf_parts.append(f"{key.upper().replace('_', '_')}:{val}")
+                if key == "type":
+                    val = val.upper()
+                    if val not in VALID_TYPES:
+                        raise ValueError(f"Invalid type: {val}. Must be one of {VALID_TYPES}")
+                qf_parts.append(f"{key.upper()}:{val}")
 
         if kwargs.get("reusability"):
+            if kwargs["reusability"] not in VALID_REUSABILITY:
+                raise ValueError(f"Invalid reusability: {kwargs['reusability']}")
             params["reusability"] = kwargs["reusability"]
         if kwargs.get("media") is not None:
             params["media"] = "true" if kwargs["media"] else "false"
@@ -141,6 +172,8 @@ class EuropeanaAPI:
 
         url = f"{BASE_URL}/search.json?{qs}"
         data = self._get_json(url)
+        if not data.get("success"):
+            raise RuntimeError(f"Europeana API error: {data.get('error', 'unknown')}")
         return data.get("items", []), data.get("totalResults", 0)
 
     # ── Record Lookup ──
@@ -150,10 +183,13 @@ class EuropeanaAPI:
         Get a single record by Europeana ID.
         record_id: e.g., "/15502/GG_9128" (from search result 'id' field)
         """
-        # Ensure leading slash
-        if not record_id.startswith("/"):
-            record_id = "/" + record_id
-        url = f"{BASE_URL}{record_id}.json?wskey={self._api_key}"
+        # Encode each path segment; keep the dataset/item slash structure
+        segments = record_id.strip("/").split("/")
+        if any(seg in ("", ".", "..") for seg in segments):
+            raise ValueError(f"Invalid Europeana record ID: {record_id!r}")
+        path = "/".join(urllib.parse.quote(seg, safe="") for seg in segments)
+        qs = urllib.parse.urlencode({"wskey": self._api_key})
+        url = f"{BASE_URL}/{path}.json?{qs}"
         try:
             data = self._get_json(url)
             if data.get("success"):

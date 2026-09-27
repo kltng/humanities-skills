@@ -5,6 +5,7 @@ Searches Columbia's Blacklight-based library catalog for books, journals,
 manuscripts, and other holdings. Uses the undocumented JSON API.
 """
 
+import email.utils
 import json
 import time
 import urllib.request
@@ -37,13 +38,66 @@ class ColumbiaClioAPI:
             time.sleep(self._min_interval - elapsed)
         self._last_request = time.time()
 
+    @staticmethod
+    def _retry_after_seconds(e: urllib.error.HTTPError, default: float) -> float:
+        """Parse a Retry-After header (seconds or HTTP date), capped at 5 min."""
+        value = e.headers.get("Retry-After") if e.headers else None
+        if value:
+            try:
+                return min(300.0, max(0.0, float(value)))
+            except ValueError:
+                try:
+                    when = email.utils.parsedate_to_datetime(value)
+                    return min(300.0, max(0.0, when.timestamp() - time.time()))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        return default
+
     def _get_json(self, url: str) -> Dict[str, Any]:
-        self._rate_limit()
         req = urllib.request.Request(url, headers={
             "User-Agent": "ColumbiaClioSkill/1.0 (Claude Code skill; research use)",
         })
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        for attempt in range(3):
+            self._rate_limit()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 2:
+                    raise
+                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+        raise RuntimeError("unreachable")
+
+    @staticmethod
+    def _build_query(
+        q: str,
+        search_field: Optional[str],
+        facets: Optional[Dict[str, str]],
+        sort: Optional[str],
+        per_page: int,
+        page: int,
+    ) -> str:
+        """Build a validated, fully encoded query string."""
+        params = {"q": q, "per_page": str(per_page)}
+        if page > 1:
+            params["page"] = str(page)
+        if search_field:
+            if search_field not in VALID_SEARCH_FIELDS:
+                raise ValueError(f"Invalid search_field: {search_field}. Use 'title' or 'author'")
+            params["search_field"] = search_field
+        if sort:
+            params["sort"] = sort
+
+        # Build URL manually to handle facet array params
+        qs = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+
+        if facets:
+            for name, value in facets.items():
+                if name not in VALID_FACETS:
+                    raise ValueError(f"Invalid facet: {name}. Must be one of {VALID_FACETS}")
+                encoded_val = urllib.parse.quote(str(value), safe="")
+                qs += f"&f[{name}][]={encoded_val}"
+        return qs
 
     # ── Search ──
 
@@ -67,26 +121,7 @@ class ColumbiaClioAPI:
             per_page: Results per page
             page: Page number
         """
-        params = {"q": q, "per_page": str(per_page)}
-        if page > 1:
-            params["page"] = str(page)
-        if search_field:
-            if search_field not in VALID_SEARCH_FIELDS:
-                raise ValueError(f"Invalid search_field: {search_field}. Use 'title' or 'author'")
-            params["search_field"] = search_field
-        if sort:
-            params["sort"] = sort
-
-        # Build URL manually to handle facet array params
-        qs = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-
-        if facets:
-            for name, value in facets.items():
-                if name not in VALID_FACETS:
-                    raise ValueError(f"Invalid facet: {name}. Must be one of {VALID_FACETS}")
-                encoded_val = urllib.parse.quote(str(value))
-                qs += f"&f[{name}][]={encoded_val}"
-
+        qs = self._build_query(q, search_field, facets, sort, per_page, page)
         url = f"{BASE_URL}.json?{qs}"
         data = self._get_json(url)
         return data.get("response", {}).get("docs", [])
@@ -97,25 +132,14 @@ class ColumbiaClioAPI:
         """
         Search and return full response with docs, facets, and pagination.
         """
-        params = {"q": q, "per_page": str(kwargs.get("per_page", 10))}
-        page = kwargs.get("page", 1)
-        if page > 1:
-            params["page"] = str(page)
-        search_field = kwargs.get("search_field")
-        if search_field:
-            params["search_field"] = search_field
-        sort = kwargs.get("sort")
-        if sort:
-            params["sort"] = sort
-
-        qs = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-
-        facets = kwargs.get("facets")
-        if facets:
-            for name, value in facets.items():
-                encoded_val = urllib.parse.quote(str(value))
-                qs += f"&f[{name}][]={encoded_val}"
-
+        qs = self._build_query(
+            q,
+            kwargs.get("search_field"),
+            kwargs.get("facets"),
+            kwargs.get("sort"),
+            kwargs.get("per_page", 10),
+            kwargs.get("page", 1),
+        )
         url = f"{BASE_URL}.json?{qs}"
         data = self._get_json(url)
         resp = data.get("response", {})
@@ -146,7 +170,7 @@ class ColumbiaClioAPI:
 
     def get_record(self, record_id: str) -> Optional[Dict]:
         """Get a single record by ID. Returns the document dict or None."""
-        url = f"{BASE_URL}/{record_id}.json"
+        url = f"{BASE_URL}/{urllib.parse.quote(str(record_id), safe='')}.json"
         try:
             data = self._get_json(url)
             return data.get("response", {}).get("document", data)

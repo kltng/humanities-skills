@@ -5,6 +5,7 @@ Looks up bibliographic records and digitized volume info by identifier
 (ISBN, OCLC, LCCN, ISSN, HathiTrust ID, record number).
 """
 
+import email.utils
 import json
 import time
 import urllib.request
@@ -15,6 +16,18 @@ from typing import Any, Dict, List, Optional, Tuple
 BASE_URL = "https://catalog.hathitrust.org/api/volumes"
 
 VALID_ID_TYPES = {"isbn", "lccn", "oclc", "issn", "htid", "recordnumber"}
+
+
+def _encode_id(id_value: str) -> str:
+    """
+    Percent-encode an identifier for a URL path. Keeps ':' and '/' because
+    ark-style htids (e.g. 'uc1.ark:/13960/t0000') need them and the server
+    returns 404 for an encoded slash (%2F). Rejects '.'/'..' segments.
+    """
+    value = str(id_value)
+    if any(seg in (".", "..") for seg in value.split("/")):
+        raise ValueError(f"Invalid identifier: {value!r}")
+    return urllib.parse.quote(value, safe=":/")
 
 
 class HathiTrustAPI:
@@ -30,13 +43,35 @@ class HathiTrustAPI:
             time.sleep(self._min_interval - elapsed)
         self._last_request = time.time()
 
+    @staticmethod
+    def _retry_after_seconds(e: urllib.error.HTTPError, default: float) -> float:
+        """Parse a Retry-After header (seconds or HTTP date), capped at 5 min."""
+        value = e.headers.get("Retry-After") if e.headers else None
+        if value:
+            try:
+                return min(300.0, max(0.0, float(value)))
+            except ValueError:
+                try:
+                    when = email.utils.parsedate_to_datetime(value)
+                    return min(300.0, max(0.0, when.timestamp() - time.time()))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        return default
+
     def _get_json(self, url: str) -> Dict[str, Any]:
-        self._rate_limit()
         req = urllib.request.Request(url, headers={
             "User-Agent": "HathiTrustSkill/1.0 (Claude Code skill; research use)",
         })
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        for attempt in range(3):
+            self._rate_limit()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 2:
+                    raise
+                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+        raise RuntimeError("unreachable")
 
     # ── Single-ID Lookups ──
 
@@ -48,7 +83,7 @@ class HathiTrustAPI:
         if id_type not in VALID_ID_TYPES:
             raise ValueError(f"Invalid id_type: {id_type}. Must be one of {VALID_ID_TYPES}")
         variant = "full" if full else "brief"
-        encoded_id = urllib.parse.quote(str(id_value), safe="")
+        encoded_id = _encode_id(id_value)
         url = f"{BASE_URL}/{variant}/{id_type}/{encoded_id}.json"
         data = self._get_json(url)
         if not data.get("records"):
@@ -96,7 +131,7 @@ class HathiTrustAPI:
             if id_type not in VALID_ID_TYPES:
                 raise ValueError(f"Invalid id_type: {id_type}")
 
-        specs = "|".join(f"{t}:{urllib.parse.quote(str(v), safe='')}" for t, v in identifiers)
+        specs = "|".join(f"{t}:{_encode_id(v)}" for t, v in identifiers)
         variant = "full" if full else "brief"
         url = f"{BASE_URL}/{variant}/json/{specs}"
         data = self._get_json(url)

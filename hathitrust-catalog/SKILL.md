@@ -48,7 +48,7 @@ Pipe-separated as `type:value`. Max 20 per request.
 |------|---------|-------|
 | `isbn` | `0140449264` or `9780140449266` | ISBN-10 or ISBN-13, digits only (+ trailing X) |
 | `oclc` | `228668653` | OCLC number, digits only |
-| `lccn` | `72081773` | URL-encode spaces/slashes |
+| `lccn` | `72081773` | URL-encode spaces; do not encode `/` (404) |
 | `issn` | `03785955` | Digits only |
 | `htid` | `mdp.39015058510069` | HathiTrust volume ID |
 | `recordnumber` | `000578050` | 9-digit HathiTrust record number |

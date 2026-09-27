@@ -12,7 +12,7 @@ Search 50M+ cultural heritage items from 4,000+ European institutions.
 
 ### API key is required — use `api2demo` for testing
 
-Every request needs a `wskey` parameter. The demo key `api2demo` works for development/testing. For production use, register for a free key at https://www.europeana.eu/en/account/api-keys.
+Every request needs a `wskey` parameter. The demo key `api2demo` works for development/testing. For production use, register for a free key at https://www.europeana.eu/en/account/api-keys and set it in the `EUROPEANA_API_KEY` environment variable (the Python client reads it automatically; do not paste the key into code or logs).
 
 ```
 https://api.europeana.eu/record/v2/search.json?query=vermeer&wskey=api2demo
@@ -114,7 +114,7 @@ Record IDs look like `/15502/GG_9128` (from the `id` field in search results).
 
 ```python
 from scripts.europeana_api import EuropeanaAPI
-eu = EuropeanaAPI()  # uses api2demo key by default
+eu = EuropeanaAPI()  # reads EUROPEANA_API_KEY from env; falls back to api2demo
 
 # Basic search
 results = eu.search("vermeer")

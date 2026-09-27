@@ -139,11 +139,13 @@ Transaction status codes: `S` (on shelf), `L` (on loan), `H` (on hold), `I` (in 
 from scripts.nlb_api import NlbAPI
 nlb = NlbAPI()  # reads NLB_API_KEY and NLB_APP_CODE from env
 
-# Keyword search
-results = nlb.search("singapore history", limit=10)
+# Keyword search (search() returns the full response dict;
+# search_titles() returns just the list of title dicts)
+data = nlb.search("singapore history", limit=10, languages=["Chinese"])
+results = nlb.search_titles("singapore history", limit=10)
 
-# Field-specific search
-results = nlb.get_titles(title="dream of the red chamber", language="Chinese")
+# Field-specific search (title, author, subject, isbn, keywords)
+found = nlb.get_titles(title="dream of the red chamber", author="Cao")
 
 # Title details by BRN
 detail = nlb.get_title_details(brn=13737742)
