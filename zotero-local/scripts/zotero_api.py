@@ -38,6 +38,23 @@ def _validate_key(key: str, label: str = "key") -> str:
     return key
 
 
+def _js_string(value: str) -> str:
+    """Return a JavaScript string literal for *value*.
+
+    JSON strings are valid JS string literals and escape quotes,
+    backslashes, and control characters such as newlines.
+    """
+    return json.dumps(value)
+
+
+def _file_url_to_path(file_url: str) -> str:
+    """Convert a file:// URL returned by Zotero into a local path."""
+    parsed = urllib.parse.urlparse(file_url)
+    if parsed.scheme != "file":
+        raise ValueError(f"Expected a file:// URL from Zotero, got: {file_url!r}")
+    return urllib.request.url2pathname(parsed.path)
+
+
 class ZoteroLocal:
     """Client for the Zotero 8 local HTTP API."""
 
@@ -167,14 +184,19 @@ class ZoteroLocal:
         return self._api_get(f"users/0/items/{key}/fulltext")
 
     def get_file(self, attachment_key: str) -> Optional[bytes]:
-        """Download an attached file. Returns raw bytes."""
-        url = f"{self._api_base}/users/0/items/{attachment_key}/file"
-        self._rate_limit()
-        req = urllib.request.Request(url, headers={"User-Agent": "ZoteroLocalSkill/1.0"})
+        """Read an attached file. Returns raw bytes, or None if there is no file.
+
+        The local API's ``/file`` endpoint answers with a 302 redirect to a
+        ``file://`` URL, which urllib refuses to follow. So resolve the path
+        with ``/file/view/url`` and read the file directly.
+        """
+        file_url = self.get_file_path(attachment_key)
+        if not file_url:
+            return None
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                return resp.read()
-        except urllib.error.HTTPError:
+            with open(_file_url_to_path(file_url), "rb") as f:
+                return f.read()
+        except (OSError, ValueError):
             return None
 
     def get_file_path(self, attachment_key: str) -> Optional[str]:
@@ -464,7 +486,8 @@ class ZoteroLocal:
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        escaped_path = file_path.replace("\\", "\\\\").replace("'", "\\'")
+        # Zotero does not share our working directory, so send an absolute path.
+        path_js = _js_string(os.path.abspath(file_path))
 
         js_code = f"""
         var item = await Zotero.Items.getByLibraryAndKeyAsync(
@@ -472,7 +495,7 @@ class ZoteroLocal:
         );
         if (!item) throw new Error('Item not found: {parent_key}');
         var attachment = await Zotero.Attachments.importFromFile({{
-            file: '{escaped_path}',
+            file: {path_js},
             parentItemID: item.id
         }});
         return JSON.stringify({{key: attachment.key, title: attachment.getField('title')}});
@@ -498,7 +521,7 @@ class ZoteroLocal:
         Raises:
             RuntimeError: If the debug-bridge is not available or the parent is not found.
         """
-        escaped_name = name.replace("\\", "\\\\").replace("'", "\\'")
+        name_js = _js_string(name)
 
         if parent_key:
             _validate_key(parent_key, "parent collection key")
@@ -509,7 +532,7 @@ class ZoteroLocal:
             if (!parent) throw new Error('Parent collection not found: {parent_key}');
             var col = new Zotero.Collection();
             col.libraryID = Zotero.Libraries.userLibraryID;
-            col.name = '{escaped_name}';
+            col.name = {name_js};
             col.parentID = parent.id;
             await col.saveTx();
             return JSON.stringify({{key: col.key, name: col.name, parentKey: '{parent_key}'}});
@@ -518,7 +541,7 @@ class ZoteroLocal:
             js_code = f"""
             var col = new Zotero.Collection();
             col.libraryID = Zotero.Libraries.userLibraryID;
-            col.name = '{escaped_name}';
+            col.name = {name_js};
             await col.saveTx();
             return JSON.stringify({{key: col.key, name: col.name}});
             """
@@ -532,6 +555,7 @@ class ZoteroLocal:
         """Delete a collection.
 
         Requires the Better BibTeX (BBT) extension for its debug-bridge.
+        Zotero also deletes all sub-collections of this collection.
 
         Args:
             collection_key: The collection key to delete.
@@ -591,7 +615,7 @@ class ZoteroLocal:
             raise FileNotFoundError(f"No file found for attachment: {attachment_key}")
 
         # file_url is like "file:///Users/.../file.pdf" — extract the path
-        source_path = urllib.parse.unquote(file_url.replace("file://", ""))
+        source_path = _file_url_to_path(file_url)
 
         if os.path.isdir(dest_path):
             filename = os.path.basename(source_path)

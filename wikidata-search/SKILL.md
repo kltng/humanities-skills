@@ -95,6 +95,7 @@ data = wd.get_entitydata("Q42", flavor="simple")
 - **User-Agent**: Required for Vector DB and WDQS (include contact info)
 - **Respect 429**: Honor `Retry-After` headers
 - **Action API**: Use `maxlag` parameter; batch with pipe-separated IDs (max 50)
+- **maxlag errors**: When Wikidata is lagged, the Action API returns HTTP 200 with `{"error": {"code": "maxlag"}}` and a `Retry-After` header. The script waits and retries, then raises `RuntimeError`. Wikidata's lag includes query-service lag, which can stay high for a long time. For read-only lookups you can use `WikidataAPI(maxlag=None)` (or a higher value) to skip the check.
 - **SPARQL**: Request only needed fields; use `LIMIT`
 
 ## Related Skills

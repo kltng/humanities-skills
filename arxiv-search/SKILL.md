@@ -22,7 +22,7 @@ The arXiv API returns **Atom 1.0 XML** — there is no JSON option. You must par
 ### The base URL uses `export.arxiv.org`, not `arxiv.org`
 
 ```
-http://export.arxiv.org/api/query?search_query=all:transformer&max_results=5
+https://export.arxiv.org/api/query?search_query=all:transformer&max_results=5
 ```
 
 Using `arxiv.org` directly will not work for API queries.
@@ -52,7 +52,7 @@ search_query=au:bengio+AND+%28cat:cs.LG+OR+cat:cs.AI%29
 search_query=submittedDate:[202401010000+TO+202412312359]
 ```
 
-Format: `YYYYMMDDTHHMM` in GMT, 24-hour. The `T` is literal. Combine with other queries using `AND`.
+Format: `YYYYMMDDHHMM` (12 digits) in GMT, 24-hour. Do not put a `T` between date and time; arXiv returns an error if you do. Combine with other queries using `AND`.
 
 ### Rate limiting: 3 seconds between requests
 

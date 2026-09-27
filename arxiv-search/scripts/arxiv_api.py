@@ -6,6 +6,7 @@ pagination, rate limiting, and Atom XML parsing using only the
 Python standard library.
 """
 
+import email.utils
 import re
 import time
 import urllib.error
@@ -22,7 +23,7 @@ _NS = {
     "arxiv": "http://arxiv.org/schemas/atom",
 }
 
-_BASE_URL = "http://export.arxiv.org/api/query"
+_BASE_URL = "https://export.arxiv.org/api/query"
 
 
 class ArxivAPI:
@@ -98,6 +99,10 @@ class ArxivAPI:
         ids : list[str]
             arXiv IDs, e.g. ``["2301.07041", "cond-mat/0207270v1"]``.
         """
+        if not ids:
+            # arXiv answers an empty id_list with HTTP 400.
+            return {"total_results": 0, "start_index": start,
+                    "items_per_page": 0, "entries": []}
         if max_results is None:
             max_results = len(ids)
         params: dict[str, str] = {
@@ -121,7 +126,7 @@ class ArxivAPI:
     def _parse_entry(self, entry: ET.Element) -> dict[str, Any]:
         """Parse a single <entry> element into a dict."""
         raw_id = self._text(entry.find("atom:id", _NS)) or ""
-        arxiv_id = raw_id.replace("http://arxiv.org/abs/", "")
+        arxiv_id = re.sub(r"^https?://arxiv\.org/abs/", "", raw_id)
 
         # Authors
         authors: list[dict[str, Optional[str]]] = []
@@ -196,6 +201,21 @@ class ArxivAPI:
         if elapsed < self.min_request_interval:
             time.sleep(self.min_request_interval - elapsed)
 
+    @staticmethod
+    def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
+        """Parse a Retry-After header (delta-seconds or HTTP-date)."""
+        if not value:
+            return None
+        try:
+            return max(0.0, float(value))
+        except ValueError:
+            pass
+        try:
+            dt = email.utils.parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, dt.timestamp() - time.time())
+
     def _request(self, url: str, params: dict[str, str]) -> str:
         """Make a rate-limited GET request with retry + exponential backoff."""
         full_url = f"{url}?{urllib.parse.urlencode(params)}"
@@ -214,12 +234,9 @@ class ArxivAPI:
                     return resp.read().decode("utf-8")
             except urllib.error.HTTPError as exc:
                 if exc.code == 429 or 500 <= exc.code < 600:
-                    retry_after = exc.headers.get("Retry-After")
-                    wait = (
-                        float(retry_after)
-                        if retry_after
-                        else self.min_request_interval * (2 ** attempt)
-                    )
+                    wait = self._retry_after_seconds(exc.headers.get("Retry-After"))
+                    if wait is None:
+                        wait = self.min_request_interval * (2 ** attempt)
                     if attempt < self.max_retries:
                         time.sleep(wait)
                         continue

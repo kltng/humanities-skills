@@ -227,6 +227,8 @@ await col.eraseTx();
 return JSON.stringify({deleted: true});
 ```
 
+`eraseTx()` also deletes every sub-collection. Items stay in the library unless you trash them yourself.
+
 **Example — check if BBT is available:**
 ```javascript
 return 'ok';

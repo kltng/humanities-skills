@@ -5,7 +5,7 @@ Detailed documentation for the arXiv Query API.
 ## Query Endpoint
 
 ```
-GET http://export.arxiv.org/api/query
+GET https://export.arxiv.org/api/query
 ```
 
 This is the only API endpoint. All searches and ID lookups go through this URL.
@@ -74,11 +74,11 @@ search_query=ti:%22large+language+model%22
 Filter by submission date using `submittedDate` with range syntax:
 
 ```
-submittedDate:[YYYYMMDDTHHMM TO YYYYMMDDTHHMM]
+submittedDate:[YYYYMMDDHHMM TO YYYYMMDDHHMM]
 ```
 
-- Format: Year-Month-Day`T`Hour-Minute in GMT, 24-hour clock
-- The `T` is a literal character in the timestamp
+- Format: Year-Month-Day-Hour-Minute (12 digits) in GMT, 24-hour clock
+- Do not insert a literal `T` between date and time (arXiv returns an error)
 - URL-encode spaces as `+`
 
 ```
@@ -230,20 +230,20 @@ Common errors:
 
 ```bash
 # Search for "attention" in titles
-curl 'http://export.arxiv.org/api/query?search_query=ti:attention&max_results=5'
+curl 'https://export.arxiv.org/api/query?search_query=ti:attention&max_results=5'
 
 # Author search with category filter
-curl 'http://export.arxiv.org/api/query?search_query=au:lecun+AND+cat:cs.CV&max_results=10'
+curl 'https://export.arxiv.org/api/query?search_query=au:lecun+AND+cat:cs.CV&max_results=10'
 
 # Fetch specific papers by ID
-curl 'http://export.arxiv.org/api/query?id_list=2301.07041,2303.08774'
+curl 'https://export.arxiv.org/api/query?id_list=2301.07041,2303.08774'
 
 # Recent CS papers sorted by date
-curl 'http://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=20'
+curl 'https://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=20'
 
 # Phrase search in abstract
-curl 'http://export.arxiv.org/api/query?search_query=abs:%22graph+neural+network%22&max_results=10'
+curl 'https://export.arxiv.org/api/query?search_query=abs:%22graph+neural+network%22&max_results=10'
 
 # Date range filter
-curl 'http://export.arxiv.org/api/query?search_query=cat:cs.CL+AND+submittedDate:%5B202401010000+TO+202412312359%5D&max_results=50'
+curl 'https://export.arxiv.org/api/query?search_query=cat:cs.CL+AND+submittedDate:%5B202401010000+TO+202412312359%5D&max_results=50'
 ```

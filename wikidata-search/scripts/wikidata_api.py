@@ -3,6 +3,7 @@
 Wikidata API client for searching items and retrieving identifiers.
 """
 
+import email.utils
 import json
 import os
 import time
@@ -62,14 +63,14 @@ class WikidataAPI:
         user_agent: str = "WikidataSearchSkill/1.0 (https://www.wikidata.org; contact: example@example.com)",
         min_request_interval: float = 0.5,
         max_retries: int = 4,
-        maxlag: int = 5,
+        maxlag: Optional[int] = 5,
         vectordb_api_secret: Optional[str] = None,
     ):
         self.user_agent = user_agent
         self._last_request_time = 0
         self._min_request_interval = float(min_request_interval)
         self._max_retries = int(max_retries)
-        self._maxlag = int(maxlag)
+        self._maxlag = int(maxlag) if maxlag is not None else None
         self._vectordb_api_secret = (
             vectordb_api_secret
             if vectordb_api_secret is not None
@@ -82,6 +83,21 @@ class WikidataAPI:
         if elapsed < self._min_request_interval:
             time.sleep(self._min_request_interval - elapsed)
         self._last_request_time = time.time()
+
+    @staticmethod
+    def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
+        """Parse a Retry-After header (delta-seconds or HTTP-date)."""
+        if not value:
+            return None
+        try:
+            return max(0.0, float(value))
+        except ValueError:
+            pass
+        try:
+            dt = email.utils.parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, dt.timestamp() - time.time())
 
     def _read_response_body(self, response) -> bytes:
         body = response.read()
@@ -106,7 +122,7 @@ class WikidataAPI:
 
         headers = {
             "User-Agent": self.user_agent,
-            "Accept-Encoding": "gzip,deflate",
+            "Accept-Encoding": "gzip",
             "Accept": "application/json",
         }
         if extra_headers:
@@ -121,18 +137,27 @@ class WikidataAPI:
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as response:
                     body = self._read_response_body(response)
-                    return json.loads(body.decode("utf-8"))
+                    data = json.loads(body.decode("utf-8"))
+                    retry_after = response.headers.get("Retry-After")
+                # The Action API reports maxlag as HTTP 200 with an error body.
+                error = data.get("error") if isinstance(data, dict) else None
+                if isinstance(error, dict) and error.get("code") == "maxlag":
+                    last_error = RuntimeError(
+                        f"Wikidata maxlag: {error.get('info', '')} "
+                        "(for read-only use you can pass maxlag=None or a higher value)"
+                    )
+                    wait = self._retry_after_seconds(retry_after)
+                    time.sleep(wait if wait is not None else 5.0)
+                    continue
+                return data
             except HTTPError as e:
                 last_error = e
                 # Respect Retry-After on 429
                 if e.code == 429:
-                    retry_after = e.headers.get("Retry-After")
-                    if retry_after:
-                        try:
-                            time.sleep(float(retry_after))
-                            continue
-                        except ValueError:
-                            pass
+                    wait = self._retry_after_seconds(e.headers.get("Retry-After"))
+                    if wait is not None:
+                        time.sleep(wait)
+                        continue
                 # Retry transient errors
                 if e.code in (429, 500, 502, 503, 504):
                     time.sleep(min(8.0, 0.5 * (2**attempt)))
@@ -150,7 +175,8 @@ class WikidataAPI:
     def _request(self, params: dict) -> dict:
         """Make Wikidata Action API request with rate limiting and retries."""
         params = dict(params)
-        params.setdefault("maxlag", str(self._maxlag))
+        if self._maxlag is not None:
+            params.setdefault("maxlag", str(self._maxlag))
         params.setdefault("formatversion", "2")
         return self._request_json(self.BASE_URL, params)
     
@@ -348,7 +374,7 @@ class WikidataAPI:
 
         headers = {
             "User-Agent": self.user_agent,
-            "Accept-Encoding": "gzip,deflate",
+            "Accept-Encoding": "gzip",
             "Accept": "application/json",
         }
 
@@ -360,7 +386,14 @@ class WikidataAPI:
                 with urllib.request.urlopen(req, timeout=30) as response:
                     body = self._read_response_body(response)
                     return json.loads(body.decode("utf-8"))
-            except (HTTPError, URLError) as e:
+            except HTTPError as e:
+                last_error = e
+                # 404 (missing entity) and other client errors will not succeed on retry.
+                if e.code in (429, 500, 502, 503, 504):
+                    time.sleep(min(8.0, 0.5 * (2**attempt)))
+                    continue
+                raise
+            except URLError as e:
                 last_error = e
                 time.sleep(min(8.0, 0.5 * (2**attempt)))
                 continue
@@ -407,7 +440,7 @@ class WikidataAPI:
         headers = {
             "User-Agent": self.user_agent,
             "Accept": accept,
-            "Accept-Encoding": "gzip,deflate",
+            "Accept-Encoding": "gzip",
         }
 
         last_error: Optional[Exception] = None
@@ -420,13 +453,10 @@ class WikidataAPI:
             except HTTPError as e:
                 last_error = e
                 if e.code == 429:
-                    retry_after = e.headers.get("Retry-After")
-                    if retry_after:
-                        try:
-                            time.sleep(float(retry_after))
-                            continue
-                        except ValueError:
-                            pass
+                    wait = self._retry_after_seconds(e.headers.get("Retry-After"))
+                    if wait is not None:
+                        time.sleep(wait)
+                        continue
                 if e.code in (429, 500, 502, 503, 504):
                     time.sleep(min(8.0, 0.5 * (2**attempt)))
                     continue

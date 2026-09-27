@@ -149,7 +149,7 @@ GET http://localhost:23119/api/users/0/items/{attachmentKey}/file/view/url
 
 Returns a `file://` URL pointing to the file in Zotero's storage directory.
 
-Or redirect to the file directly (returns 302):
+Or redirect to the file directly (returns 302 to a `file://` URL; Python's urllib will not follow it, so `get_file()` reads the path from `/file/view/url` instead):
 
 ```
 GET http://localhost:23119/api/users/0/items/{attachmentKey}/file
@@ -190,7 +190,8 @@ col = z.create_collection("My Research")
 sub = z.create_collection("Chapter 1", parent_key=col["key"])
 # Returns: {"key": "EFGH5678", "name": "Chapter 1", "parentKey": "ABCD1234"}
 
-# Delete a collection (items remain in library)
+# Delete a collection (items remain in library).
+# Warning: Zotero also deletes all sub-collections of this collection.
 z.delete_collection("ABCD1234")
 
 # Delete a collection and trash items only in that collection
