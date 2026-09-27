@@ -25,7 +25,9 @@ https://cbdb.fas.harvard.edu/cbdbapi/person.php
 ```
 response["Package"]["PersonAuthority"]["PersonInfo"]["Person"]
 ```
-The Person object contains: `BasicInfo`, `AltNameInfo`, `AddrInfo`, `EntryInfo`, `PostingInfo`, `SocialAssocInfo`, `KinshipInfo`.
+The Person object contains: `BasicInfo`, `PersonAliases.Alias`, `PersonAddresses.Address`, `PersonEntryInfo.Entry`, `PersonPostings.Posting`, `PersonSocialStatus.SocialStatus`, `PersonKinshipInfo.Kinship`, `PersonSocialAssociation.Association`, `PersonTexts.Text`, `PersonSources.Source`.
+
+Each section is a dict when it has records, but an **empty string `""`** when it has none. Inside a section, one record may come back as a dict and several as a list. `Person` itself may also be a list if the name matches more than one person.
 
 **Encoding:** Pass Chinese characters as UTF-8 directly — do not URL-encode into hex.
 
@@ -40,6 +42,7 @@ api = CBDBAPI()
 # By name (Chinese or Pinyin)
 person = api.query_by_name("蘇軾")
 person = api.query_by_name("Wang Anshi")
+people = api.query_by_name_all("Wang Anshi")  # every match, as a list
 
 # By ID (most precise)
 person = api.query_by_id(1762)
@@ -50,12 +53,14 @@ postings = api.get_postings(person)     # official positions
 assocs = api.get_social_associations(person)  # social network
 kinship = api.get_kinship(person)       # family relations
 alt_names = api.get_alt_names(person)   # courtesy name, pen name, etc.
+entries = api.get_entries(person)       # exam / entry records
+addresses = api.get_addresses(person)   # places
 
 # Formatted summary
 print(api.summarize(person))
 ```
 
-The script handles rate limiting, retries, and the nested JSON navigation automatically.
+The script handles rate limiting, retries (including HTTP 429 `Retry-After`), a `User-Agent` header, and the nested JSON navigation automatically. A person that is not found returns `None` (the API answers with HTTP 404 and a JSON error body).
 
 ## Quick Reference
 
@@ -80,17 +85,19 @@ https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=1762&o=json
 
 **Multiple results from Pinyin queries:** Check dynasty, dates, or other context to identify the correct person. If ambiguous, present options to the user.
 
-**Error response:**
+**Error response** (sent with HTTP status 404; bad input such as a non-numeric ID gives 422):
 ```json
 {"error": {"code": 404, "message": "Person not found."}}
 ```
 Try alternative name forms (Chinese vs Pinyin), check spelling, or try courtesy names (字, 號).
 
+**Common record fields:** Posting: `OfficeName`, `AddrName`, `FirstYear`, `LastYear`. Association: `AssocPersonName`, `AssocPersonId`, `AssocName` (relation type). Kinship: `KinPersonName`, `KinPersonId`, `KinRelName`. Alias: `AliasType`, `AliasName`. A year of `"0"` means unknown.
+
 **BasicInfo fields:** `PersonId`, `EngName`, `ChName`, `IndexYear`, `Gender`, `YearBirth`, `YearDeath`, `Dynasty`, `Notes`
 
 ## Related Skills
 
-- **chgis-tgaz**: Look up birthplaces or associated locations from CBDB's `AddrInfo` in the CHGIS Temporal Gazetteer
+- **chgis-tgaz**: Look up birthplaces or associated locations from CBDB's `PersonAddresses` in the CHGIS Temporal Gazetteer
 - **wikidata-search**: Cross-reference CBDB figures with Wikidata for external identifiers (VIAF, LoC, etc.)
 
 ## Resources

@@ -65,7 +65,9 @@ history = api.get_personal_history(person_id)  # personal history records
 print(api.summarize(person))
 ```
 
-The script handles rate limiting, retries, and LoopBack filter construction automatically.
+The script handles rate limiting, retries (including HTTP 429 `Retry-After`), a `User-Agent` header, regex escaping of names, and LoopBack filter construction automatically.
+
+**Availability note (checked 2026-09-24):** `https://jbdb.jp/api/...` currently returns the website's HTML "Page not found" page instead of JSON. The script raises `RuntimeError("JBDB API endpoint not found ...")` in that case, so an outage is not mistaken for "no results".
 
 ## Quick Reference
 
@@ -100,7 +102,7 @@ https://jbdb.jp/api/KinData?filter={"where":{"cPersonid":12345}}
 
 **Multiple results:** Use additional context (dates, occupation, place) to identify the correct person. If ambiguous, present options to the user.
 
-**Empty results:** Returns `[]` for find operations or 404 for findById. Try alternative name forms (kanji vs romaji vs furigana).
+**Empty results:** Returns `[]` for find operations or a JSON 404 for findById (the script returns `None`). Try alternative name forms (kanji vs romaji vs furigana).
 
 **Key BiogMain fields:** `cPersonid`, `cName`, `cNameFurigana`, `cNameRomaji`, `cFemale`, `cByNengoYear`, `cByNengoCode`, `cDyNengoYear`, `cDeathAge`, `cOccupationCodes`, `cStatusCodes`, `cPlaceCode`, `cNotes`
 

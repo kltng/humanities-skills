@@ -8,7 +8,7 @@
       "files": [],
       "expectations": [
         "The API was queried using Chinese characters 蘇軾 (not URL-encoded hex)",
-        "The response was parsed correctly — BasicInfo, PostingInfo, and SocialAssocInfo data extracted",
+        "The response was parsed correctly — BasicInfo, PersonPostings, and PersonSocialAssociation data extracted",
         "Official positions are listed with names and/or years",
         "Social relationships are listed with names and relationship types",
         "The output includes dynasty context (Song/宋)"

@@ -95,17 +95,26 @@ The JSON response nests data under `Package.PersonAuthority.PersonInfo.Person`:
             "Notes": "..."
           },
           "PersonSources": { "Source": [...] },
-          "AltNameInfo": { "AltName": [...] },
-          "AddrInfo": { "Addr": [...] },
-          "EntryInfo": { "Entry": [...] },
-          "PostingInfo": { "Posting": [...] },
-          "SocialAssocInfo": { "SocialAssoc": [...] }
+          "PersonSourcesAs": { "SourceAs": [...] },
+          "PersonAliases": { "Alias": [...] },
+          "PersonAddresses": { "Address": [...] },
+          "PersonEntryInfo": { "Entry": [...] },
+          "PersonPostings": { "Posting": [...] },
+          "PersonSocialStatus": { "SocialStatus": [...] },
+          "PersonKinshipInfo": { "Kinship": [...] },
+          "PersonSocialAssociation": { "Association": [...] },
+          "PersonTexts": { "Text": [...] }
         }
       }
     }
   }
 }
 ```
+
+**Shape rules:**
+- An empty section is an empty string (`"PersonSourcesAs": ""`), not an empty object.
+- A section with one record may hold a dict instead of a list.
+- `Person` may be a list when a name matches several people.
 
 ### Key BasicInfo Fields
 
@@ -124,6 +133,8 @@ The JSON response nests data under `Package.PersonAuthority.PersonInfo.Person`:
 
 ### Error Response
 
+Sent with HTTP status 404 (not found). Invalid input (for example a non-numeric `id`) returns HTTP 422 with `{"error": {"code": 422, "message": "Validation failed.", ...}}`.
+
 ```json
 {"error": {"code": 404, "message": "Person not found."}}
 ```
@@ -139,27 +150,44 @@ Structured XML output following CBDB's schema, providing maximum flexibility for
 ### JSON
 JavaScript Object Notation format for easy integration with modern web applications and APIs.
 
-## SocialAssocInfo Structure
+## PersonSocialAssociation.Association Structure
 
 Social associations include relationship types and associated persons:
 
 | Field | Description |
 |-------|-------------|
-| AssocName / AssocChName | Associated person's name |
-| AssocId | Associated person's CBDB ID |
-| AssocRelation | Relationship type (e.g., "Father", "Teacher", "Friend") |
-| AssocRelationId | Relationship type ID |
+| AssocPersonName | Associated person's name (Chinese) |
+| AssocPersonId | Associated person's CBDB ID |
+| AssocName | Relationship type (Chinese, e.g. 友, 是Y的恩主) |
+| AssocCode | Relationship type code |
+| Year | Year of the association (often empty) |
 
-## PostingInfo Structure
+## PersonPostings.Posting Structure
 
 Official postings include:
 
 | Field | Description |
 |-------|-------------|
-| PostingName | Office/position name (Chinese) |
-| PostingNameEng | Office/position name (English) |
-| PostingAddr | Location of posting |
-| FirstYear / LastYear | Years of appointment |
+| OfficeName | Office/position name (Chinese) |
+| OfficeId | Office code |
+| AddrName / AddrId | Location of posting |
+| FirstYear / LastYear | Years of appointment ("0" = unknown) |
+
+## PersonKinshipInfo.Kinship Structure
+
+| Field | Description |
+|-------|-------------|
+| KinPersonName | Relative's name (Chinese) |
+| KinPersonId | Relative's CBDB ID |
+| KinRelName | Relation (Chinese, e.g. 父) |
+| KinRel | Relation code (e.g. F) |
+
+## PersonAliases.Alias Structure
+
+| Field | Description |
+|-------|-------------|
+| AliasType | Name type (e.g. 字, 室名、別號) |
+| AliasName | The alternative name |
 
 ## Best Practices
 

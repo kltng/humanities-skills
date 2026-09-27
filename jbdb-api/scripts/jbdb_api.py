@@ -5,6 +5,7 @@ Zero external dependencies — uses only Python stdlib.
 """
 
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -16,18 +17,34 @@ class JBDBAPI:
     """Client for the Japan Biographical Database API."""
 
     BASE_URL = "https://jbdb.jp/api"
+    DEFAULT_USER_AGENT = "JBDBAPISkill/1.0 (https://github.com/kltng/humanities-skills)"
 
-    def __init__(self, min_request_interval: float = 1.0, max_retries: int = 3):
+    def __init__(self, min_request_interval: float = 1.0, max_retries: int = 3,
+                 user_agent: str = DEFAULT_USER_AGENT):
         self._last_request_time = 0.0
         self._min_request_interval = min_request_interval
         self._max_retries = max_retries
+        self._user_agent = user_agent
         self._nengo_cache: dict[int, dict] = {}
 
-    def _rate_limit(self):
+    def _rate_limit(self) -> None:
         elapsed = time.time() - self._last_request_time
         if elapsed < self._min_request_interval:
             time.sleep(self._min_request_interval - elapsed)
         self._last_request_time = time.time()
+
+    @staticmethod
+    def _retry_after(e: HTTPError, default: float) -> float:
+        value = e.headers.get("Retry-After") if e.headers else None
+        try:
+            return min(60.0, max(default, float(value)))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _regex_escape(text: str) -> str:
+        """Escape regex metacharacters (and the / delimiter) for a LoopBack regexp."""
+        return re.sub(r"([\\.^$*+?()\[\]{}|/])", r"\\\1", text)
 
     def _request(self, path: str, filter_obj: Optional[dict] = None, timeout: int = 30) -> Any:
         url = f"{self.BASE_URL}/{path}"
@@ -40,14 +57,26 @@ class JBDBAPI:
             self._rate_limit()
             req = urllib.request.Request(url)
             req.add_header("Accept", "application/json")
+            req.add_header("User-Agent", self._user_agent)
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except HTTPError as e:
+                backoff = min(8.0, 0.5 * (2 ** attempt))
                 if e.code == 404:
-                    return None
+                    # LoopBack answers "no such record" with a JSON 404. An HTML
+                    # 404 means the API endpoint itself is missing; don't hide it.
+                    if "json" in (e.headers.get("Content-Type", "") if e.headers else ""):
+                        return None
+                    raise RuntimeError(f"JBDB API endpoint not found (HTML 404): {url}") from e
+                if e.code in (429, 503):
+                    last_error = e
+                    time.sleep(self._retry_after(e, backoff))
+                    continue
+                if 400 <= e.code < 500:
+                    raise
                 last_error = e
-                time.sleep(min(8.0, 0.5 * (2 ** attempt)))
+                time.sleep(backoff)
             except URLError as e:
                 last_error = e
                 time.sleep(min(8.0, 0.5 * (2 ** attempt)))
@@ -65,7 +94,7 @@ class JBDBAPI:
     def search_by_name(self, name: str, limit: int = 20) -> list[dict]:
         """Search across all name fields (Japanese, furigana, romaji).
         Returns a list of matching BiogMain dicts."""
-        escaped = name.replace("/", "\\/")
+        escaped = self._regex_escape(name)
         filter_obj = {
             "where": {
                 "or": [
@@ -160,7 +189,7 @@ class JBDBAPI:
 
     def summarize(self, person: dict) -> str:
         """Generate a formatted biographical summary."""
-        lines = []
+        lines: list[str] = []
 
         name = person.get("cName", "")
         romaji = person.get("cNameRomaji", "")
@@ -209,7 +238,7 @@ class JBDBAPI:
             lines.append(f"\n**Notes:** {notes}")
 
         # Occupations
-        occ_codes = person.get("cOccupationCodes", [])
+        occ_codes = person.get("cOccupationCodes") or []
         if occ_codes:
             lines.append("\n## Occupations")
             for code in occ_codes:
@@ -247,7 +276,7 @@ class JBDBAPI:
         return "\n".join(lines)
 
 
-def main():
+def main() -> None:
     api = JBDBAPI()
 
     print("=== Search by name: Matsuo Basho ===")

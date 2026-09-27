@@ -120,9 +120,19 @@ def fetch_latest_metadata() -> Optional[dict]:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, ValueError) as e:
+    except (OSError, json.JSONDecodeError, ValueError) as e:
         print(f"Warning: could not fetch release metadata: {e}", file=sys.stderr)
         return None
+
+
+def _meta_download_url(meta: Optional[dict]) -> Optional[str]:
+    """Return the HTTPS download URL from latest.json (key name varies by release)."""
+    if not meta:
+        return None
+    url = meta.get("download_url") or meta.get("huggingface_url")
+    if isinstance(url, str) and url.lower().startswith("https://"):
+        return url
+    return None
 
 
 def _print_7z_install_help() -> None:
@@ -157,7 +167,12 @@ def _download_file(url: str, archive_path: Path) -> None:
                         pct = downloaded * 100 // total
                         print(f"\r  {downloaded // 1048576} / {total // 1048576} MB ({pct}%)", end="", flush=True)
             print()
-    except urllib.error.URLError as e:
+        if total > 0 and downloaded != total:
+            archive_path.unlink(missing_ok=True)
+            print(f"Download failed: got {downloaded} of {total} bytes.", file=sys.stderr)
+            sys.exit(1)
+    except OSError as e:
+        archive_path.unlink(missing_ok=True)
         print(f"\nDownload failed: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -236,14 +251,17 @@ def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = Fa
         print("Resolving ZZZ (denormalized) release URL ...")
     else:
         meta = fetch_latest_metadata()
-        if meta and meta.get("download_url"):
-            url = meta["download_url"]
+        meta_url = _meta_download_url(meta)
+        if meta_url:
+            url = meta_url
             inner_name = meta.get("sqlite_filename")
             expected_sha = meta.get("sha256")
             print(f"Current release: {inner_name or '?'} "
                   f"({meta.get('generated_at_utc', 'date unknown')})")
             print(f"Download URL:    {url}")
         else:
+            # Don't record metadata for a release we didn't actually download.
+            meta = None
             url = DB_DOWNLOAD_URL_FALLBACK
             print(f"Using fallback download URL: {url}")
 
@@ -327,7 +345,7 @@ def check_release() -> None:
     print(f"  filename:     {meta.get('sqlite_filename', '?')}")
     print(f"  released:     {remote_date}")
     print(f"  format:       {meta.get('format', '?')}")
-    print(f"  download_url: {meta.get('download_url', '?')}")
+    print(f"  download_url: {_meta_download_url(meta) or '?'}")
     print(f"  sha256:       {meta.get('sha256', '?')}")
 
     if not DB_PATH.exists():
@@ -363,7 +381,8 @@ def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
         print(f"Database not found: {path}", file=sys.stderr)
         print("Run: python3 cbdb_query.py setup", file=sys.stderr)
         sys.exit(1)
-    conn = sqlite3.connect(str(path))
+    # Open read-only: queries (including `sql`) must never modify the database.
+    conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -450,7 +469,7 @@ def search_person(conn: sqlite3.Connection, query: str) -> list[dict]:
             "death_year": row["c_deathyear"],
             "surname_chn": row["c_surname_chn"],
             "mingzi_chn": row["c_mingzi_chn"],
-            "female": bool(row["c_female"]) if row["c_female"] else None,
+            "female": bool(row["c_female"]) if row["c_female"] is not None else None,
             "index_year": row["c_index_year"],
             "notes": row["c_notes"],
         })
@@ -485,7 +504,7 @@ def search_person_by_id(conn: sqlite3.Connection, person_id: int) -> list[dict]:
         "death_year": row["c_deathyear"],
         "surname_chn": row["c_surname_chn"],
         "mingzi_chn": row["c_mingzi_chn"],
-        "female": bool(row["c_female"]) if row["c_female"] else None,
+        "female": bool(row["c_female"]) if row["c_female"] is not None else None,
         "index_year": row["c_index_year"],
         "notes": row["c_notes"],
     } for row in rows]
@@ -1202,6 +1221,20 @@ def build_kinship_tree(
     return {"nodes": list(nodes.values()), "edges": edges, "ego_id": str(person_id)}
 
 
+def _dot_escape(text: Any) -> str:
+    """Escape a value for use inside a double-quoted DOT string."""
+    return str(text or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def _mermaid_escape(text: Any) -> str:
+    """Escape a value for a quoted Mermaid label (labels may be rendered as HTML)."""
+    s = str(text or "")
+    for ch, ent in (("&", "#amp;"), ('"', "#quot;"), ("<", "#lt;"), (">", "#gt;"),
+                    ("|", "#124;"), ("\n", " ")):
+        s = s.replace(ch, ent)
+    return s
+
+
 def render_tree_dot(tree: dict) -> str:
     """Render kinship tree as Graphviz DOT."""
     from collections import defaultdict
@@ -1242,7 +1275,7 @@ def render_tree_dot(tree: dict) -> str:
                 fill = "#ADD8E6"
 
             penwidth = "3" if is_ego else "1"
-            label = node.get("name_chn") or node.get("name_pinyin") or node["id"]
+            label = _dot_escape(node.get("name_chn") or node.get("name_pinyin") or node["id"])
             by = node.get("birth_year", 0)
             dy = node.get("death_year", 0)
             if by and by != 0:
@@ -1260,7 +1293,7 @@ def render_tree_dot(tree: dict) -> str:
     for edge in tree["edges"]:
         src = f'"{edge["source"]}"'
         tgt = f'"{edge["target"]}"'
-        rel = edge["relation_chn"].replace('"', '\\"')
+        rel = _dot_escape(edge["relation_chn"] or edge.get("relation"))
 
         if edge["edge_type"] == "marriage":
             lines.append(
@@ -1290,16 +1323,13 @@ def render_tree_mermaid(tree: dict) -> str:
     # Node definitions (prefix IDs with 'p' since Mermaid can't start with digits)
     for node in tree["nodes"]:
         nid = f'p{node["id"]}'
-        label = node.get("name_chn") or node.get("name_pinyin") or node["id"]
+        label = _mermaid_escape(node.get("name_chn") or node.get("name_pinyin") or node["id"])
         by = node.get("birth_year", 0)
         dy = node.get("death_year", 0)
         if by and by != 0:
             label += f'<br>{by}'
             if dy and dy != 0:
                 label += f'–{dy}'
-
-        # Escape quotes in label
-        label = label.replace('"', '#quot;')
 
         cls = "ego" if node.get("is_ego") else (
             "female" if node.get("gender") == "F" else "male"
@@ -1312,7 +1342,7 @@ def render_tree_mermaid(tree: dict) -> str:
     for edge in tree["edges"]:
         src = f'p{edge["source"]}'
         tgt = f'p{edge["target"]}'
-        rel = edge["relation_chn"]
+        rel = _mermaid_escape(edge["relation_chn"] or edge.get("relation"))
 
         if edge["edge_type"] == "marriage":
             lines.append(f'  {src} -.-|"{rel}"| {tgt}')
@@ -1540,6 +1570,23 @@ def _parse_export_args(args: list[str]) -> dict:
     return opts
 
 
+def _parse_export_args_or_exit(args: list[str]) -> dict:
+    """Like _parse_export_args, but exit with a clear message on a bad/missing value."""
+    try:
+        return _parse_export_args(args)
+    except (IndexError, ValueError):
+        print("Error: an option is missing its value or the value is not a number.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _person_id_arg() -> int:
+    """Read the <person_id> positional argument for per-person commands."""
+    if len(sys.argv) < 3 or not sys.argv[2].lstrip("-").isdigit():
+        print(f"Usage: cbdb_query.py {sys.argv[1]} <person_id>", file=sys.stderr)
+        sys.exit(1)
+    return int(sys.argv[2])
+
+
 def run_sql(conn: sqlite3.Connection, sql: str) -> list[dict]:
     """Run arbitrary read-only SQL."""
     sql_stripped = sql.strip().rstrip(";")
@@ -1610,47 +1657,47 @@ def main() -> None:
                 _print_json(results)
 
     elif cmd == "kinship":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_kinship(conn, pid))
 
     elif cmd == "offices":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_offices(conn, pid))
 
     elif cmd == "associations":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_associations(conn, pid))
 
     elif cmd == "addresses":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_addresses(conn, pid))
 
     elif cmd == "entries":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_entries(conn, pid))
 
     elif cmd == "altnames":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_altnames(conn, pid))
 
     elif cmd == "status":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_status(conn, pid))
 
     elif cmd == "texts":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_texts(conn, pid))
 
     elif cmd == "institutions":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_institutions(conn, pid))
 
     elif cmd == "postaddr":
-        pid = int(sys.argv[2])
+        pid = _person_id_arg()
         _print_json(get_posted_addresses(conn, pid))
 
     elif cmd == "tree":
-        opts = _parse_export_args(sys.argv[2:])
+        opts = _parse_export_args_or_exit(sys.argv[2:])
         if not opts["positional"]:
             print("Usage: cbdb_query.py tree <person_id> [--depth/-d N] [--format/-f dot|mermaid|svg] [-o FILE]", file=sys.stderr)
             sys.exit(1)
@@ -1662,7 +1709,7 @@ def main() -> None:
         export_tree(tree, out, fmt)
 
     elif cmd == "export-kinship":
-        opts = _parse_export_args(sys.argv[2:])
+        opts = _parse_export_args_or_exit(sys.argv[2:])
         if not opts["positional"]:
             print("Usage: cbdb_query.py export-kinship <person_id> [options]", file=sys.stderr)
             sys.exit(1)
@@ -1672,7 +1719,7 @@ def main() -> None:
         export_network(network, out, opts["format"])
 
     elif cmd == "export-associations":
-        opts = _parse_export_args(sys.argv[2:])
+        opts = _parse_export_args_or_exit(sys.argv[2:])
         if not opts["positional"]:
             print("Usage: cbdb_query.py export-associations <person_id> [options]", file=sys.stderr)
             sys.exit(1)
@@ -1682,7 +1729,7 @@ def main() -> None:
         export_network(network, out, opts["format"])
 
     elif cmd == "export-network":
-        opts = _parse_export_args(sys.argv[2:])
+        opts = _parse_export_args_or_exit(sys.argv[2:])
         if not opts["positional"]:
             print("Usage: cbdb_query.py export-network <person_id> [options]", file=sys.stderr)
             sys.exit(1)
@@ -1692,7 +1739,7 @@ def main() -> None:
         export_network(network, out, opts["format"])
 
     elif cmd == "export-office":
-        opts = _parse_export_args(sys.argv[2:])
+        opts = _parse_export_args_or_exit(sys.argv[2:])
         if not opts["positional"]:
             print("Usage: cbdb_query.py export-office <office_name> [--dynasty N] [options]", file=sys.stderr)
             sys.exit(1)
@@ -1705,7 +1752,7 @@ def main() -> None:
         export_network(network, out, opts["format"])
 
     elif cmd == "export-place":
-        opts = _parse_export_args(sys.argv[2:])
+        opts = _parse_export_args_or_exit(sys.argv[2:])
         if not opts["positional"]:
             print("Usage: cbdb_query.py export-place <place_name> [--addr-type N] [options]", file=sys.stderr)
             sys.exit(1)
