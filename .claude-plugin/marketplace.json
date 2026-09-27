@@ -22,7 +22,7 @@
       "name": "cbdb-api",
       "source": "./cbdb-api",
       "description": "Query the China Biographical Database API for comprehensive biographical data about historical Chinese figures from the 7th century BCE through the 19th century CE",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -32,7 +32,7 @@
       "name": "chgis-tgaz",
       "source": "./chgis-tgaz",
       "description": "Query the CHGIS Temporal Gazetteer API for historical Chinese placenames and administrative units from 222 BCE to 1911 CE",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -42,7 +42,7 @@
       "name": "wikidata-search",
       "source": "./wikidata-search",
       "description": "Search Wikidata for items, properties, and external identifiers using keyword search, semantic/hybrid search, SPARQL, and direct entity retrieval",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
