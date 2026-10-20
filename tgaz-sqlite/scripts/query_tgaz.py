@@ -84,19 +84,82 @@ def _like_escape(text):
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+# English words people use that are not an exact ftype.name_en.
+FEATURE_TYPE_ALIASES = {"kingdom": "country", "state": "country"}
+
+
+def english_feature_terms(conn, word):
+    """Map an English feature type ("county") to TGAZ terms (xian, gun, uezd).
+
+    Matches ftype.name_en exactly, so "county" does not also pull in
+    "autonomous county boundary". Returns [] when the word is not English.
+    """
+    word = word.strip().strip('"').lower()
+    word = FEATURE_TYPE_ALIASES.get(word, word)
+    rows = conn.execute(
+        "SELECT DISTINCT name_tr FROM ftype WHERE name_en = ? COLLATE NOCASE AND name_tr <> ''",
+        (word,),
+    ).fetchall()
+    return [r["name_tr"] for r in rows]
+
+
+def _feature_type_filter(conn, feature_type):
+    """SQL clause and params for --feature-type.
+
+    English types match their TGAZ terms exactly; anything else (xian, 县)
+    keeps the substring match.
+    """
+    terms = english_feature_terms(conn, feature_type)
+    if terms:
+        marks = ", ".join("?" * len(terms))
+        return f" AND LOWER(ftype_tr) IN ({marks})", [t.lower() for t in terms]
+    ft = _like_escape(feature_type)
+    return (" AND (ftype_tr LIKE ? ESCAPE '\\' OR ftype_vn LIKE ? ESCAPE '\\')",
+            [f"%{ft}%", f"%{ft}%"])
+
+
+def _expand_feature_words(conn, query):
+    """Rewrite English feature words in an FTS query as TGAZ terms.
+
+    "county Beijing" -> '("xian" OR "gun" OR "uezd") AND Beijing'. Returns
+    None when no word is an English feature type.
+    """
+    operators = {"AND", "OR", "NOT"}
+    words, changed = [], False
+    for word in query.split():
+        terms = english_feature_terms(conn, word)
+        if terms:
+            # A quoted multi-word term ("di qu") is an FTS5 phrase.
+            token = "(" + " OR ".join('"' + t.replace('"', '""') + '"' for t in terms) + ")"
+            changed = True
+        else:
+            token = word
+        # FTS5 has no implicit AND next to a (group), so write it out.
+        if words and words[-1] not in operators and token not in operators:
+            words.append("AND")
+        words.append(token)
+    return " ".join(words) if changed else None
+
+
 def search_fts(conn, query, limit=50):
     """Full-text search across names, transcriptions, feature types.
 
     The query is tried as FTS5 syntax first (so AND/OR/NEAR/prefix* work).
-    If that is a syntax error, it is retried as plain quoted words.
+    If that is a syntax error, it is retried as plain quoted words. If it
+    finds nothing, English feature words ("county") are retried as TGAZ
+    terms ("xian"), since only the TGAZ terms are indexed.
     """
     try:
-        return _search_fts(conn, query, limit)
+        rows = _search_fts(conn, query, limit)
     except sqlite3.OperationalError:
-        phrase = _fts_phrase(query)
-        if not phrase:
+        query = _fts_phrase(query)
+        if not query:
             return []
-        return _search_fts(conn, phrase, limit)
+        rows = _search_fts(conn, query, limit)
+    if rows:
+        return rows
+    expanded = _expand_feature_words(conn, query)
+    return _search_fts(conn, expanded, limit) if expanded else rows
 
 
 def _search_fts(conn, query, limit):
@@ -126,9 +189,9 @@ def search_name(conn, name, year=None, feature_type=None, limit=50):
         sql += " AND beg_yr <= ? AND end_yr >= ?"
         params.extend([year, year])
     if feature_type:
-        sql += " AND (ftype_tr LIKE ? ESCAPE '\\' OR ftype_vn LIKE ? ESCAPE '\\')"
-        ft = _like_escape(feature_type)
-        params.extend([f"%{ft}%", f"%{ft}%"])
+        clause, ft_params = _feature_type_filter(conn, feature_type)
+        sql += clause
+        params.extend(ft_params)
     sql += " ORDER BY beg_yr LIMIT ?"
     params.append(limit)
     return conn.execute(sql, params).fetchall()
@@ -139,9 +202,9 @@ def search_by_year(conn, year, feature_type=None, limit=50):
     sql = "SELECT * FROM mv_pn_srch WHERE beg_yr <= ? AND end_yr >= ?"
     params = [year, year]
     if feature_type:
-        sql += " AND (ftype_tr LIKE ? ESCAPE '\\' OR ftype_vn LIKE ? ESCAPE '\\')"
-        ft = _like_escape(feature_type)
-        params.extend([f"%{ft}%", f"%{ft}%"])
+        clause, ft_params = _feature_type_filter(conn, feature_type)
+        sql += clause
+        params.extend(ft_params)
     sql += " ORDER BY name LIMIT ?"
     params.append(limit)
     return conn.execute(sql, params).fetchall()

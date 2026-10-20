@@ -75,8 +75,9 @@ python3 scripts/query_tgaz.py --fts "county Beijing"
 python3 scripts/query_tgaz.py --bbox 108,34,110,36 --year -200
 
 # Feature type + year
-# (--feature-type matches ftype_tr / ftype_vn, e.g. xian or 县; not English "county")
+# (--feature-type takes xian, 县, or an English type such as county)
 python3 scripts/query_tgaz.py --feature-type xian --year 1820 --limit 20
+python3 scripts/query_tgaz.py --feature-type county --year 1820 --limit 20
 
 # Children of a jurisdiction
 python3 scripts/query_tgaz.py --parent hvd_9659 --year 1820
@@ -162,6 +163,11 @@ This pre-joined table has everything for 90% of queries:
   - `xian` (县, county), `fu` (府, prefecture), `jun` (郡, commandery)
   - `sheng` (省, province), `lu` (路, circuit), `dao` (道, circuit/route)
   - `zhou` (州, prefecture), `guo` (国, kingdom/state), `dgon pa` (monastery)
+  - The CLI also accepts English types. It looks the word up in `ftype.name_en`
+    (exact match) and searches the TGAZ terms it maps to: `county` → `xian`,
+    `gun`, `uezd`; `prefecture` → `zhou`, `fu`, `di qu`, `ken`. `--fts`
+    does the same when the plain query finds nothing, since only the TGAZ
+    terms are indexed. In raw SQL, use the TGAZ terms.
 
 ## Common Query Patterns
 

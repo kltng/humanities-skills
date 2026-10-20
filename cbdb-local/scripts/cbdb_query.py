@@ -1593,7 +1593,10 @@ def run_sql(conn: sqlite3.Connection, sql: str) -> list[dict]:
     # Safety: only allow SELECT
     if not sql_stripped.upper().startswith("SELECT"):
         return [{"error": "Only SELECT queries are allowed"}]
-    rows = conn.execute(sql_stripped).fetchall()
+    try:
+        rows = conn.execute(sql_stripped).fetchall()
+    except sqlite3.Error as e:
+        return [{"error": str(e)}]
     return [dict(row) for row in rows]
 
 

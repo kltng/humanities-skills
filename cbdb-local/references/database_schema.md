@@ -302,27 +302,36 @@ WHERE k.c_personid = 3767
 ORDER BY kc.c_kincode;
 ```
 
-### Find jinshi holders using denormalized table
+### Find jinshi holders
 
 ```sql
--- Much simpler than multi-table joins
-SELECT * FROM ZZZ_ENTRY_DATA
-WHERE c_entry_code = 36 AND c_year BETWEEN 1050 AND 1100;
+SELECT b.c_personid, b.c_name_chn, b.c_name,
+       e.c_year, e.c_exam_rank, ec.c_entry_desc_chn
+FROM ENTRY_DATA e
+JOIN BIOG_MAIN b ON b.c_personid = e.c_personid
+JOIN ENTRY_CODES ec ON ec.c_entry_code = e.c_entry_code
+WHERE e.c_entry_code = 36 AND e.c_year BETWEEN 1050 AND 1100
+ORDER BY e.c_year, b.c_personid
+LIMIT 50;
 ```
 
 ### Find kin of jinshi holders with their entry modes
 
 ```sql
-SELECT e1.c_personid, e1.c_person_name_chn,
-       k.c_node_id, k.c_node_chn, k.c_link_desc,
-       k.c_upstep, k.c_dwnstep, k.c_marstep, k.c_colstep,
-       e2.c_entry_desc
-FROM ZZZ_ENTRY_DATA e1
-JOIN ZZZ_KIN_BIOG_ADDR k ON e1.c_personid = k.c_personid
-LEFT JOIN ZZZ_ENTRY_DATA e2 ON k.c_node_id = e2.c_personid
+SELECT b.c_personid, b.c_name_chn,
+       kb.c_personid AS kin_personid, kb.c_name_chn AS kin_name_chn,
+       kc.c_kinrel_chn, kc.c_kinrel,
+       e2.c_entry_code AS kin_entry_code, ec2.c_entry_desc_chn AS kin_entry_desc_chn
+FROM ENTRY_DATA e1
+JOIN BIOG_MAIN b ON b.c_personid = e1.c_personid
+JOIN KIN_DATA k ON k.c_personid = e1.c_personid
+JOIN BIOG_MAIN kb ON kb.c_personid = k.c_kin_id
+JOIN KINSHIP_CODES kc ON kc.c_kincode = k.c_kin_code
+LEFT JOIN ENTRY_DATA e2 ON e2.c_personid = k.c_kin_id
+LEFT JOIN ENTRY_CODES ec2 ON ec2.c_entry_code = e2.c_entry_code
 WHERE e1.c_entry_code = 36 AND e1.c_year = 1148
-AND k.c_upstep <= 2 AND k.c_dwnstep = 0
-AND k.c_marstep = 0 AND k.c_colstep <= 1;
+ORDER BY b.c_personid, kc.c_kincode
+LIMIT 100;
 ```
 
 ### Find all Song dynasty jinshi
@@ -348,11 +357,25 @@ ORDER BY po.c_firstyear
 LIMIT 20;
 ```
 
-### Find office holders at a place (using denormalized table)
+### Find office holders at a place
+
+`POSTED_TO_ADDR_DATA` has no years; they are in `POSTED_TO_OFFICE_DATA`,
+joined on the posting and office. Address 8074 is 開封府 (Kaifeng Fu).
 
 ```sql
-SELECT * FROM ZZZ_POSTED_TO_ADDR_DATA
-WHERE c_addr_id = 101538;
+SELECT b.c_personid, b.c_name_chn,
+       ac.c_name_chn AS place_chn,
+       oc.c_office_chn,
+       po.c_firstyear, po.c_lastyear
+FROM POSTED_TO_ADDR_DATA pa
+JOIN BIOG_MAIN b ON b.c_personid = pa.c_personid
+JOIN ADDR_CODES ac ON ac.c_addr_id = pa.c_addr_id
+LEFT JOIN POSTED_TO_OFFICE_DATA po
+       ON po.c_posting_id = pa.c_posting_id AND po.c_office_id = pa.c_office_id
+LEFT JOIN OFFICE_CODES oc ON oc.c_office_id = pa.c_office_id
+WHERE pa.c_addr_id = 8074
+ORDER BY COALESCE(po.c_firstyear, 0) = 0, po.c_firstyear  -- unknown years last
+LIMIT 50;
 ```
 
 ### People associated with a place
