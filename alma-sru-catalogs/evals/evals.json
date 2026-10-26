@@ -1,0 +1,41 @@
+{
+  "skill_name": "alma-sru-catalogs",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Which of the big research libraries hold OCLC 424023? Check the UK ones too.",
+      "expected_output": "search_many across libraries (or --library all) by OCLC number, listing holders with call numbers",
+      "files": [],
+      "expectations": [
+        "The alma_sru script or Alma SRU endpoints were used",
+        "The oclc field (alma.oclc_control_number_035_a) was searched",
+        "Several libraries including Oxford, Cambridge, and Edinburgh were checked",
+        "Holding libraries are listed with call numbers or online access",
+        "Libraries with zero results or errors are reported separately"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Compare Ming-dynasty imprints with 明史 in the title at Berkeley, UCLA, and Princeton.",
+      "expected_output": "Title + date-range CQL search at three libraries, sorted by date",
+      "files": [],
+      "expectations": [
+        "The libraries berkeley, ucla, and princeton were searched",
+        "A date limit such as alma.main_pub_date<1700 was used",
+        "Titles appear in Chinese characters",
+        "Results are grouped by library with call numbers"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find Chinese books by 王守仁 at the University of Toronto.",
+      "expected_output": "Author search at Toronto with language chi",
+      "files": [],
+      "expectations": [
+        "The toronto library key was used",
+        "The author field and language chi were used",
+        "Record links to librarysearch.library.utoronto.ca are given"
+      ]
+    }
+  ]
+}

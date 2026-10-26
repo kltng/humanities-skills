@@ -1,0 +1,37 @@
+{
+  "skill_name": "northwestern-digital-collections",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Find Northwestern's photographs of the Yungang Grottoes and give me IIIF manifests.",
+      "expected_output": "DC API search for Yungang returning works with IIIF manifests",
+      "files": [],
+      "expectations": [
+        "The DC API (api.dc.library.northwestern.edu) or its MCP was used",
+        "The query parameter (not q) was used",
+        "Results include iiif_manifest links and item URLs"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "What digital collections does Northwestern have that relate to Asia?",
+      "expected_output": "Collections listing or search filtered to Asia-related collections",
+      "files": [],
+      "expectations": [
+        "The collections endpoint or a collections search was used",
+        "Collection titles and links are listed"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Show me Chinese ceramics images in Northwestern's digital collections, oldest first.",
+      "expected_output": "Search with subject/work_type filters sorted by date_created ascending",
+      "files": [],
+      "expectations": [
+        "work_type:Image or a similar filter was used",
+        "Results were sorted by date_created ascending",
+        "Dates and rights statements are shown"
+      ]
+    }
+  ]
+}

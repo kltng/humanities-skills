@@ -1,0 +1,37 @@
+{
+  "skill_name": "mit-timdex",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "What Chinese-language materials about Ming history does MIT have?",
+      "expected_output": "TIMDEX search for 明史 or Ming history, filtered to MIT Alma and chinese",
+      "files": [],
+      "expectations": [
+        "The TIMDEX GraphQL endpoint was queried (timdex.mit.edu/graphql)",
+        "The source or language filter was applied",
+        "Titles and record links are listed"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Are there MIT theses or working papers about Chinese foreign policy?",
+      "expected_output": "TIMDEX search restricted to DSpace@MIT",
+      "files": [],
+      "expectations": [
+        "sourceFilter DSpace@MIT was used",
+        "Results show authors and dates",
+        "dspace.mit.edu handle links are given"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Does MIT hold any archival collections about China?",
+      "expected_output": "TIMDEX search restricted to MIT ArchivesSpace",
+      "files": [],
+      "expectations": [
+        "sourceFilter MIT ArchivesSpace was used",
+        "Collection names and archivesspace.mit.edu links are given"
+      ]
+    }
+  ]
+}
