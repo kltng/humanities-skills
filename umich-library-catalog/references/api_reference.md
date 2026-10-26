@@ -40,6 +40,8 @@ Relations: `=` (words), `==` (exact), `all`, `<>`, and `< > <= >=` on date and I
 
 Sortable indexes: `alma.title`, `alma.creator`, `alma.main_pub_date` (`/sort.ascending` or `/sort.descending`).
 
+Records with an unknown date (`uuuu`) sort first in ascending order. Add `alma.main_pub_date>=1000` to leave them out. (`alma.main_pub_date>0` returns nothing.)
+
 ## Useful Indexes
 
 The `explain` response lists about 400 indexes. These are the most useful for research:
@@ -136,9 +138,11 @@ A romanized field carries `$6 880-01`. Its partner 880 field carries `$6 245-01/
 | `$m` | Collection name | `Taylor & Francis eBooks Complete` |
 | `$t` | Interface/platform | `EBSCOhost` |
 | `$e` | Availability | `Available` |
+| `$n` | Public note | `Online book` |
+| `$u` | Access link (only some libraries supply it) | OpenURL |
 | `$8` | Portfolio ID | |
 
-AVE has no direct URL. Link users to the record page instead.
+When `$u` is missing, link users to the record page instead.
 
 ## Record Page Link
 

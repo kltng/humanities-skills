@@ -1,0 +1,52 @@
+{
+  "skill_name": "yale-library-catalog",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Does Yale University Library have Chinese books with 明史 in the title? Show the oldest ones and where they are shelved.",
+      "expected_output": "Alma SRU title search at Yale for 明史, Chinese language, oldest first, with vernacular titles and AVA call numbers",
+      "files": [],
+      "expectations": [
+        "The Alma SRU endpoint was queried (yale.alma.exlibrisgroup.com/view/sru)",
+        "The title index was searched for 明史, with language chi",
+        "Results were sorted by date ascending, with unknown dates excluded or noted",
+        "Titles are shown in Chinese characters (from 880 fields)",
+        "Call numbers and locations from AVA fields are given",
+        "The library's public website was not scraped"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Find books by Jonathan D. Spence at Yale and tell me which ones I can read online.",
+      "expected_output": "Author search with AVE electronic holdings identified",
+      "files": [],
+      "expectations": [
+        "The author/creator index was used",
+        "Results separate print (AVA) from online (AVE) holdings",
+        "Record links are provided"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I found OCLC number 424023 in WorldCat. Does Yale hold it, and is there a digitized copy?",
+      "expected_output": "OCLC lookup in Yale Alma, then HathiTrust check",
+      "files": [],
+      "expectations": [
+        "The OCLC index (alma.oclc_control_number_035_a) was used",
+        "The record title and holdings are reported",
+        "The hathitrust-catalog skill or HathiTrust API was used for the digitized-copy question"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Does Yale have any artworks or objects by Wen Zhengming 文徵明? Search across its museums and libraries.",
+      "expected_output": "LUX search for Wen Zhengming in the item scope, with summaries",
+      "files": [],
+      "expectations": [
+        "The LUX API was queried (lux.collections.yale.edu/api/search)",
+        "The agent or item scope was used with Wen Zhengming or 文徵明",
+        "Results show object labels and types, and links where available"
+      ]
+    }
+  ]
+}

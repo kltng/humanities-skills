@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.umich_api import (
     NS,
+    RECORD_URL,
     SRUError,
     UMichCatalogAPI,
     parse_marc,
@@ -66,6 +67,7 @@ SAMPLE_RESPONSE = """<?xml version="1.0" encoding="UTF-8"?>
         <subfield code="e">Available</subfield>
         <subfield code="m">Zhonghua jing dian gu ji ku.</subfield>
         <subfield code="t">Zhonghua ancient books database</subfield>
+        <subfield code="u">https://example.org/openurl?rft.mms_id=990023071550106381</subfield>
       </datafield>
     </record>
   </recordData><recordPosition>1</recordPosition></record></records>
@@ -142,7 +144,7 @@ class SummarizeTest(unittest.TestCase):
         self.assertEqual(self.rec["oclc"], ["12345678"])
         self.assertEqual(self.rec["lc_call_number"], "Z3102 .P15")
         self.assertEqual(self.rec["subjects"], ["Chinese literature -- Bibliography"])
-        self.assertEqual(self.rec["url"], "https://search.lib.umich.edu/catalog/record/990023071550106381")
+        self.assertEqual(self.rec["url"], RECORD_URL.format(mms_id="990023071550106381"))
 
     def test_holdings(self):
         physical = self.rec["holdings"]["physical"]
@@ -153,6 +155,7 @@ class SummarizeTest(unittest.TestCase):
         self.assertEqual(physical[0]["summary"], "(v.1-16 1883)")
         electronic = self.rec["holdings"]["electronic"]
         self.assertEqual(electronic[0]["interface"], "Zhonghua ancient books database")
+        self.assertEqual(electronic[0]["url"], "https://example.org/openurl?rft.mms_id=990023071550106381")
 
 
 class DiagnosticsTest(unittest.TestCase):

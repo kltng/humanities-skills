@@ -1,0 +1,41 @@
+{
+  "skill_name": "pitt-library-catalog",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Does University of Pittsburgh Library System have Chinese books with 明史 in the title? Show the oldest ones and where they are shelved.",
+      "expected_output": "Alma SRU title search at Pitt for 明史, Chinese language, oldest first, with vernacular titles and AVA call numbers",
+      "files": [],
+      "expectations": [
+        "The Alma SRU endpoint was queried (pitt.alma.exlibrisgroup.com/view/sru)",
+        "The title index was searched for 明史, with language chi",
+        "Results were sorted by date ascending, with unknown dates excluded or noted",
+        "Titles are shown in Chinese characters (from 880 fields)",
+        "Call numbers and locations from AVA fields are given",
+        "The library's public website was not scraped"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Find books by Evelyn S. Rawski at Pitt and tell me which ones I can read online.",
+      "expected_output": "Author search with AVE electronic holdings identified",
+      "files": [],
+      "expectations": [
+        "The author/creator index was used",
+        "Results separate print (AVA) from online (AVE) holdings",
+        "Record links are provided"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I found OCLC number 424023 in WorldCat. Does Pitt hold it, and is there a digitized copy?",
+      "expected_output": "OCLC lookup in Pitt Alma, then HathiTrust check",
+      "files": [],
+      "expectations": [
+        "The OCLC index (alma.oclc_control_number_035_a) was used",
+        "The record title and holdings are reported",
+        "The hathitrust-catalog skill or HathiTrust API was used for the digitized-copy question"
+      ]
+    }
+  ]
+}

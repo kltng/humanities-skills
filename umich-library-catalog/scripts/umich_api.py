@@ -326,6 +326,7 @@ def holdings(marc: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
             "interface": get.get("t", ""),
             "availability": get.get("e", ""),
             "note": get.get("n", ""),
+            "url": get.get("u", ""),
         })
     return {"physical": physical, "electronic": electronic}
 
@@ -390,7 +391,8 @@ def _print_summary(rec: Dict[str, Any]) -> None:
         print(f"  Print: {h['library']} / {h['location']} — {h['call_number']} [{h['availability']}]"
               + (f" {h['summary']}" if h["summary"] else ""))
     for h in rec["holdings"]["electronic"]:
-        print(f"  Online: {h['collection'] or h['interface']} [{h['availability']}]")
+        print(f"  Online: {h['collection'] or h['interface'] or h['note']} [{h['availability']}]"
+              + (f" {h['url']}" if h["url"] else ""))
     print(f"  MMS ID: {rec['mms_id']}  {rec['url']}")
 
 

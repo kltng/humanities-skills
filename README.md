@@ -37,6 +37,9 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [loc-catalog](loc-catalog/) | Search Library of Congress digital collections — books, photos, maps, manuscripts, newspapers |
 | [nlb-singapore](nlb-singapore/) | Search National Library Board Singapore catalog — availability, new arrivals, checkout trends |
 | [umich-library-catalog](umich-library-catalog/) | Search University of Michigan Library via Alma SRU — CJK script fields, call numbers, availability |
+| [princeton-library-catalog](princeton-library-catalog/) | Search Princeton University Library via Alma SRU — East Asian Library holdings, CJK script fields |
+| [yale-library-catalog](yale-library-catalog/) | Search Yale University Library via Alma SRU, plus Yale LUX across libraries, museums, and archives |
+| [pitt-library-catalog](pitt-library-catalog/) | Search University of Pittsburgh Library System (PittCat) via Alma SRU — CJK script fields, call numbers |
 
 ### Scholarly Resources
 

@@ -1,0 +1,131 @@
+---
+name: princeton-library-catalog
+description: Search the Princeton University Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including the East Asian Library and its rare Chinese books. Use this skill whenever the user wants to look up items at Princeton, check whether Princeton holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read MARC records with vernacular (880) script fields, or compare Princeton holdings with other libraries. Returns call numbers, locations, availability, and online access.
+version: 1.0.0
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
+---
+
+# Princeton University Library Catalog Skill
+
+Search Princeton's library catalog (Alma) for print and online holdings. No API key needed.
+
+## Overview
+
+Princeton runs its catalog on Ex Libris **Alma**. Alma has a public **SRU** interface (Search/Retrieve via URL, a library standard for searching catalogs over plain HTTP). Queries are written in **CQL** (Contextual Query Language, e.g. `alma.title="明史"`). Records come back as MARCXML; the script turns them into simple JSON.
+
+```
+https://princeton.alma.exlibrisgroup.com/view/sru/01PRI_INST
+  ?version=1.2&operation=searchRetrieve&recordSchema=marcxml
+  &query=alma.title="明史"&maximumRecords=10
+```
+
+## Critical: Things Claude Won't Know Without This Skill
+
+### Do not scrape catalog.princeton.edu
+
+Princeton's catalog website (Orangelight) has a `catalog.json` search, but its `robots.txt` disallows search URLs (`/*?q=*`) for automated clients and asks for a 10-second crawl delay. Record pages also redirect scripts to a `/challenge` bot check. Use Alma SRU instead. Give people `catalog.princeton.edu/catalog/{mms_id}` links to open in a browser. Princeton's MMS IDs end in `06421`.
+
+### Holdings are in the AVA and AVE fields
+
+- **AVA** = print/physical copy. `$q` library name, `$c` location, `$d` call number, `$e` available/unavailable, `$f` item count, `$t` volume summary.
+- **AVE** = online copy. `$m` collection, `$t` platform, `$e` Available, `$n` note, `$u` access link (when supplied).
+
+The script reads both into `holdings.physical` and `holdings.electronic`. East Asian Library holdings show `$q` = `East Asian Library` and location codes such as `cjk: East Asian Library`.
+
+### Chinese/Japanese/Korean script is in 880 fields
+
+The main fields (245 title, 100 author, 260/264 publisher) are **romanized** (pinyin, Hepburn, McCune-Reischauer). The original script is in a linked **880** field. The script pairs them, so `title` reads like `明史 (Ming shi)`. Search in both scripts: `alma.title="明史"` and `alma.title="Ming shi"` return different sets.
+
+### Limits and quirks
+
+- **50 records per request** at most. Page with `startRecord` (1-based); `search_all()` does this for you.
+- **Sort** goes inside the CQL: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them.
+- **Default order is not relevance ranking.** Narrow the query (title + language, or a date range) rather than relying on the first results.
+- **CJK title words match by character**, so `明史` can also match `明治 ... 史`. Check titles in the results.
+- **Unknown index names** fail with a vague "Catalog search has encountered an error". Check the spelling against `references/api_reference.md`.
+- **Encode the query** with normal URL encoding. Raw Chinese or quotes in the URL give HTTP 400.
+
+## When to Use
+
+- "Does Princeton have X?" / "Where is X shelved at Princeton?"
+- Finding Chinese, Japanese, or Korean books in Princeton's East Asian collections
+- Finding pre-modern editions with a date range (`alma.main_pub_date<1900`)
+- Getting MARC data (OCLC, LCCN, ISBN, subjects) for a known item
+- Comparing holdings across libraries
+
+## Quick Start
+
+### CLI
+
+```bash
+python scripts/princeton_api.py search --title 明史 --language chi --limit 5
+python scripts/princeton_api.py search --author "Elman, Benjamin A." --sort date_desc
+python scripts/princeton_api.py search --cql 'alma.title=明史 and alma.main_pub_date<1900' --sort date_asc
+python scripts/princeton_api.py search --call-number 'DS753*' --json
+python scripts/princeton_api.py record 9953348843506421
+python scripts/princeton_api.py record 9953348843506421 --raw   # all MARC fields
+```
+
+### Python
+
+```python
+from scripts.princeton_api import PrincetonCatalogAPI
+
+lib = PrincetonCatalogAPI()
+result = lib.search(title="明史", language="chi", sort="date_asc",
+                    cql="alma.main_pub_date>=1000", limit=10)
+print(result["total"])
+for rec in result["records"]:
+    print(rec["title"], rec["year"])
+    for h in rec["holdings"]["physical"]:
+        print("  ", h["library"], h["call_number"], h["availability"])
+
+lib.search(oclc="424023")                        # exact identifier lookups
+lib.search(isbn="9787101003277")
+lib.search_all(subject="China History Ming dynasty", max_results=200)
+lib.get_record("9953348843506421")                 # one record by MMS ID
+```
+
+Search fields: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oclc`, `lccn`, `publisher`, `series`, `call_number`, `language` (MARC code: `chi`, `jpn`, `kor`, `eng`), `mms_id`. Sort: `date_desc`, `date_asc`, `title`, `author`.
+
+Each summary has `mms_id`, `title`, `titles` (romanized + vernacular), `author`, `authors`, `contributors`, `edition`, `publication`, `year`, `language`, `physical_description`, `series`, `subjects`, `isbns`, `oclc`, `lccn`, `lc_call_number`, `holdings`, and `url` (the public record page).
+
+## Best Practices
+
+1. **Search both scripts** (Chinese characters and romanization) for full coverage.
+2. **Narrow with `language`** (`chi`, `jpn`, `kor`) when a title word is common.
+3. **Match across catalogs with `oclc` or `isbn`.** These are exact.
+4. **Give people the `url`** so they can see live status and request items in a browser.
+5. **Respect the server.** The script waits 1 second between requests and backs off on HTTP 429/503 with `Retry-After`. Do not page through thousands of records.
+
+## Related Skills
+
+- **umich-library-catalog**, **princeton-library-catalog**, **yale-library-catalog**, **pitt-library-catalog**: the same Alma SRU method at other libraries
+- **harvard-library-catalog**, **columbia-clio**, **loc-catalog**: other catalogs to compare holdings
+- **hathitrust-catalog**: use OCLC numbers from here to find digitized copies
+- **zotero-local**: save found records into Zotero
+
+## Resources
+
+- `references/api_reference.md` — SRU parameters, CQL syntax, index list, MARC and AVA/AVE field guide
+- `scripts/princeton_api.py` — Alma SRU client and CLI (zero dependencies)
+- `tests/test_princeton_api.py` — offline tests (`python -m unittest discover -s tests`)
+- Ex Libris SRU docs: https://developers.exlibrisgroup.com/alma/integrations/sru/
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "princeton-library-catalog"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[princeton-library-catalog] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: princeton-library-catalog* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

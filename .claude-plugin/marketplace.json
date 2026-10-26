@@ -182,6 +182,36 @@
       "name": "umich-library-catalog",
       "source": "./umich-library-catalog",
       "description": "Search the University of Michigan Library catalog via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, print call numbers and availability, and online access",
+      "version": "1.0.1",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "princeton-library-catalog",
+      "source": "./princeton-library-catalog",
+      "description": "Search the Princeton University Library catalog via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, East Asian Library call numbers and availability, and online access",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "yale-library-catalog",
+      "source": "./yale-library-catalog",
+      "description": "Search the Yale University Library catalog via Alma's public SRU interface (CJK vernacular fields, call numbers, availability, online access links) and Yale LUX across Yale's libraries, museums, and archives",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "pitt-library-catalog",
+      "source": "./pitt-library-catalog",
+      "description": "Search the University of Pittsburgh Library System catalog (PittCat) via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, call numbers and availability, and online access",
       "version": "1.0.0",
       "author": {
         "name": "Kwok-leong Tang",
