@@ -371,6 +371,36 @@ def holdings(marc: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     return {"physical": physical, "electronic": electronic}
 
 
+# MARC 6XX second indicator -> subject vocabulary (7 = named in $2)
+SUBJECT_SOURCES = {"0": "lcsh", "1": "lcshac", "2": "mesh", "3": "nal", "5": "cash", "6": "rvm"}
+
+# MARC 08X fields -> classification scheme (084 names its scheme in $2)
+CLASS_TAGS = {"050": "lcc", "060": "nlm", "080": "udc", "082": "ddc", "084": ""}
+
+
+def subject_headings(marc: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Subject headings with their vocabulary (lcsh, csht, fast, ...)."""
+    out = []
+    for f in _fields(marc, "600", "610", "611", "630", "648", "650", "651", "655"):
+        parts = [v.strip(" .") for c, v in f["subfields"] if c in "abcdtvxyz" and v.strip()]
+        if not parts:
+            continue
+        source = SUBJECT_SOURCES.get(f["ind2"]) or next(iter(_sub(f, "2")), "") or "unspecified"
+        out.append({"heading": " -- ".join(parts), "source": source, "tag": f["tag"]})
+    return out
+
+
+def classifications(marc: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Classification numbers with their scheme (lcc, ddc, ncsclt, ...)."""
+    out = []
+    for f in _fields(marc, *CLASS_TAGS):
+        number = _text(f, "ab")
+        if number:
+            scheme = CLASS_TAGS[f["tag"]] or next(iter(_sub(f, "2")), "") or "other"
+            out.append({"scheme": scheme, "number": number})
+    return out
+
+
 def summarize(marc: Dict[str, Any]) -> Dict[str, Any]:
     """Summarize a parsed MARC record into a clean dict."""
     ctrl = marc["control"]
@@ -414,6 +444,8 @@ def summarize(marc: Dict[str, Any]) -> Dict[str, Any]:
         "oclc": list(dict.fromkeys(oclc)),
         "lccn": [v.strip() for f in _fields(marc, "010") for v in _sub(f, "a")],
         "lc_call_number": next((_text(f, "ab") for f in _fields(marc, "050")), ""),
+        "classifications": classifications(marc),
+        "subject_headings": subject_headings(marc),
         "holdings": holdings(marc),
         "url": RECORD_URL.format(mms_id=mms_id) if mms_id else "",
     }

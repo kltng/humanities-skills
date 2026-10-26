@@ -1,7 +1,7 @@
 ---
 name: yale-library-catalog
 description: Search the Yale University Library catalog (Alma) through its public SRU interface, and Yale LUX (libraries, museums, and archives) through its JSON API. Use this skill whenever the user wants to look up items at Yale, check whether Yale holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read MARC records with vernacular (880) script fields, find Yale museum objects, archives, people, or places in LUX, or compare Yale holdings with other libraries. Returns call numbers, locations, availability, and online access links.
-version: 1.0.1
+version: 1.1.0
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -113,7 +113,9 @@ lib.get_record("99129140223408651")                 # one record by MMS ID
 
 Search fields: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oclc`, `lccn`, `publisher`, `series`, `call_number`, `language` (MARC code: `chi`, `jpn`, `kor`, `eng`), `mms_id`. Sort: `date_desc`, `date_asc`, `title`, `author`.
 
-Each summary has `mms_id`, `title`, `titles` (romanized + vernacular), `author`, `authors`, `contributors`, `edition`, `publication`, `year`, `language`, `physical_description`, `series`, `subjects`, `isbns`, `oclc`, `lccn`, `lc_call_number`, `holdings`, and `url` (the public record page).
+Each summary has `mms_id`, `title`, `titles` (romanized + vernacular), `author`, `authors`, `contributors`, `edition`, `publication`, `year`, `language`, `physical_description`, `series`, `subjects`, `isbns`, `oclc`, `lccn`, `lc_call_number`, `classifications`, `subject_headings`, `holdings`, and `url` (the public record page).
+
+**Cataloging fields** (for comparing cataloging traditions): `subject_headings` lists each 6XX heading with its vocabulary (`lcsh`, `csht` = Taiwan's Chinese subject headings, `fast`, `mesh`, …), and `classifications` lists each class number with its scheme (`lcc`, `ddc`, `ncsclt` = 中文圖書分類法, the Chinese classification used in Taiwan, …). `subjects` stays a plain list of strings.
 
 ### LUX (libraries, museums, archives)
 

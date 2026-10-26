@@ -33,7 +33,7 @@ USER_AGENT = (
 )
 
 # Each library: SRU base URL, record page template ({mms_id}), and notes.
-# All endpoints and record links were tested on 2026-10-25.
+# All endpoints and record links were tested on 2026-10-25 (Taiwan: 2026-10-26).
 LIBRARIES: Dict[str, Dict[str, str]] = {
     "umich": {
         "name": "University of Michigan Library",
@@ -111,6 +111,42 @@ LIBRARIES: Dict[str, Dict[str, str]] = {
         "sru": "https://sydney.alma.exlibrisgroup.com/view/sru/61USYD_INST",
         "record_url": "https://sydney.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=61USYD_INST:sydney",
         "note": "SRU records carry no AVA/AVE holdings fields; check availability on the record page.",
+    },
+    "ntu": {
+        "name": "National Taiwan University Library 國立臺灣大學圖書館",
+        "sru": "https://ap01.alma.exlibrisgroup.com/view/sru/886NTU_INST",
+        "record_url": "https://ntu.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=886NTU_INST:886NTU_INST",
+        "note": "Records are in Chinese without romanized 880 pairs; subjects use Chinese headings (csht), call numbers use the Chinese classification (ncsclt).",
+    },
+    "nccu": {
+        "name": "National Chengchi University Libraries 國立政治大學圖書館",
+        "sru": "https://ap01.alma.exlibrisgroup.com/view/sru/886NCCU_INST",
+        "record_url": "https://nccu.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=886NCCU_INST:886NCCU_INST",
+        "note": "Records are in Chinese without romanized 880 pairs; subjects use Chinese headings (csht), call numbers use the Chinese classification (ncsclt).",
+    },
+    "ncku": {
+        "name": "National Cheng Kung University Library 國立成功大學圖書館",
+        "sru": "https://ap01.alma.exlibrisgroup.com/view/sru/886NCKU_INST",
+        "record_url": "https://ncku.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=886NCKU_INST:886NCKU_INST",
+        "note": "Records are in Chinese without romanized 880 pairs; subjects use Chinese headings (csht), call numbers use the Chinese classification (ncsclt).",
+    },
+    "nsysu": {
+        "name": "National Sun Yat-sen University Library 國立中山大學圖書館",
+        "sru": "https://ap01.alma.exlibrisgroup.com/view/sru/886NSYSU_INST",
+        "record_url": "https://nsysu.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=886NSYSU_INST:886NSYSU_INST",
+        "note": "Records are in Chinese without romanized 880 pairs; subjects use Chinese headings (csht), call numbers use the Chinese classification (ncsclt).",
+    },
+    "nchu": {
+        "name": "National Chung Hsing University Library 國立中興大學圖書館",
+        "sru": "https://ap01.alma.exlibrisgroup.com/view/sru/886NCHU_INST",
+        "record_url": "https://nchu.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=886NCHU_INST:886NCHU_INST",
+        "note": "Records are in Chinese without romanized 880 pairs; subjects use Chinese headings (csht), call numbers use the Chinese classification (ncsclt).",
+    },
+    "ccu": {
+        "name": "National Chung Cheng University Library 國立中正大學圖書館",
+        "sru": "https://ap01.alma.exlibrisgroup.com/view/sru/886CCU_INST",
+        "record_url": "https://ccu.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma{mms_id}&vid=886CCU_INST:886CCU_INST",
+        "note": "Records are in Chinese without romanized 880 pairs; subjects use Chinese headings (csht), call numbers use the Chinese classification (ncsclt).",
     },
 }
 
@@ -485,6 +521,36 @@ def holdings(marc: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     return {"physical": physical, "electronic": electronic}
 
 
+# MARC 6XX second indicator -> subject vocabulary (7 = named in $2)
+SUBJECT_SOURCES = {"0": "lcsh", "1": "lcshac", "2": "mesh", "3": "nal", "5": "cash", "6": "rvm"}
+
+# MARC 08X fields -> classification scheme (084 names its scheme in $2)
+CLASS_TAGS = {"050": "lcc", "060": "nlm", "080": "udc", "082": "ddc", "084": ""}
+
+
+def subject_headings(marc: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Subject headings with their vocabulary (lcsh, csht, fast, ...)."""
+    out = []
+    for f in _fields(marc, "600", "610", "611", "630", "648", "650", "651", "655"):
+        parts = [v.strip(" .") for c, v in f["subfields"] if c in "abcdtvxyz" and v.strip()]
+        if not parts:
+            continue
+        source = SUBJECT_SOURCES.get(f["ind2"]) or next(iter(_sub(f, "2")), "") or "unspecified"
+        out.append({"heading": " -- ".join(parts), "source": source, "tag": f["tag"]})
+    return out
+
+
+def classifications(marc: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Classification numbers with their scheme (lcc, ddc, ncsclt, ...)."""
+    out = []
+    for f in _fields(marc, *CLASS_TAGS):
+        number = _text(f, "ab")
+        if number:
+            scheme = CLASS_TAGS[f["tag"]] or next(iter(_sub(f, "2")), "") or "other"
+            out.append({"scheme": scheme, "number": number})
+    return out
+
+
 def summarize(marc: Dict[str, Any], record_url: str = "") -> Dict[str, Any]:
     """Summarize a parsed MARC record. `record_url` is a template with {mms_id}."""
     ctrl = marc["control"]
@@ -528,6 +594,8 @@ def summarize(marc: Dict[str, Any], record_url: str = "") -> Dict[str, Any]:
         "oclc": list(dict.fromkeys(oclc)),
         "lccn": [v.strip() for f in _fields(marc, "010") for v in _sub(f, "a")],
         "lc_call_number": next((_text(f, "ab") for f in _fields(marc, "050")), ""),
+        "classifications": classifications(marc),
+        "subject_headings": subject_headings(marc),
         "holdings": holdings(marc),
         "url": record_url.format(mms_id=mms_id) if record_url and mms_id else "",
     }

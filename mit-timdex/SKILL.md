@@ -1,7 +1,7 @@
 ---
 name: mit-timdex
 description: Search MIT Libraries through TIMDEX, MIT's official public GraphQL discovery API (no API key) — the MIT library catalog, DSpace@MIT theses and papers, MIT ArchivesSpace archival collections, MIT digital collections (images), GIS data, research databases, and LibGuides in one index. Use this skill whenever the user wants to find books or e-books at MIT, MIT theses or working papers, MIT archives, or MIT digital images; search by title, author, subject, or identifier; filter by source, language, or format; or run semantic (vector) search over MIT records.
-version: 1.0.0
+version: 1.0.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -92,7 +92,7 @@ Each summary has `id`, `title`, `alternate_titles`, `source`, `content_type`, `f
 
 ## Related Skills
 
-- **alma-sru-catalogs**: the same search across 15 other research libraries
+- **alma-sru-catalogs**: the same search across 20 other research libraries (US, UK, Canada, Australia, Taiwan)
 - **hathitrust-catalog**: digitized copies by OCLC or ISBN
 - **arxiv-search**: preprints (MIT authors often post there)
 

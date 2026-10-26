@@ -2,7 +2,7 @@
 
 ## Endpoints
 
-Every Alma institution has the same interface at `https://<host>.alma.exlibrisgroup.com/view/sru/<INSTITUTION_CODE>`. Tested on 2026-10-25:
+Every Alma institution has the same interface at `https://<host>.alma.exlibrisgroup.com/view/sru/<INSTITUTION_CODE>`. Tested on 2026-10-25 (Taiwan on 2026-10-26):
 
 | Key | Library | SRU base URL |
 |-----|---------|--------------|
@@ -21,6 +21,12 @@ Every Alma institution has the same interface at `https://<host>.alma.exlibrisgr
 | `cambridge` | Cambridge University Libraries | `https://eu.alma.exlibrisgroup.com/view/sru/44CAM_INST` |
 | `edinburgh` | University of Edinburgh Library | `https://ed.alma.exlibrisgroup.com/view/sru/44UOE_INST` |
 | `sydney` | University of Sydney Library | `https://sydney.alma.exlibrisgroup.com/view/sru/61USYD_INST` |
+| `ntu` | National Taiwan University Library 國立臺灣大學圖書館 | `https://ap01.alma.exlibrisgroup.com/view/sru/886NTU_INST` |
+| `nccu` | National Chengchi University Libraries 國立政治大學圖書館 | `https://ap01.alma.exlibrisgroup.com/view/sru/886NCCU_INST` |
+| `ncku` | National Cheng Kung University Library 國立成功大學圖書館 | `https://ap01.alma.exlibrisgroup.com/view/sru/886NCKU_INST` |
+| `nsysu` | National Sun Yat-sen University Library 國立中山大學圖書館 | `https://ap01.alma.exlibrisgroup.com/view/sru/886NSYSU_INST` |
+| `nchu` | National Chung Hsing University Library 國立中興大學圖書館 | `https://ap01.alma.exlibrisgroup.com/view/sru/886NCHU_INST` |
+| `ccu` | National Chung Cheng University Library 國立中正大學圖書館 | `https://ap01.alma.exlibrisgroup.com/view/sru/886CCU_INST` |
 
 The host part varies (`eu.alma...` for Cambridge, `i-share-uiu.alma...` for Illinois). A wrong host or code returns diagnostic `Invalid institution code`.
 
@@ -132,13 +138,15 @@ Errors come back as `<diagnostics><diagnostic><message>…</message></diagnostic
 | `020 $a` | ISBN |
 | `035 $a` | System numbers; `(OCoLC)…` = OCLC number |
 | `050 $a $b` | LC call number |
+| `082` | Dewey class number → `classifications` (scheme `ddc`) |
+| `084` | Other class number; `$2` names the scheme (`ncsclt` = 中文圖書分類法) → `classifications` |
 | `100/110/111` | Main author |
 | `245 $a $b $n $p` | Title |
 | `250` | Edition |
 | `260/264 $a $b $c` | Place, publisher, date |
 | `300` | Physical description |
 | `490/830` | Series |
-| `600–651` | Subjects |
+| `600–655` | Subjects → `subjects` (strings) and `subject_headings` (with vocabulary: 2nd indicator `0` = LCSH, `2` = MeSH, `7` = named in `$2`, e.g. `csht`, `fast`) |
 | `700/710/711` | Other contributors |
 | `880` | Vernacular script version of a linked field |
 

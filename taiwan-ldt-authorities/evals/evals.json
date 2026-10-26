@@ -1,0 +1,39 @@
+{
+  "skill_name": "taiwan-ldt-authorities",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "What is the authorized Taiwan library form of 王陽明's name, and what variant names and sources are recorded?",
+      "expected_output": "Variant lookup leading to 王守仁, 1472-1528 with variants and sources",
+      "files": [],
+      "expectations": [
+        "LDT@Library (ld.ncl.edu.tw) was queried",
+        "A variant or prefix lookup was used rather than trusting the first reconciliation hit",
+        "The authorized form 王守仁, 1472-1528 is given",
+        "Variant names and sources with page numbers are listed"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Is 孔廟 a Taiwan Chinese subject heading? How does it compare with the LCSH heading?",
+      "expected_output": "Exact subject lookup for 孔廟 and comparison with LCSH 'Temples, Confucian'",
+      "files": [],
+      "expectations": [
+        "An exact lookup found subject/89443",
+        "The local id (ChTaNC)sh01473 or MARC key is reported",
+        "The LCSH form Temples, Confucian is mentioned for comparison"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Reconcile these names against Taiwan authorities: 金庸, 王守仁, 錢穆.",
+      "expected_output": "Reconciliation results with confirmed matches",
+      "files": [],
+      "expectations": [
+        "The reconciliation API was used",
+        "Each match was checked by name or get(), not taken blindly from the top score",
+        "URIs are reported for confirmed matches"
+      ]
+    }
+  ]
+}

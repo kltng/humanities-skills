@@ -1,7 +1,7 @@
 ---
 name: umich-library-catalog
 description: Search the University of Michigan Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including its strong Asia Library holdings in Chinese, Japanese, and Korean. Use this skill whenever the user wants to look up items at U-M or "Michigan" libraries, check whether U-M holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read full MARC records with vernacular (880) script fields, or compare U-M holdings with Harvard, Columbia, or LOC. Returns call numbers, locations, availability, and online access.
-version: 1.0.2
+version: 1.1.0
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -136,6 +136,8 @@ Search field names: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oc
   "subjects": ["..."],
   "isbns": [], "oclc": ["..."], "lccn": [],
   "lc_call_number": "Z3102 .P15",
+  "classifications": [{"scheme": "lcc", "number": "Z3102 .P15"}],
+  "subject_headings": [{"heading": "Chinese literature -- Bibliography", "source": "lcsh", "tag": "650"}],
   "holdings": {
     "physical": [{"library": "Buhr Shelving Facility", "location": "Main",
                   "call_number": "Z 3102 .P15", "availability": "available",
@@ -145,6 +147,8 @@ Search field names: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oc
   "url": "https://search.lib.umich.edu/catalog/record/990023071550106381"
 }
 ```
+
+**Cataloging fields** (for comparing cataloging traditions): `subject_headings` lists each 6XX heading with its vocabulary (`lcsh`, `csht` = Taiwan's Chinese subject headings, `fast`, `mesh`, …), and `classifications` lists each class number with its scheme (`lcc`, `ddc`, `ncsclt` = 中文圖書分類法, the Chinese classification used in Taiwan, …). `subjects` stays a plain list of strings.
 
 ## Best Practices
 

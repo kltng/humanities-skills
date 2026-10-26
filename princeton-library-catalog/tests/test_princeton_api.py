@@ -202,5 +202,36 @@ class PhraseTest(unittest.TestCase):
             api.search(title="x", raw=True, phrase=True)
 
 
+class CatalogingFieldsTest(unittest.TestCase):
+    """Subject vocabularies and classification schemes, for comparing cataloging traditions."""
+
+    MARC = {"control": {}, "fields": [
+        {"tag": "050", "ind1": " ", "ind2": "4", "subfields": [("a", "DS753"), ("b", ".Z533 2002")]},
+        {"tag": "082", "ind1": "0", "ind2": "4", "subfields": [("a", "951.026"), ("2", "23")]},
+        {"tag": "084", "ind1": " ", "ind2": " ", "subfields": [("a", "666"), ("b", "8365"), ("2", "ncsclt")]},
+        {"tag": "650", "ind1": " ", "ind2": "0", "subfields": [("a", "Temples, Confucian"), ("z", "China.")]},
+        {"tag": "650", "ind1": " ", "ind2": "7", "subfields": [("a", "歷史地理"), ("x", "研究"), ("y", "明代"), ("2", "csht")]},
+        {"tag": "651", "ind1": " ", "ind2": "4", "subfields": [("a", "China")]},
+        {"tag": "655", "ind1": " ", "ind2": "7", "subfields": [("a", "Local histories"), ("2", "fast")]},
+    ]}
+
+    def test_subject_headings_keep_vocabulary(self):
+        from scripts.princeton_api import subject_headings
+        self.assertEqual(subject_headings(self.MARC), [
+            {"heading": "Temples, Confucian -- China", "source": "lcsh", "tag": "650"},
+            {"heading": "歷史地理 -- 研究 -- 明代", "source": "csht", "tag": "650"},
+            {"heading": "China", "source": "unspecified", "tag": "651"},
+            {"heading": "Local histories", "source": "fast", "tag": "655"},
+        ])
+
+    def test_classifications_keep_scheme(self):
+        from scripts.princeton_api import classifications
+        self.assertEqual(classifications(self.MARC), [
+            {"scheme": "lcc", "number": "DS753 .Z533 2002"},
+            {"scheme": "ddc", "number": "951.026"},
+            {"scheme": "ncsclt", "number": "666 8365"},
+        ])
+
+
 if __name__ == "__main__":
     unittest.main()

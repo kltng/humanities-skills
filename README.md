@@ -40,9 +40,10 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [princeton-library-catalog](princeton-library-catalog/) | Search Princeton University Library via Alma SRU — East Asian Library holdings, CJK script fields |
 | [yale-library-catalog](yale-library-catalog/) | Search Yale University Library via Alma SRU, plus Yale LUX across libraries, museums, and archives |
 | [pitt-library-catalog](pitt-library-catalog/) | Search University of Pittsburgh Library System (PittCat) via Alma SRU — CJK script fields, call numbers |
-| [alma-sru-catalogs](alma-sru-catalogs/) | Search 15 research libraries at once via Alma SRU — US, UK, Canada, Australia; compare holdings by OCLC/ISBN |
+| [alma-sru-catalogs](alma-sru-catalogs/) | Search 21 research libraries at once via Alma SRU — US, UK, Canada, Australia, Taiwan; compare holdings, subject vocabularies, and classification |
 | [mit-timdex](mit-timdex/) | Search MIT Libraries via TIMDEX GraphQL — catalog, DSpace@MIT theses, ArchivesSpace, digital collections |
 | [northwestern-digital-collections](northwestern-digital-collections/) | Search Northwestern's digitized images, manuscripts, and media via its API or hosted MCP, with IIIF |
+| [taiwan-ldt-authorities](taiwan-ldt-authorities/) | Taiwan LDT@Library authorities — Chinese name variants and sources, Chinese Subject Headings, Chinese classification |
 
 ### Scholarly Resources
 

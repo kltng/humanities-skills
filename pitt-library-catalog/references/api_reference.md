@@ -106,13 +106,15 @@ Errors come back as `<diagnostics><diagnostic><message>…</message></diagnostic
 | `020 $a` | ISBN |
 | `035 $a` | System numbers; `(OCoLC)…` = OCLC number |
 | `050 $a $b` | LC call number |
+| `082` | Dewey class number → `classifications` (scheme `ddc`) |
+| `084` | Other class number; `$2` names the scheme (`ncsclt` = 中文圖書分類法) → `classifications` |
 | `100/110/111` | Main author |
 | `245 $a $b $n $p` | Title |
 | `250` | Edition |
 | `260/264 $a $b $c` | Place, publisher, date |
 | `300` | Physical description |
 | `490/830` | Series |
-| `600–651` | Subjects |
+| `600–655` | Subjects → `subjects` (strings) and `subject_headings` (with vocabulary: 2nd indicator `0` = LCSH, `2` = MeSH, `7` = named in `$2`, e.g. `csht`, `fast`) |
 | `700/710/711` | Other contributors |
 | `880` | Vernacular script version of a linked field |
 

@@ -1,7 +1,7 @@
 ---
 name: alma-sru-catalogs
-description: Search 15 research library catalogs at once through their public Alma SRU interfaces (no API key) — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, UC Berkeley, UCLA, Toronto, Oxford (Bodleian), Cambridge, Edinburgh, and Sydney. Use this skill whenever the user wants to find which libraries hold a book, compare holdings across universities, search UK/Canadian/Australian university catalogs, look up items at any of these libraries by title/author/subject/ISBN/OCLC/call number, or read MARC records with vernacular (880) Chinese/Japanese/Korean script. Returns call numbers, locations, availability, and online access per library.
-version: 1.0.0
+description: Search 21 research library catalogs at once through their public Alma SRU interfaces (no API key) — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, UC Berkeley, UCLA, Toronto, Oxford (Bodleian), Cambridge, Edinburgh, Sydney, and six Taiwan universities (National Taiwan University 臺大, NCCU 政大, NCKU 成大, NSYSU 中山, NCHU 中興, CCU 中正). Use this skill whenever the user wants to find which libraries hold a book, compare holdings across universities, search UK/Canadian/Australian/Taiwanese university catalogs, compare subject headings and classification across cataloging traditions (LCSH vs Taiwan's Chinese headings), look up items at any of these libraries by title/author/subject/ISBN/OCLC/call number, or read MARC records with vernacular (880) Chinese/Japanese/Korean script. Returns call numbers, locations, availability, and online access per library.
+version: 1.1.0
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -10,7 +10,7 @@ contributors:
 
 # Alma SRU Catalogs Skill
 
-Search the catalogs of 15 research libraries with one script. No API key needed.
+Search the catalogs of 21 research libraries with one script. No API key needed.
 
 ## Overview
 
@@ -33,6 +33,12 @@ Many research libraries run Ex Libris **Alma**, and many leave its **SRU** inter
 | `cambridge` | Cambridge University Libraries | |
 | `edinburgh` | University of Edinburgh | |
 | `sydney` | University of Sydney | No AVA/AVE holdings in SRU records |
+| `ntu` | National Taiwan University 國立臺灣大學 | Taiwan records (see below) |
+| `nccu` | National Chengchi University 國立政治大學 | Taiwan records |
+| `ncku` | National Cheng Kung University 國立成功大學 | Taiwan records |
+| `nsysu` | National Sun Yat-sen University 國立中山大學 | Taiwan records |
+| `nchu` | National Chung Hsing University 國立中興大學 | Taiwan records |
+| `ccu` | National Chung Cheng University 國立中正大學 | Taiwan records |
 
 The single-library skills **umich-library-catalog**, **princeton-library-catalog**, **yale-library-catalog** (which adds Yale LUX), and **pitt-library-catalog** use the same code.
 
@@ -41,6 +47,16 @@ The single-library skills **umich-library-catalog**, **princeton-library-catalog
 ### Use SRU, not the libraries' search websites
 
 Most of these libraries' public search sites block scripts (Cloudflare, bot challenges) or forbid search URLs in `robots.txt` (Princeton, Penn). The Primo REST API needs a key. Alma SRU is open. Use the `url` in each record only as a link for people to open in a browser.
+
+### Taiwan records are cataloged differently
+
+The six Taiwan libraries catalog in Chinese:
+
+- Titles, authors, and publishers are in Chinese script **without** romanized 880 pairs. Romanized searches (`Ming shi`) find very little; search in characters, and try both traditional and simplified forms.
+- Subject headings come from Taiwan's **Chinese Subject Headings** (`$2 csht`), e.g. `歷史地理 -- 研究 -- 中國 -- 明代`, not LCSH. Search them in Chinese: `subject="歷史地理"`.
+- Call numbers use the **Chinese classification** 中文圖書分類法 (`084 $2 ncsclt`), e.g. `626.01`, not LC.
+- Records may be in Japanese too (`language=jpn`).
+- Other Taiwan universities (NTHU, NYCU, NCU, NTNU, Academia Sinica) did not answer at guessed institution codes. Hong Kong's JULAC libraries answer HTTP 401: their SRU is closed.
 
 ### Holdings are in the AVA and AVE fields
 
@@ -68,7 +84,7 @@ Main fields are romanized (pinyin, Hepburn, McCune-Reischauer); the original scr
 - **Default order is not relevance ranking.** Narrow the query instead of trusting the first hits.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
 - **Unknown index names** give a vague "Catalog search has encountered an error".
-- **Searching all 15 takes about 25 seconds.** Each server gets at most one request per second, but different servers are queried back to back without waiting.
+- **Searching all 21 takes about 45 seconds.** Each server gets at most one request per second; different servers are queried back to back without waiting, but the six Taiwan libraries share one server (`ap01`), so they go one per second.
 
 ## When to Use
 
@@ -88,6 +104,7 @@ python scripts/alma_sru.py search --library oxford,cambridge,edinburgh --oclc 42
 python scripts/alma_sru.py search --library all --isbn 9787101003277 --limit 1
 python scripts/alma_sru.py search --library berkeley,ucla --cql 'alma.title=明史 and alma.main_pub_date<1900' --sort date_asc
 python scripts/alma_sru.py search --library toronto --title "Ming shi" --json
+python scripts/alma_sru.py search --library ntu,nccu,ccu --subject 歷史地理 --limit 3
 python scripts/alma_sru.py record --library penn 9960332043503681
 ```
 
@@ -114,7 +131,9 @@ oxford.get_record("991027744457507026")
 
 Search fields: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oclc`, `lccn`, `publisher`, `series`, `call_number`, `language` (MARC code: `chi`, `jpn`, `kor`), `mms_id`. Sort: `date_desc`, `date_asc`, `title`, `author`.
 
-Each summary has `mms_id`, `title`, `titles`, `author`, `authors`, `contributors`, `edition`, `publication`, `year`, `language`, `physical_description`, `series`, `subjects`, `isbns`, `oclc`, `lccn`, `lc_call_number`, `holdings`, and `url`. Search results also carry `library`, `total`, and `query`.
+Each summary has `mms_id`, `title`, `titles`, `author`, `authors`, `contributors`, `edition`, `publication`, `year`, `language`, `physical_description`, `series`, `subjects`, `isbns`, `oclc`, `lccn`, `lc_call_number`, `classifications`, `subject_headings`, `holdings`, and `url`. Search results also carry `library`, `total`, and `query`.
+
+**Cataloging fields** (for comparing cataloging traditions): `subject_headings` lists each 6XX heading with its vocabulary (`lcsh`, `csht` = Taiwan's Chinese subject headings, `fast`, `mesh`, …), and `classifications` lists each class number with its scheme (`lcc`, `ddc`, `ncsclt` = 中文圖書分類法, the Chinese classification used in Taiwan, …). `subjects` stays a plain list of strings.
 
 ## Best Practices
 
@@ -127,6 +146,7 @@ Each summary has `mms_id`, `title`, `titles`, `author`, `authors`, `contributors
 ## Related Skills
 
 - **mit-timdex**: MIT's official API, better than SRU for MIT
+- **taiwan-ldt-authorities**: look up Taiwan's name authorities, Chinese subject headings, and classification behind these records
 - **harvard-library-catalog**, **columbia-clio**, **loc-catalog**: catalogs that do not use Alma SRU
 - **hathitrust-catalog**: digitized copies by OCLC number
 - **zotero-local**: save found records

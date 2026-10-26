@@ -182,7 +182,7 @@
       "name": "umich-library-catalog",
       "source": "./umich-library-catalog",
       "description": "Search the University of Michigan Library catalog via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, print call numbers and availability, and online access",
-      "version": "1.0.2",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -192,7 +192,7 @@
       "name": "princeton-library-catalog",
       "source": "./princeton-library-catalog",
       "description": "Search the Princeton University Library catalog via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, East Asian Library call numbers and availability, and online access",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -202,7 +202,7 @@
       "name": "yale-library-catalog",
       "source": "./yale-library-catalog",
       "description": "Search the Yale University Library catalog via Alma's public SRU interface (CJK vernacular fields, call numbers, availability, online access links) and Yale LUX across Yale's libraries, museums, and archives",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -212,7 +212,7 @@
       "name": "pitt-library-catalog",
       "source": "./pitt-library-catalog",
       "description": "Search the University of Pittsburgh Library System catalog (PittCat) via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, call numbers and availability, and online access",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -221,8 +221,8 @@
     {
       "name": "alma-sru-catalogs",
       "source": "./alma-sru-catalogs",
-      "description": "Search 15 research library catalogs at once via public Alma SRU — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, Berkeley, UCLA, Toronto, Oxford, Cambridge, Edinburgh, Sydney — with CJK vernacular fields, call numbers, availability, and online access",
-      "version": "1.0.0",
+      "description": "Search 21 research library catalogs at once via public Alma SRU — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, Berkeley, UCLA, Toronto, Oxford, Cambridge, Edinburgh, Sydney, and six Taiwan universities (NTU, NCCU, NCKU, NSYSU, NCHU, CCU) — with CJK fields, holdings, subject vocabularies, and classification schemes",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -232,7 +232,7 @@
       "name": "mit-timdex",
       "source": "./mit-timdex",
       "description": "Search MIT Libraries through TIMDEX, MIT's official GraphQL discovery API — library catalog, DSpace@MIT, ArchivesSpace, digital collections, and GIS data, with filters, facets, and semantic search",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -242,6 +242,16 @@
       "name": "northwestern-digital-collections",
       "source": "./northwestern-digital-collections",
       "description": "Search Northwestern University Libraries' Digital Collections (images, manuscripts, maps, audio, video) via its official API or hosted MCP server, with IIIF manifests",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "taiwan-ldt-authorities",
+      "source": "./taiwan-ldt-authorities",
+      "description": "Look up Taiwan's LDT@Library authorities — Chinese name authorities with variants and sources, Chinese Subject Headings, and the Chinese classification — via its public reconciliation API and SPARQL endpoint",
       "version": "1.0.0",
       "author": {
         "name": "Kwok-leong Tang",
