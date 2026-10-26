@@ -26,7 +26,7 @@ https://pitt.alma.exlibrisgroup.com/view/sru/01PITT_INST
 ## CQL Syntax
 
 ```
-alma.title="明史"                                   phrase/words in title
+alma.title="明史"                                   all words, anywhere in the title (NOT a phrase)
 alma.title=明史 and alma.language=chi               AND
 alma.creator="Brook, Timothy" or alma.creator=卜正民  OR
 alma.title=Ming not alma.title=Qing                 NOT
@@ -36,7 +36,11 @@ alma.main_pub_date>=1600 and alma.main_pub_date<1700
 alma.title=明史 sortBy alma.main_pub_date/sort.descending
 ```
 
-Relations: `=` (words), `==` (exact), `all`, `<>`, and `< > <= >=` on date and ID indexes.
+Relations: `=` (all words, any order, anywhere — quotes and `adj` do not make a phrase), `==` (the whole field, exactly), `all`, `<>`, and `< > <= >=` on date and ID indexes.
+
+CJK titles are split into words by a dictionary, so a CJK term can miss a title that contains it (文廟 misses 文廟祀典考, indexed as 文 / 廟祀 / 典考). Search traditional, simplified, and romanized forms and merge.
+
+Subject indexes: drop the ` -- ` from LCSH strings and use the inverted LC form (`Temples, Confucian`).
 
 Sortable indexes: `alma.title`, `alma.creator`, `alma.main_pub_date` (`/sort.ascending` or `/sort.descending`).
 
@@ -136,7 +140,7 @@ A romanized field carries `$6 880-01`. Its partner 880 field carries `$6 245-01/
 | Subfield | Meaning | Example |
 |----------|---------|---------|
 | `$m` | Collection name | `Taylor & Francis eBooks Complete` |
-| `$t` | Interface/platform | `EBSCOhost` |
+| `$t` | Interface/platform (script key `interface`) | `EBSCOhost` |
 | `$e` | Availability | `Available` |
 | `$n` | Public note | `Online book` |
 | `$u` | Access link (only some libraries supply it) | OpenURL |

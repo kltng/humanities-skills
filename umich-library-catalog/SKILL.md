@@ -1,7 +1,7 @@
 ---
 name: umich-library-catalog
 description: Search the University of Michigan Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including its strong Asia Library holdings in Chinese, Japanese, and Korean. Use this skill whenever the user wants to look up items at U-M or "Michigan" libraries, check whether U-M holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read full MARC records with vernacular (880) script fields, or compare U-M holdings with Harvard, Columbia, or LOC. Returns call numbers, locations, availability, and online access.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -33,9 +33,9 @@ U-M's public search site and its backend API (`search.lib.umich.edu/spectrum/...
 Each MARC record includes Alma availability fields:
 
 - **AVA** = print/physical copy. `$q` library name, `$c` location, `$d` call number, `$e` available/unavailable, `$f` item count, `$t` volume summary.
-- **AVE** = online copy. `$m` collection, `$t` platform, `$e` Available, `$u` access link (when the library supplies one).
+- **AVE** = online copy. `$m` collection, `$t` interface (platform), `$e` Available, `$u` access link (when the library supplies one).
 
-The script reads both into `holdings.physical` and `holdings.electronic`.
+The script reads both into `holdings.physical` and `holdings.electronic`. Keys: `holdings.physical[]` has `library`, `location`, `call_number`, `availability`, `items_total`, `items_unavailable`, `summary`; `holdings.electronic[]` has `collection`, `interface`, `availability`, `note`, `url`.
 
 ### Chinese/Japanese/Korean script is in 880 fields
 
@@ -43,10 +43,19 @@ Like most US catalogs, the main fields (245 title, 100 author, 260/264 publisher
 
 You can search in either script. `alma.title="明史"` and `alma.title="Ming shi"` both work but return different sets, so try both for full coverage.
 
+### Title searches match words, not phrases
+
+- `alma.title="shi dian"` matches records with *shi* and *dian* anywhere in the title (353 hits at U-M, including a Shenyang phone book). Quotes and `adj` change nothing; `==` matches the whole title field exactly.
+- Use `phrase=True` (CLI `--phrase`) to keep only titles that contain the term as one connected phrase. It filters each page after the search, so `total` is still the server's count; use `search_all(..., phrase=True)` to scan every page.
+- Pinyin syllables stay ambiguous: `shi dian` also matches 知识典籍 (*zhi shi dian ji*), and `ji qi` is 機器 as well as 祭器. After a romanized search, keep the records whose vernacular title has the characters you want.
+- **A CJK title search can also miss titles that contain the term.** Alma splits CJK titles into words with a dictionary: 文廟祀典考 is indexed as 文 / 廟祀 / 典考, so `alma.title="文廟"` misses it at U-M and Princeton (Yale finds it). The romanized `Wen miao` finds it.
+- So never treat one CJK title search as complete. Search the traditional, simplified, and romanized forms (文廟, 文庙, Wen miao) and merge the results by `mms_id`.
+
 ### Limits and quirks
 
 - **50 records per request** at most (`maximumRecords`). Page with `startRecord` (1-based).
 - **Sort** goes inside the CQL, not in a separate parameter: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Sortable: `title`, `creator`, `main_pub_date`. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them.
+- **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
 - **Unknown index names** fail with a vague "Catalog search has encountered an error". Check the spelling against `references/api_reference.md`.
 - **Encode the query** with normal URL encoding (`urllib.parse.quote`). Raw Chinese or quotes in the URL give HTTP 400.
 - **Truncation**: `alma.lc_class_number=DS753*` (no quotes around the term).
@@ -147,6 +156,7 @@ Search field names: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oc
 
 ## Related Skills
 
+- **alma-sru-catalogs**: search this library and 14 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
 - **princeton-library-catalog**, **yale-library-catalog**, **pitt-library-catalog**: the same Alma SRU method at other libraries
 - **hathitrust-catalog**: U-M is HathiTrust's founding partner. Use OCLC numbers from here to find digitized copies.
 - **harvard-library-catalog**, **columbia-clio**, **loc-catalog**: compare holdings across libraries

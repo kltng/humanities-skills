@@ -168,5 +168,39 @@ class DiagnosticsTest(unittest.TestCase):
         PrincetonCatalogAPI._raise_diagnostics(ET.fromstring(SAMPLE_RESPONSE))
 
 
+class PhraseTest(unittest.TestCase):
+    """Issue #1: SRU `=` is not a phrase search; `phrase=True` filters titles."""
+
+    @staticmethod
+    def rec(romanized, vernacular=""):
+        title = {"romanized": romanized}
+        if vernacular:
+            title["vernacular"] = vernacular
+        return {"titles": [title]}
+
+    def test_romanized_needs_adjacent_syllables(self):
+        from scripts.princeton_api import title_matches
+        self.assertTrue(title_matches(self.rec("Shi dian kao"), "shi dian"))
+        self.assertTrue(title_matches(self.rec("Wen miao si dian kao : [50 juan]"), "Wen miao"))
+        self.assertFalse(title_matches(self.rec("Shenyang shi dian hua"), "shi hua"))
+        self.assertFalse(title_matches(self.rec("Shidian"), "shi dian"))
+        self.assertFalse(title_matches(self.rec("Bai shi dianzi"), "shi dian"))
+
+    def test_cjk_substring_and_accents(self):
+        from scripts.princeton_api import title_matches
+        self.assertTrue(title_matches(self.rec("Wen miao si dian kao", "文廟祀典考 :"), "文廟"))
+        self.assertFalse(title_matches(self.rec("Wen miao", "文 學 廟"), "文廟祀"))
+        self.assertTrue(title_matches(self.rec("Nihon no Kōshibyō"), "koshibyo"))
+        self.assertFalse(title_matches({"titles": []}, "x"))
+        self.assertFalse(title_matches(self.rec("anything"), "  "))
+
+    def test_phrase_needs_title_and_summaries(self):
+        api = PrincetonCatalogAPI()
+        with self.assertRaises(ValueError):
+            api.search(author="x", phrase=True)
+        with self.assertRaises(ValueError):
+            api.search(title="x", raw=True, phrase=True)
+
+
 if __name__ == "__main__":
     unittest.main()

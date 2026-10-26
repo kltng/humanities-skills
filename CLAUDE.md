@@ -45,6 +45,8 @@ Each SKILL.md follows this pattern: Overview → When to Use → Quick Start / W
 
 When changing a skill, bump its `version` in both `SKILL.md` and `marketplace.json` so installed copies update.
 
+The Alma SRU client exists in five copies (`alma-sru-catalogs/scripts/alma_sru.py` is the reference; the umich, princeton, yale, and pitt skills keep their own copies so each installs alone). Make shared fixes in all five, then run `python tools/check_alma_sync.py`.
+
 ### API Etiquette (enforced across all skills)
 
 - Rate-limit requests (0.5–1s minimum between calls)

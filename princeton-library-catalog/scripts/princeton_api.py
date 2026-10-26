@@ -18,6 +18,7 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -180,6 +181,7 @@ class PrincetonCatalogAPI:
         limit: int = 10,
         start: int = 1,
         raw: bool = False,
+        phrase: bool = False,
         **fields: Optional[str],
     ) -> Dict[str, Any]:
         """
@@ -191,9 +193,15 @@ class PrincetonCatalogAPI:
             limit: Records to return (1–50)
             start: 1-based position of the first record
             raw: If True, records are MARC dicts instead of summaries
+            phrase: Keep only records whose title contains `title` as one
+                    connected phrase (SRU `=` matches the words anywhere).
+                    `total` stays the server's count; `returned` is the page
+                    size before filtering.
             **fields: keyword, title, author, subject, isbn, issn, oclc, lccn,
                       publisher, series, call_number, language, mms_id
         """
+        if phrase and (raw or not fields.get("title")):
+            raise ValueError("phrase=True needs a title search and summary records (raw=False)")
         query = self.build_cql(cql=cql, sort=sort, **fields)
         params = {
             "version": "1.2",
@@ -209,17 +217,22 @@ class PrincetonCatalogAPI:
         for rec in root.findall(".//marc:record", NS):
             marc = parse_marc(rec)
             records.append(marc if raw else summarize(marc))
-        return {"total": total, "start": start, "query": query, "records": records}
+        returned = len(records)
+        if phrase:
+            records = [r for r in records if title_matches(r, fields["title"])]
+        return {"total": total, "start": start, "query": query, "returned": returned, "records": records}
 
     def search_all(self, max_results: int = 100, **kwargs: Any) -> List[Dict[str, Any]]:
         """Page through results (50 per request) up to max_results."""
         records: List[Dict[str, Any]] = []
         start = 1
         while len(records) < max_results:
-            page = self.search(limit=min(MAX_PAGE_SIZE, max_results - len(records)), start=start, **kwargs)
+            # with phrase filtering, fetch full pages because some records are dropped
+            size = MAX_PAGE_SIZE if kwargs.get("phrase") else min(MAX_PAGE_SIZE, max_results - len(records))
+            page = self.search(limit=size, start=start, **kwargs)
             records.extend(page["records"])
-            start += len(page["records"])
-            if not page["records"] or start > page["total"]:
+            start += page["returned"]
+            if not page["returned"] or start > page["total"]:
                 break
         return records[:max_results]
 
@@ -302,6 +315,33 @@ def _display(items: List[Dict[str, str]]) -> str:
     if first.get("vernacular"):
         return f"{first['vernacular']} ({first['romanized']})"
     return first["romanized"]
+
+
+_CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]")
+
+
+def _normalize(text: str) -> str:
+    """Lowercase, strip accents and punctuation, collapse spaces (CJK kept)."""
+    text = unicodedata.normalize("NFKD", text.lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[^\w\s]", " ", text)
+    return " ".join(text.split())
+
+
+def title_matches(record: Dict[str, Any], term: str) -> bool:
+    """True if `term` is one connected phrase in a romanized or vernacular title."""
+    needle = _normalize(term)
+    if not needle:
+        return False
+    cjk = bool(_CJK.search(needle))
+    for title in record.get("titles", []):
+        for text in (title.get("romanized", ""), title.get("vernacular", "")):
+            hay = _normalize(text)
+            if cjk and needle.replace(" ", "") in hay.replace(" ", ""):
+                return True
+            if not cjk and f" {needle} " in f" {hay} ":
+                return True
+    return False
 
 
 def holdings(marc: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
@@ -407,6 +447,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--sort", choices=sorted(SORT_KEYS))
     s.add_argument("--limit", type=int, default=10)
     s.add_argument("--start", type=int, default=1)
+    s.add_argument("--phrase", action="store_true", help="Keep only titles containing --title as one connected phrase")
     s.add_argument("--json", action="store_true", help="Print JSON instead of a short list")
 
     r = sub.add_parser("record", help="Fetch one record by MMS ID")
@@ -419,11 +460,14 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "search":
         fields = {name: getattr(args, name) for name in FIELD_INDEXES}
-        result = api.search(cql=args.cql, sort=args.sort, limit=args.limit, start=args.start, **fields)
+        result = api.search(cql=args.cql, sort=args.sort, limit=args.limit, start=args.start,
+                            phrase=args.phrase, **fields)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            shown = len(result["records"])
+            shown = result["returned"]
+            if args.phrase:
+                print(f"{len(result['records'])} of {shown} records on this page contain the phrase")
             if shown:
                 print(f"{result['total']} results (showing {args.start}–{args.start + shown - 1})\n")
             else:
