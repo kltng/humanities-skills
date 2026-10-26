@@ -90,6 +90,30 @@ class SummarizeTest(unittest.TestCase):
         self.assertEqual(empty["copies"], [])
         self.assertIsNone(empty["citation_count"])
 
+    def test_doi_from_copy_url_when_no_pid(self):
+        rec = summarize_product({
+            "mainTitle": "旧幕府聖堂釈奠図",
+            "pids": [],
+            "instances": [
+                {"urls": ["http://example.org/item/1"]},
+                {"urls": ["http://dx.doi.org/10.11501/1016515"], "accessRight": {"label": "OPEN"}},
+            ],
+        })
+        self.assertEqual(rec["doi"], "10.11501/1016515")
+        self.assertEqual(rec["pids"], {})
+        self.assertEqual(rec["open_urls"], ["https://doi.org/10.11501/1016515"])
+
+    def test_pid_doi_wins_over_copy_url(self):
+        rec = summarize_product({
+            "pids": [{"scheme": "doi", "value": "10.1/a"}],
+            "instances": [{"urls": ["https://doi.org/10.1/b"]}],
+        })
+        self.assertEqual(rec["doi"], "10.1/a")
+
+    def test_no_doi_without_doi_url(self):
+        rec = summarize_product({"instances": [{"urls": ["https://hdl.handle.net/10722/1"]}]})
+        self.assertEqual(rec["doi"], "")
+
     def test_datasource(self):
         rec = summarize_datasource({"id": "x", "officialName": "HKU Scholars Hub",
                                     "type": {"value": "Institutional Repository"}})

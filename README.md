@@ -53,7 +53,7 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [openaire-search](openaire-search/) | Search the OpenAIRE Graph — theses, repository copies, datasets, open-access versions of a DOI |
 | [europeana-collections](europeana-collections/) | Search Europeana's 50M+ cultural heritage items from 4,000+ European institutions |
 | [wikidata-search](wikidata-search/) | Search Wikidata via keyword, semantic/hybrid search, SPARQL, and direct entity retrieval |
-| [zotero-local](zotero-local/) | Interact with local Zotero 8 desktop via HTTP API — search, fetch, add, organize references |
+| [zotero-local](zotero-local/) | Search, read, export, and add references in a local Zotero 8 desktop library via its HTTP API |
 
 ### Research & Evaluation Tools
 

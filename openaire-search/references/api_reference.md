@@ -91,7 +91,7 @@ Errors: `{"message": "...", "error": "Bad Request", "code": 400, ...}`.
 | `collectedFrom` | sources merged into this record |
 | `projects`, `organizations`, `communities` | related entities |
 
-Instance URLs can be malformed (`https://doi.org/https://doi.org/10.5353/...`) or duplicated with `dx.doi.org`; the script cleans and merges them.
+Instance URLs can be malformed (`https://doi.org/https://doi.org/10.5353/...`) or duplicated with `dx.doi.org`; the script cleans and merges them. Many records have no DOI in `pids` but a DOI copy URL (on 2026-10-26, 42 of the first 50 hits for `"釈奠"`: NDL `10.11501`, NIJL `10.20730`, and others). The summary then takes `doi` from that URL, so `doi` is set but `pids` has no `doi` key.
 
 ## Examples
 

@@ -1,7 +1,7 @@
 ---
 name: human-eval-review
 description: Generate a single self-contained HTML file for human-in-the-loop evaluation of model output. The reviewer opens it in a browser, makes per-item judgments (pick the matching candidate(s), choose one, rate on a scale, yes/no, or free-text correction), and exports their decisions as JSON. Use when you have analysis output — candidate matches, rankings, classifications, translations, extractions — that a human needs to review, confirm, score, or correct.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -79,9 +79,15 @@ any CSS variable via `theme` (see `references/review_format.md`).
 ### 1. Point at the analysis output and shape it
 
 Read whatever the upstream step produced (CSV, JSON, JSONL, markdown table) and map it onto
-items + questions. The fluent builder is usually the most direct:
+items + questions. The fluent builder is usually the most direct.
+
+The import `from scripts.review_builder import ...` works only when Python can see the skill
+folder. Either run your script from inside the skill folder, or add the folder to the path
+first, as below.
 
 ```python
+import sys
+sys.path.insert(0, "/path/to/human-eval-review")   # the folder that holds scripts/
 from scripts.review_builder import ReviewBuilder
 
 rb = ReviewBuilder(

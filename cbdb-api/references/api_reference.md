@@ -182,6 +182,10 @@ Official postings include:
 | KinRelName | Relation (Chinese, e.g. 父) |
 | KinRel | Relation code (e.g. F) |
 
+## How `name` Matches
+
+`name` is reliable for the main name (`ChName` or `EngName`). It also falls back to alternative names, but then returns only one person even when several share the alt name, and may match part of an alt name (`東坡` → 唐庚, alias 小東坡). Surname + 號 forms (`王陽明`) return 404. Tested 2026-10-26; see SKILL.md, "Name Matching".
+
 ## PersonAliases.Alias Structure
 
 | Field | Description |

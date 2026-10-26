@@ -37,6 +37,7 @@
   .entry{background:var(--card);border:1px solid var(--line);border-radius:6px;margin-bottom:1.75rem;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);transition:box-shadow 0.2s,border-color 0.2s;scroll-margin-top:6.5rem;}
   .entry.reviewed{border-color:var(--reviewed);box-shadow:0 1px 4px rgba(80,140,60,0.18);}
   .entry.kbd-focus{box-shadow:0 0 0 2px var(--accent),0 1px 8px rgba(0,0,0,0.12);}
+  .question.kbd-focus{background:var(--hover);box-shadow:inset 3px 0 0 var(--accent);}
 
   .entry-header{background:var(--panel);padding:0.5rem 1rem;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid var(--line);}
   .entry-num{font-size:0.75rem;font-weight:bold;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
@@ -184,7 +185,7 @@ const STORAGE_KEY = 'her::' + (CONFIG.storage_key || ((CONFIG.title || 'review')
 
 // ---- state -------------------------------------------------------------------
 const state = {};                         // qi -> answer object
-const QLIST = [];                         // {qi,item,q,block}
+const QLIST = [];                         // {qi,item,q,block,card}
 function defState(){ return {selected:{}, none:false, rating:null, value:null, notes:''}; }
 function initState(q){
   const s = defState();
@@ -198,7 +199,7 @@ function initState(q){
 DATA.forEach(item => (item.questions || []).forEach(q => {
   const qi = QLIST.length;
   state[qi] = initState(q);
-  QLIST.push({ qi, item, q, block: null });
+  QLIST.push({ qi, item, q, block: null, card: null });
 }));
 const TOTAL = QLIST.length;
 
@@ -250,7 +251,8 @@ function render(){
     (item.questions || []).forEach(q => {
       const qi = QLIST.findIndex(e => e.item === item && e.q === q);
       const qBlock = renderQuestion(qi, q);
-      QLIST[qi].block = card;          // focus highlights at card level
+      QLIST[qi].block = qBlock;        // keyboard keys act on this question
+      QLIST[qi].card = card;           // the card gets the outer highlight
       card.appendChild(qBlock);
     });
 
@@ -275,7 +277,7 @@ function renderQuestion(qi, q){
   return block;
 }
 
-function candRow(qi, q, cand, input_type){
+function candRow(qi, q, cand, input_type, onChange){
   const li = el('li');
   const label = el('label', 'cand');
   const input = el('input');
@@ -285,7 +287,7 @@ function candRow(qi, q, cand, input_type){
   input.dataset.id = cand.id;
   if (input_type === 'radio') input.name = 'q-' + qi;
   input.checked = !!state[qi].selected[cand.id];
-  input.addEventListener('change', () => onCandChange(qi, q));
+  input.addEventListener('change', onChange || (() => onCandChange(qi, q)));
   label.appendChild(input);
 
   if (cand.label != null && cand.label !== '') {
@@ -314,12 +316,13 @@ function renderCandidates(block, qi, q){
   cands.forEach(c => list.appendChild(candRow(qi, q, c, itype)));
 
   if (q.allow_none) {
-    const li = candRow(qi, q, { id: '__none__', title: 'None of the above' }, itype);
+    // The None row gets only its own handler: onCandChange would un-tick it.
+    const li = candRow(qi, q, { id: '__none__', title: 'None of the above' }, itype, () => onNoneChange(qi, q));
     li.firstChild.classList.add('none-row');
-    li.querySelector('.cand-input').classList.remove('cand-input');
-    li.querySelector('input').classList.add('none-input');
-    li.querySelector('input').addEventListener('change', () => onNoneChange(qi, q));
-    li.querySelector('input').checked = !!state[qi].none;
+    const noneInput = li.querySelector('input');
+    noneInput.classList.remove('cand-input');
+    noneInput.classList.add('none-input');
+    noneInput.checked = !!state[qi].none;
     li.firstChild.classList.add('none-host');
     list.appendChild(li);
   }
@@ -547,9 +550,10 @@ let focusIdx = -1;
 function setFocus(i){
   if (!TOTAL) return;
   focusIdx = Math.max(0, Math.min(TOTAL - 1, i));
-  const card = QLIST[focusIdx].block;
-  document.querySelectorAll('.entry.kbd-focus').forEach(c => { if (c !== card) c.classList.remove('kbd-focus'); });
-  if (card) { card.classList.add('kbd-focus'); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  const card = QLIST[focusIdx].card, block = QLIST[focusIdx].block;
+  document.querySelectorAll('.kbd-focus').forEach(c => { if (c !== card && c !== block) c.classList.remove('kbd-focus'); });
+  if (card) card.classList.add('kbd-focus');
+  if (block) { block.classList.add('kbd-focus'); block.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
 function actDigit(d){
   if (focusIdx < 0) return;

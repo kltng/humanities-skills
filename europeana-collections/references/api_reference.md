@@ -45,6 +45,9 @@ Required: `wskey` parameter on every request.
 | `where` | Place name |
 | `when` | Time period |
 
+Put values with spaces in double quotes: `qf=COUNTRY:"United Kingdom"`. Unquoted, a
+multi-word value returns 0 results. `europeana_api.py` quotes every filter value.
+
 ## Response Fields
 
 ### Search Result Item

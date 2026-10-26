@@ -1,7 +1,7 @@
 ---
 name: cbdb-api
 description: Query the China Biographical Database (CBDB) API to retrieve comprehensive biographical data about historical Chinese figures. Use this skill when searching for information about Chinese historical figures, scholars, officials, or literary figures from the 7th century BCE through the 19th century CE. Applicable for queries about biographical details, social relationships, official positions, or when users mention specific Chinese names or CBDB person IDs.
-version: 1.1.1
+version: 1.1.2
 license: MIT
 creator: AI
 author: Kwok-leong Tang
@@ -33,9 +33,13 @@ Each section is a dict when it has records, but an **empty string `""`** when it
 
 ## Python Script
 
-Use `scripts/cbdb_api.py` for programmatic access (zero dependencies):
+Use `scripts/cbdb_api.py` for programmatic access (zero dependencies).
+
+`from scripts.cbdb_api import CBDBAPI` works only when the **skill folder is the working directory**. From anywhere else (and always under `python -I`), add the folder to the path first:
 
 ```python
+import sys
+sys.path.insert(0, "/path/to/cbdb-api")   # the folder that holds SKILL.md
 from scripts.cbdb_api import CBDBAPI
 api = CBDBAPI()
 
@@ -56,8 +60,13 @@ alt_names = api.get_alt_names(person)   # courtesy name, pen name, etc.
 entries = api.get_entries(person)       # exam / entry records
 addresses = api.get_addresses(person)   # places
 
-# Formatted summary
+# Did the name hit the main name, or an alt name? ("primary" / "alias" / "other")
+api.name_match(person, "蘇軾")
+
+# Formatted summary. Lists the first 20 postings and 20 associations and says
+# how many were left out; pass max_items=None for all.
 print(api.summarize(person))
+print(api.summarize(person, max_items=None))
 ```
 
 The script handles rate limiting, retries (including HTTP 429 `Retry-After`), a `User-Agent` header, and the nested JSON navigation automatically. A person that is not found returns `None` (the API answers with HTTP 404 and a JSON error body).
@@ -81,6 +90,33 @@ https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=1762&o=json
 
 **Priority:** ID > Chinese characters > Pinyin (Pinyin may return multiple matches).
 
+## Name Matching: Main Names Are Safe, Alt Names Are Not
+
+The `name` parameter is reliable only for the person's **main name** (Chinese `ChName` or pinyin `EngName`). Alternative names (字, 號, 室名 ...) behave badly. Tested on 2026-10-26:
+
+| Query | Result | Correct? |
+|---|---|---|
+| `王守仁`, `Wang Shouren` | 王守仁 (30374) | Yes |
+| `陽明先生` (a 號) | 王守仁 (30374) | Yes |
+| `子瞻` (蘇軾's 字) | 蘇軾 (3767) | Yes |
+| `王陽明` (surname + 號, the form most people type) | 404 Person not found | No match |
+| `陽明` | 毛燧傳 (72362), who also has the alt name 陽明 | Not 王守仁 |
+| `伯安` (王守仁's 字; 9 people share it) | only 梁億 (10939) | One of 9, no warning |
+| `東坡` | 唐庚 (1598), alt name 小東坡 | Not 蘇軾 |
+
+So:
+
+- When the API matches an alt name it returns **one** person, even if many people share that name, and it does not say so.
+- Surname + 號 forms like 王陽明 or 蘇東坡 are not in CBDB and return nothing.
+- After a name query, check `api.name_match(person, name)`. If it is not `"primary"`, treat the result as a guess. Show the user the person's `ChName`, dates and dynasty, and confirm.
+
+**To turn a 字/號 into the main name first:**
+
+1. **cbdb-local** skill (same data, local SQLite): `python3 scripts/cbdb_query.py person "陽明"` lists every person with a matching alt name, and `person "王陽明"` finds 王守仁 through 王 + 陽明先生.
+2. **taiwan-ldt-authorities** skill (library name authorities): `python scripts/ldt_api.py lookup 王陽明 --mode variant` → `王守仁, 1472-1528`.
+
+Then query this API with the main name or, better, the ID.
+
 ## Handling Results
 
 **Multiple results from Pinyin queries:** Check dynasty, dates, or other context to identify the correct person. If ambiguous, present options to the user.
@@ -89,7 +125,7 @@ https://cbdb.fas.harvard.edu/cbdbapi/person.php?id=1762&o=json
 ```json
 {"error": {"code": 404, "message": "Person not found."}}
 ```
-Try alternative name forms (Chinese vs Pinyin), check spelling, or try courtesy names (字, 號).
+Try the other form (Chinese vs Pinyin) and check the spelling. If the user gave a 字 or 號, resolve it to the main name first (see **Name Matching** above); do not rely on the API for alt names.
 
 **Common record fields:** Posting: `OfficeName`, `AddrName`, `FirstYear`, `LastYear`. Association: `AssocPersonName`, `AssocPersonId`, `AssocName` (relation type). Kinship: `KinPersonName`, `KinPersonId`, `KinRelName`. Alias: `AliasType`, `AliasName`. A year of `"0"` means unknown.
 
@@ -98,6 +134,8 @@ Try alternative name forms (Chinese vs Pinyin), check spelling, or try courtesy 
 ## Related Skills
 
 - **chgis-tgaz**: Look up birthplaces or associated locations from CBDB's `PersonAddresses` in the CHGIS Temporal Gazetteer
+- **cbdb-local**: Same data offline; lists all alt-name candidates and handles surname + 號 (王陽明)
+- **taiwan-ldt-authorities**: Find the authorized main name from a variant (王陽明 → 王守仁)
 - **wikidata-search**: Cross-reference CBDB figures with Wikidata for external identifiers (VIAF, LoC, etc.)
 
 ## Resources

@@ -1,7 +1,7 @@
 ---
 name: historical-map
 description: Generate interactive historical maps as standalone HTML files using Leaflet.js. Supports markers with popups, GeoJSON boundary overlays, historical tile layers (Academia Sinica, MapWarper), image overlays, WMS layers, and layer controls. Use when the user asks to create, build, or visualize a map of historical places, routes, boundaries, or events.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -26,7 +26,14 @@ from scripts.map_builder import BASEMAPS
 # Keys: "osm", "watercolor", "toner_lite", "carto_light", "carto_dark"
 ```
 
-`carto_light` (CartoDB Positron) is the default — a clean, muted basemap ideal for historical data overlays.
+`osm` (OpenStreetMap) is the default. It is the only one that works without an account.
+
+The other four need a key (tested 2026-10-26):
+
+- `carto_light`, `carto_dark`: every tile shows "API KEY REQUIRED" (see carto.com/basemaps/apikey).
+- `watercolor`, `toner_lite` (Stadia): tiles return HTTP 401 when the HTML file is opened from disk. Stadia needs an account and a registered domain or API key.
+
+The builder prints a warning if you pick one of these. Use them only if you have a key; add it to the tile URL yourself with `add_tile_layer(..., overlay=False)`.
 
 ### Historical world boundaries are one method call away
 
@@ -58,27 +65,44 @@ Marker colors: `blue`, `gold`, `red`, `green`, `orange`, `yellow`, `violet`, `gr
 
 WMTS tiles based on Tan Qixiang's Historical Atlas of China (谭其骧《中国历史地图集》), covering 222 BCE – 1911 CE.
 The server is WMTS only (it does not answer WMS `GetMap`), so do **not** use `add_wms_layer`.
-Its tiles use the Google/XYZ grid, so load them with `add_tile_layer`:
+Use `add_sinica_layer` with a layer ID:
 
 ```python
-m.add_tile_layer(
-    "https://gis.sinica.edu.tw/ccts/file-exists.php?img=LAYER_ID-png-{z}-{x}-{y}",
-    name="Beijing 1928",
-    attribution='<a href="https://gis.sinica.edu.tw/">Academia Sinica</a>',
-)
+m.add_sinica_layer("ad1582")                 # Ming atlas
+m.add_sinica_layer("ad0741", opacity=0.5)    # Tang atlas
 ```
 
-Find `LAYER_ID` and its image format (`png` or `jpg`) in the capabilities file:
+One layer per dynasty volume (keys in `SINICA_LAYERS`, from the capabilities file, checked 2026-10-26):
+
+| ID | Atlas map | ID | Atlas map |
+|----|-----------|----|-----------|
+| `bc0210` | Qin 秦 | `ad0612` | Sui 隋 |
+| `bc0007` | Western Han 西漢 | `ad0741` | Tang 唐 |
+| `ad0140` | Eastern Han 東漢 | `ad1111` | Northern Song 北宋 |
+| `ad0262` | Three Kingdoms 三國 | `ad1208` | Southern Song 南宋 |
+| `ad0281` | Western Jin 西晉 | `ad1330` | Yuan 元 |
+| `ad0382` | Eastern Jin 東晉 | `ad1582` | Ming 明 |
+| `ad0497` | Southern and Northern Dynasties 南北朝 | `ad1820` | Qing 清 |
+
+Tiles of `ad0741`, `ad1111`, `ad1582`, `ad1820`, `bc0007` and `bc0210` were fetched and worked. The number in the ID is the atlas year (`ad1582` = 1582 CE).
+
+Other layers (city maps, 1:50,000 sheets) are in the capabilities file:
 `https://gis.sinica.edu.tw/ccts/wmts?SERVICE=WMTS&REQUEST=GetCapabilities`
-(each layer's `ResourceURL template`, e.g. `Beijing_50K_1928b-png-...`).
+Each layer's `ResourceURL template` gives its ID and image format, e.g. `Beijing_50K_1928b-png-...`.
+For a PNG layer, `add_sinica_layer("Beijing_50K_1928b", name="Beijing 1928")` works. For a JPG layer, use
+`add_tile_layer` with the template URL.
 
 ### MapWarper provides crowdsourced georeferenced historical maps
 
 ```python
-m.add_mapwarper_layer(14781, name="1860 Beijing")
+m.add_mapwarper_layer(MAP_ID, name="Map title")
 ```
 
-Find map IDs by browsing https://mapwarper.net/
+Find a map ID by browsing https://mapwarper.net/ in a browser, and open the map there first to check that it is rectified (warped). Unrectified maps have no tiles (the server returns HTTP 500). The site blocks automated access, so do not script lookups of its pages.
+
+### TGAZ coordinates: watch for longitude 0
+
+Coordinates from chgis-tgaz or tgaz-sqlite include thousands of duplicate POLYGON records whose longitude is 0 (a few have 1-5). Plotted, they land near Africa. Drop them before mapping: `api.search(..., drop_bad_coords=True)` in chgis-tgaz, or `--good-coords` in tgaz-sqlite. `add_marker` warns when latitude or longitude is exactly 0.
 
 ## Workflow
 
@@ -91,7 +115,7 @@ m = HistoricalMapBuilder(
     title="Tang Dynasty China",
     center=(35.0, 108.0),
     zoom=5,
-    basemap="carto_light",   # or "osm", "watercolor", "toner_lite", "carto_dark"
+    basemap="osm",   # the default; the others need an API key
 )
 
 # Add historical boundaries
@@ -170,7 +194,7 @@ HistoricalMapBuilder(
     title="Map Title",
     center=(lat, lng),         # Default: (35.0, 105.0)
     zoom=5,                    # Default: 5, range 0-18
-    basemap="carto_light",     # Key from BASEMAPS or "none"
+    basemap="osm",             # Key from BASEMAPS or "none"
 )
 ```
 
@@ -183,6 +207,7 @@ HistoricalMapBuilder(
 | `add_geojson_url(url, name, *, style, popup_property, tooltip_property)` | Remote GeoJSON (fetched by browser) |
 | `add_historical_boundaries(period, *, name, style)` | World boundaries from historical-basemaps |
 | `add_tile_layer(url, name, *, attribution, max_zoom, opacity, overlay)` | XYZ tile layer |
+| `add_sinica_layer(layer_id, name, *, opacity)` | Academia Sinica atlas layer (see `SINICA_LAYERS`) |
 | `add_mapwarper_layer(map_id, name, *, opacity)` | MapWarper georeferenced map |
 | `add_wms_layer(url, layers, name, *, fmt, transparent, opacity, attribution)` | WMS tile layer (real WMS servers only) |
 | `add_image_overlay(url, bounds, name, *, opacity)` | Georeferenced image overlay |
@@ -204,7 +229,8 @@ style = {
 ## API Etiquette
 
 - **Historical boundaries**: Fetched from GitHub raw URLs — no rate limit, but cache results for repeated use
-- **MapWarper**: Public tile service — use reasonably
+- **MapWarper**: Public tile service — use reasonably. Its robots.txt disallows automated access to map pages.
+- **OpenStreetMap**: Follow the tile usage policy (https://operations.osmfoundation.org/policies/tiles/). Fine for viewing a map; do not bulk-download tiles.
 - **Academia Sinica**: Public WMTS — use for academic purposes
 - **Leaflet CDN**: No rate limits on `unpkg.com`
 

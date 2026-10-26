@@ -1,7 +1,7 @@
 ---
 name: chgis-tgaz
 description: Query the China Historical GIS (CHGIS) Temporal Gazetteer (TGAZ) API to search for historical Chinese placenames from 222 BCE to 1911 CE. Use this skill when searching for information about historical Chinese places, administrative units, or geographic locations during the dynastic period. Applicable for queries about historical place names, administrative hierarchies, or when users mention specific Chinese locations with historical context.
-version: 1.1.1
+version: 1.1.2
 license: MIT
 creator: AI
 author: Kwok-leong Tang
@@ -27,9 +27,11 @@ The `?fmt=json` parameter only works for the faceted search endpoint.
 
 **TGAZ IDs use the `hvd_` prefix:** CHGIS ID 32180 → TGAZ ID `hvd_32180`.
 
-**The `ipar` (parent) search parameter is unreliable.** For hierarchical queries (e.g., "find all counties in Zhejiang"), use the canonical record drill-down approach instead: look up the parent record by ID and read its subordinate units.
+**The `ipar` (parent) search parameter is unreliable.** For hierarchical queries (e.g., "find all counties in Zhejiang"), use the canonical record drill-down approach instead: look up the parent record by ID and read its subordinate units. A record lists only the **next** level down. A province lists prefectures, not counties, so counties need a second step (see "Hierarchical Queries").
 
-**Romanization quirks:** Some names use older romanizations, not modern pinyin. For example, Ningbo is stored as "Ningpo". If a search returns no results, try alternative romanizations.
+**Romanization quirks:** Some names use older romanizations, not modern pinyin. For example, Ningbo is stored as "Ningpo". Some names also have a **space between syllables**: 苏州 from 589 to 1112 is "Su Zhou", while 苏州府 is "Suzhou Fu". So `n=suzhou&yr=1100` returns 0 results, and `n=su zhou&yr=1100` returns 4. Search with Chinese characters when you can: `蘇州` and `苏州` both work. If a romanized search returns nothing, try a space between syllables and other romanizations.
+
+**Duplicate POLYGON records with longitude 0.** Many places have a second record with `"object type": "POLYGON"` (often an `hvd_90xxx` id). Its `xy coordinates` has longitude 0 (sometimes 1-5), e.g. hvd_90496 苏州 `0.00000, 31.276870`. A few other records are `0.00000, 0.00000`. On a map these points land near Africa. Before mapping, drop them: `api.search(..., drop_bad_coords=True)`, or check `api.has_bad_coords(result)`. Use the POINT record of the same place instead.
 
 **Search uses prefix matching:** `n=beijing` matches 北京路, 北京行省, 北井县, etc. Short terms return more results.
 
@@ -44,6 +46,7 @@ api = TGAZAPI()
 # Faceted search
 results = api.search("suzhou", year=1820)
 results = api.search("北京", feature_type="fu")
+results = api.search("蘇州", drop_bad_coords=True)   # for maps: no longitude-0 rows
 
 # ID lookup (correct URL format handled automatically)
 record = api.get_by_id("hvd_32180")
@@ -55,7 +58,8 @@ transcription = api.get_transcription(record)  # Romanized
 begin, end = api.get_temporal_span(record)     # Year range
 modern = api.get_modern_location(record)       # Present-day equivalent
 ftype = api.get_feature_type(record)           # Administrative type
-subs = api.get_subordinates(record)            # Child units (reliable!)
+subs = api.get_subordinates(record)            # Direct child units only (one level)
+units = api.get_descendants("hvd_30015", year=1850, levels=2)  # Two levels down
 
 # Formatted summary
 print(api.summarize(record))
@@ -87,7 +91,16 @@ Since `ipar` is unreliable, use this pattern for "find all X in Y" queries:
 1. Search for the parent region to get its TGAZ ID
 2. Look up the parent's canonical record via `/placename/json/{id}`
 3. Read the `historical_context.subordinate units` field (each entry has `child id`, `name`, `transcribed`, `begin_year`, `end_year`)
-4. Filter subordinates by year range and feature type
+4. Filter subordinates by year range
+5. **Repeat steps 2-4 for each child** if you need the next level down
+
+A record lists only its **direct** children. Zhejiang (hvd_30015) in 1850
+lists 12 units: 11 prefectures (府) and 定海厅. It lists no counties. To get
+the counties, look up each of those 12 records too. Tested 2026-10-26: this
+gives 77 units at the second level, 75 of them counties (县).
+
+`get_descendants()` does both levels for you. It makes one request per
+record (13 for Zhejiang), at most one per second.
 
 ```python
 api = TGAZAPI()
@@ -95,15 +108,20 @@ api = TGAZAPI()
 results = api.search("zhejiang", year=1850, feature_type="sheng")
 zhejiang_id = results[0]["sys_id"]  # e.g., hvd_30015
 
-# Get canonical record with subordinates
+# Level 1 only: prefectures
 record = api.get_by_id(zhejiang_id)
-subordinates = api.get_subordinates(record)
-
-# Filter to active units in 1850
-for sub in subordinates:
+for sub in api.get_subordinates(record):
     if int(sub["begin_year"]) <= 1850 <= int(sub["end_year"]):
         print(sub["child id"], sub["name"], sub["transcribed"])
+
+# Level 2: counties (each unit has "level" and "parent id")
+units = api.get_descendants(zhejiang_id, year=1850, levels=2)
+counties = [u for u in units if u["level"] == 2 and u["name"].endswith("县")]
+print(len(counties))  # 75
 ```
+
+Subordinate units have no feature-type field. Use the last character of the
+name (县, 州, 厅) as a guide, or look up the record for its `feature_type`.
 
 ## Encoding
 

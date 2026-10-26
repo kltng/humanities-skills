@@ -1,7 +1,7 @@
 ---
 name: umich-library-catalog
 description: Search the University of Michigan Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including its strong Asia Library holdings in Chinese, Japanese, and Korean. Use this skill whenever the user wants to look up items at U-M or "Michigan" libraries, check whether U-M holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read full MARC records with vernacular (880) script fields, or compare U-M holdings with Harvard, Columbia, or LOC. Returns call numbers, locations, availability, and online access.
-version: 1.1.2
+version: 1.1.3
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -54,8 +54,9 @@ You can search in either script. `alma.title="明史"` and `alma.title="Ming shi
 ### Limits and quirks
 
 - **50 records per request** at most (`maximumRecords`). Page with `startRecord` (1-based).
-- **Sort** goes inside the CQL, not in a separate parameter: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Sortable: `title`, `creator`, `main_pub_date`. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them.
+- **Sort** goes inside the CQL, not in a separate parameter: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Sortable: `title`, `creator`, `main_pub_date`. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them. But placeholder years such as `####` still pass that filter and sort first (seen at Princeton and U-M on 2026-10-26). Add `known_dates=True` (CLI `--known-dates`) to drop records whose year is not four digits. It filters each page after the search, like `phrase`.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
+- **Subject heading output:** name and title subjects (600/610/611/630) keep their dates and title in the heading, e.g. `Song, Yingxing, 1587-approximately 1666. Dian gong kai wu`. Only the subdivisions `$v $x $y $z` are joined with ` -- `, e.g. `Science -- China -- History`.
 - **Network errors are retried.** Dropped connections, read timeouts, and HTTP 429/5xx are retried up to 4 times (waiting 5, 10, 20 s, or `Retry-After`). If a later page of `search_all()` still fails, it raises `IncompleteResults`; the records fetched so far are in its `.records`.
 - **Unknown index names** fail with a vague "Catalog search has encountered an error". Check the spelling against `references/api_reference.md`.
 - **Encode the query** with normal URL encoding (`urllib.parse.quote`). Raw Chinese or quotes in the URL give HTTP 400.
@@ -161,7 +162,7 @@ Search field names: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oc
 
 ## Related Skills
 
-- **alma-sru-catalogs**: search this library and 14 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
+- **alma-sru-catalogs**: search this library and 20 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
 - **princeton-library-catalog**, **yale-library-catalog**, **pitt-library-catalog**: the same Alma SRU method at other libraries
 - **hathitrust-catalog**: U-M is HathiTrust's founding partner. Use OCLC numbers from here to find digitized copies.
 - **harvard-library-catalog**, **loc-catalog**: compare holdings across libraries

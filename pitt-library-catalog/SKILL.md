@@ -1,7 +1,7 @@
 ---
 name: pitt-library-catalog
 description: Search the University of Pittsburgh Library System catalog (PittCat, Alma) through its public SRU interface for books, journals, manuscripts, and e-resources, including the East Asian Library. Use this skill whenever the user wants to look up items at Pitt or the University of Pittsburgh, check whether Pitt holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read MARC records with vernacular (880) script fields, or compare Pitt holdings with other libraries. Returns call numbers, locations, availability, and online access.
-version: 1.1.2
+version: 1.1.3
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -41,7 +41,7 @@ The main fields (245 title, 100 author, 260/264 publisher) are **romanized** (pi
 
 ### Title searches match words, not phrases
 
-- `alma.title="shi dian"` matches records with *shi* and *dian* anywhere in the title (353 hits at U-M, including a Shenyang phone book). Quotes and `adj` change nothing; `==` matches the whole title field exactly.
+- `alma.title="shi dian"` matches records with *shi* and *dian* anywhere in the title (114 hits at Pitt on 2026-10-26, many of them unrelated titles). Quotes and `adj` change nothing; `==` matches the whole title field exactly.
 - Use `phrase=True` (CLI `--phrase`) to keep only titles that contain the term as one connected phrase. It filters each page after the search, so `total` is still the server's count; use `search_all(..., phrase=True)` to scan every page.
 - Pinyin syllables stay ambiguous: `shi dian` also matches 知识典籍 (*zhi shi dian ji*), and `ji qi` is 機器 as well as 祭器. After a romanized search, keep the records whose vernacular title has the characters you want.
 - **A CJK title search can also miss titles that contain the term.** Alma splits CJK titles into words with a dictionary: 文廟祀典考 is indexed as 文 / 廟祀 / 典考, so `alma.title="文廟"` misses it at U-M and Princeton (Yale finds it). The romanized `Wen miao` finds it.
@@ -50,9 +50,10 @@ The main fields (245 title, 100 author, 260/264 publisher) are **romanized** (pi
 ### Limits and quirks
 
 - **50 records per request** at most. Page with `startRecord` (1-based); `search_all()` does this for you.
-- **Sort** goes inside the CQL: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them.
+- **Sort** goes inside the CQL: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them. But placeholder years such as `####` still pass that filter and sort first (seen at Princeton and U-M on 2026-10-26). Add `known_dates=True` (CLI `--known-dates`) to drop records whose year is not four digits. It filters each page after the search, like `phrase`.
 - **Default order is not relevance ranking.** Narrow the query (title + language, or a date range) rather than relying on the first results.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
+- **Subject heading output:** name and title subjects (600/610/611/630) keep their dates and title in the heading, e.g. `Song, Yingxing, 1587-approximately 1666. Dian gong kai wu`. Only the subdivisions `$v $x $y $z` are joined with ` -- `, e.g. `Science -- China -- History`.
 - **Network errors are retried.** Dropped connections, read timeouts, and HTTP 429/5xx are retried up to 4 times (waiting 5, 10, 20 s, or `Retry-After`). If a later page of `search_all()` still fails, it raises `IncompleteResults`; the records fetched so far are in its `.records`.
 - **Unknown index names** fail with a vague "Catalog search has encountered an error". Check the spelling against `references/api_reference.md`.
 - **Encode the query** with normal URL encoding. Raw Chinese or quotes in the URL give HTTP 400.
@@ -114,8 +115,8 @@ Each summary has `mms_id`, `title`, `titles` (romanized + vernacular), `author`,
 
 ## Related Skills
 
-- **alma-sru-catalogs**: search this library and 14 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
-- **umich-library-catalog**, **princeton-library-catalog**, **yale-library-catalog**, **pitt-library-catalog**: the same Alma SRU method at other libraries
+- **alma-sru-catalogs**: search this library and 20 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
+- **umich-library-catalog**, **princeton-library-catalog**, **yale-library-catalog**: the same Alma SRU method at other libraries
 - **harvard-library-catalog**, **loc-catalog**: other catalogs to compare holdings
 - **hathitrust-catalog**: use OCLC numbers from here to find digitized copies
 - **zotero-local**: save found records into Zotero

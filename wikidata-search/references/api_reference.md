@@ -246,6 +246,24 @@ Common error codes:
 | param-missing | Required parameter missing |
 | param-invalid | Invalid parameter value |
 | too-many-entities | Too many entity IDs (max 50) |
+| maxlag | Servers are lagged more than the `maxlag` you sent (HTTP 200 + `Retry-After`) |
+
+### maxlag
+
+`maxlag=N` asks the server to refuse the request when replication or query-service lag is above N seconds. It is meant mainly for bots that edit. The script sends `maxlag=5`, retries twice with a short back-off, then sends read requests once without `maxlag` (see SKILL.md, API Etiquette). Check the current lag with `?action=query&maxlag=-1&format=json`; the `lag` field in the error shows it.
+
+## Full-text search (fallback when the Vector DB is down)
+
+`list=search` uses CirrusSearch. It searches labels, descriptions and statements, and supports filters.
+
+```text
+GET https://www.wikidata.org/w/api.php?action=query&list=search&srsearch=朱熹 haswbstatement:P31=Q5&srlimit=10&format=json
+```
+
+- `haswbstatement:P31=Q5` keeps only humans. Other useful filters: `haswbstatement:P497` (has a CBDB ID), `inlabel:朱熹@zh`.
+- Results are in `query.search[]`; `title` is the QID, `snippet` is the description.
+- Tested 2026-10-26: `朱熹 haswbstatement:P31=Q5` returned 7 hits, with Q9397 first.
+
 ## Special:EntityData (Direct Entity JSON)
 
 For many "fetch the entity JSON now" use cases, the Linked Data interface is a good fit:

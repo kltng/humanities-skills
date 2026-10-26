@@ -346,5 +346,72 @@ class RetryTest(unittest.TestCase):
             AlmaSRU("sydney", min_interval=0).search_all(max_results=10, title="x")
 
 
+class Issue21Test(unittest.TestCase):
+    """Issue #21: name/title subject headings, NTU author shown twice, placeholder years."""
+
+    def test_name_subject_keeps_dates_and_title(self):
+        from scripts.alma_sru import subject_headings
+        marc = {"control": {}, "fields": [
+            {"tag": "600", "ind1": "1", "ind2": "0", "subfields": [
+                ("a", "Song, Yingxing,"), ("d", "1587-approximately 1666."), ("t", "Tian gong kai wu."),
+                ("v", "Criticism, interpretation, etc."), ("0", "http://id.loc.gov/x")]},
+            {"tag": "610", "ind1": "1", "ind2": "0", "subfields": [
+                ("a", "United States."), ("b", "Congress."), ("b", "House"), ("x", "History.")]},
+        ]}
+        self.assertEqual([h["heading"] for h in subject_headings(marc)], [
+            "Song, Yingxing, 1587-approximately 1666. Tian gong kai wu -- Criticism, interpretation, etc",
+            "United States. Congress. House -- History",
+        ])
+        self.assertEqual(summarize(marc)["subjects"][0],
+                         "Song, Yingxing, 1587-approximately 1666. Tian gong kai wu -- Criticism, interpretation, etc")
+
+    def test_romanized_inside_vernacular_is_shown_once(self):
+        marc = {"control": {}, "fields": [
+            {"tag": "100", "ind1": "1", "ind2": " ", "subfields": [
+                ("6", "880-01"), ("a", "Hill, A. V."), ("q", "(Archibald Vivian),"), ("d", "1886-")]},
+            {"tag": "880", "ind1": "1", "ind2": " ", "subfields": [
+                ("6", "100-01"), ("a", "希爾"), ("c", "(Hill, A. V. (Archibald Vivian), 1886-    )")]},
+        ]}
+        self.assertEqual(summarize(marc)["author"], "希爾 (Hill, A. V. (Archibald Vivian), 1886- )")
+
+    def test_has_known_year(self):
+        from scripts.alma_sru import has_known_year
+        self.assertTrue(has_known_year({"year": "1781"}))
+        for year in ("####", "19uu", "", "uuuu"):
+            self.assertFalse(has_known_year({"year": year}))
+        self.assertFalse(has_known_year({}))
+
+    def test_known_dates_filters_page(self):
+        import io
+        import urllib.request
+        from scripts import alma_sru as module
+
+        record = SAMPLE_RESPONSE.split("<records>")[1].split("</records>")[0]
+        head = SAMPLE_RESPONSE.split("<records>")[0].replace("<numberOfRecords>1<", "<numberOfRecords>2<")
+        page = head + "<records>" + record.replace("s1882", "s####") + record + "</records></searchRetrieveResponse>"
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        saved = urllib.request.urlopen
+        urllib.request.urlopen = lambda req, timeout=None: Response(page.encode())
+        try:
+            api = AlmaSRU("princeton", min_interval=0)
+            everything = api.search(title="x", sort="date_asc")
+            known = api.search(title="x", sort="date_asc", known_dates=True)
+        finally:
+            urllib.request.urlopen = saved
+        self.assertEqual([r["year"] for r in everything["records"]], ["####", "1882"])
+        self.assertEqual([r["year"] for r in known["records"]], ["1882"])
+        self.assertEqual(known["returned"], 2)
+        with self.assertRaises(ValueError):
+            AlmaSRU("princeton", min_interval=0).search(title="x", raw=True, known_dates=True)
+        self.assertTrue(module.has_known_year(known["records"][0]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -76,7 +76,7 @@ Subject indexes: drop the ` -- ` from LCSH strings and use the inverted LC form 
 
 Sortable indexes: `alma.title`, `alma.creator`, `alma.main_pub_date` (`/sort.ascending` or `/sort.descending`).
 
-Records with an unknown date (`uuuu`) sort first in ascending order. Add `alma.main_pub_date>=1000` to leave them out. (`alma.main_pub_date>0` returns nothing.)
+Records with an unknown date (`uuuu`) sort first in ascending order. Add `alma.main_pub_date>=1000` to leave them out. (`alma.main_pub_date>0` returns nothing.) Placeholder years such as `####` (a Project Gutenberg record at Princeton and U-M) still pass `>=1000` and sort first. The script's `known_dates=True` (CLI `--known-dates`) drops records whose MARC 008 year is not four digits, after the search.
 
 ## Useful Indexes
 

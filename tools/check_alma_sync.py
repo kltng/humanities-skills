@@ -25,11 +25,12 @@ COPIES = [
 # Module-level functions and class methods that must match exactly.
 FUNCTIONS = [
     "parse_marc", "_fields", "_sub", "_text", "_vernacular", "_paired", "_display",
-    "holdings", "_normalize", "title_matches", "subject_headings", "classifications",
+    "holdings", "_normalize", "title_matches", "has_known_year", "_heading", "subject_headings",
+    "classifications",
 ]
 METHODS = ["_retry_after_seconds", "_raise_diagnostics", "quote_term", "build_cql", "search_all", "get_record"]
 CONSTANTS = ["FIELD_INDEXES", "SORT_KEYS", "MAX_PAGE_SIZE", "NS", "_CJK", "SUBJECT_SOURCES", "CLASS_TAGS",
-             "MAX_ATTEMPTS", "RETRY_HTTP_CODES", "NETWORK_ERRORS"]
+             "MAX_ATTEMPTS", "RETRY_HTTP_CODES", "NETWORK_ERRORS", "HEADING_CODES", "SUBDIVISION_CODES"]
 
 
 def definitions(path: Path) -> dict:

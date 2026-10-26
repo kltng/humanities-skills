@@ -93,7 +93,7 @@ All endpoints below use GET. Use `users/0` for the local user.
 | `qmode` | `titleCreatorYear`, `everything` | Search scope |
 | `sort` | `dateAdded`, `dateModified`, `title`, `creator`, `itemType`, `date`, `publisher`, `publicationTitle`, `journalAbbreviation`, `language`, `accessDate`, `libraryCatalog`, `callNumber`, `rights`, `addedBy`, `numItems` | Sort field |
 | `direction` | `asc`, `desc` | Sort direction |
-| `limit` | integer | Max results (no default limit locally) |
+| `limit` | integer | Max results (no default limit locally, also for export formats such as `bibtex`: without `limit` you get the whole library) |
 | `start` | integer | Pagination offset |
 | `since` | integer | Return items changed since this version |
 | `itemType` | string | Filter: `book`, `journalArticle`, `-attachment`, etc. Use `\|\|` for OR |
@@ -171,15 +171,31 @@ Attach a file to an item created in the same `saveItems` session. The `parentIte
 - Header: `X-Metadata: {"parentItemID": "connector-item-id", "title": "filename.pdf", "url": "https://...", "sessionID": "sess-id"}`
 - Body: file binary data
 
-### POST /debug-bridge/execute (Better BibTeX)
+### POST /debug-bridge/execute (Debug Bridge add-on)
 
-Execute JavaScript inside Zotero. Requires the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) extension. Use this to attach files to **existing** items.
+Execute JavaScript inside Zotero. This endpoint comes from the **Debug Bridge** add-on
+(id `debug-bridge@iris-advies.com`). Better BibTeX does **not** provide it. The add-on is built
+in the Better BibTeX repository and released here:
+https://github.com/retorquere/zotero-better-bibtex/releases/tag/debug-bridge
+Use this endpoint to attach files to **existing** items and to create or delete collections.
+
+**Setup:** install the `.xpi` (Tools → Plugins → gear icon → Install Plugin From File). Then in
+Zotero: Settings → Advanced → Config Editor, add a string pref
+`extensions.zotero.debug-bridge.token` with a secret value of your choice.
 
 **Request:**
-- Content-Type: `application/javascript`
+- Header: `Authorization: Bearer <token>` (the same value as the pref)
+- Content-Type: `text/plain` (current Zotero rejects `application/javascript`)
 - Body: JavaScript code (runs as async function body)
 
-**Response:** `201` with JSON return value, or `500` with error
+**Response:** `201` with the return value encoded as JSON. If the script itself returns
+`JSON.stringify(...)`, the result is a JSON string inside JSON, so decode twice.
+
+**Errors:**
+- `404` — the add-on is not installed
+- `500 token not configured` — the pref is not set
+- `401 bearer token required` / `invalid bearer token` — header missing or wrong
+- `500 debug-bridge failed: ...` — the script threw an error
 
 **Example — attach PDF to existing item:**
 ```javascript
@@ -229,11 +245,12 @@ return JSON.stringify({deleted: true});
 
 `eraseTx()` also deletes every sub-collection. Items stay in the library unless you trash them yourself.
 
-**Example — check if BBT is available:**
+**Example — check if the Debug Bridge works:**
 ```javascript
 return 'ok';
 ```
-If this returns 201, BBT is installed. If 404, it is not.
+If this returns 201, the add-on is installed and the token is right. See the error list above
+for other codes.
 
 ### POST /connector/saveStandaloneAttachment
 

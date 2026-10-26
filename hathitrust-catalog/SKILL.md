@@ -1,7 +1,7 @@
 ---
 name: hathitrust-catalog
 description: Look up bibliographic records and digitized volumes in HathiTrust's 17M+ volume collection by ISBN, OCLC, LCCN, ISSN, or HathiTrust ID. Use this skill whenever the user wants to check if a book has been digitized, find which libraries hold a copy, get MARC metadata for a known identifier, or link a bibliographic reference to its HathiTrust digital version. Also triggers when cross-referencing identifiers from other library catalogs (Harvard, Library of Congress) against HathiTrust holdings.
-version: 1.0.1
+version: 1.0.2
 ---
 
 # HathiTrust Bibliographic API Skill
@@ -82,8 +82,8 @@ Pipe-separated as `type:value`. Max 20 per request.
 ```
 
 Key fields:
-- **`rightsCode`**: `pd` = public domain (full text available), `ic` = in-copyright (search only)
-- **`usRightsString`**: `"Full View"` or `"Limited (search-only)"`
+- **`rightsCode`**: the HathiTrust rights code. Open (full view) in the US: `pd`, `pdus`, `ic-world`, `und-world`, and all `cc-*` codes. `pdus` = public domain in the US only; readers outside the US cannot read it in full. Search only: `ic`, `op`, `orph`, `orphcand`, `und`, `umall`, `nobody`, `pd-pvt`, `supp`, and `icus` (in copyright in the US; open outside the US). Many pre-1929 Chinese books are `pdus`.
+- **`usRightsString`**: `"Full view"` (lowercase v in the live API) or `"Limited (search-only)"`. It is for US readers. Compare it case-insensitively.
 - **`itemURL`**: Direct link to the HathiTrust page-turner viewer
 - **`enumcron`**: Volume/issue info (e.g., `"vol. 3"`) or `false`
 
@@ -109,9 +109,17 @@ results = ht.batch_lookup([
 record = ht.lookup_isbn("0140449264", full=True)
 marc = ht.get_marc_xml(record)
 
-# Check if digitized and accessible
+# Check if digitized and readable in full
 for item in ht.get_items(record):
-    print(f"{item['orig']}: {item['usRightsString']} — {item['itemURL']}")
+    print(f"{item['orig']}: {item['rightsCode']} {item['usRightsString']} — {item['itemURL']}")
+ht.has_full_view(record)            # True if any volume is full view for US readers
+ht.get_full_view_url(record)        # link to the first full-view volume, or None
+ht.has_full_view(record, us=False)  # for readers outside the US (pdus = no, icus = yes)
+
+# Title in the original script (Chinese, Japanese, ...). The `titles` field is
+# romanized only; the original script is in MARC field 880, so use full=True.
+full = ht.lookup_oclc("34674216", full=True)
+ht.get_original_title(full)   # '欽定四庫全書總目 : 二〇〇卷, 卷首四卷'
 
 # Summarize
 print(ht.summarize(record))
@@ -119,7 +127,13 @@ print(ht.summarize(record))
 
 ## Typical Workflow: Cross-Reference with Other Catalogs
 
+This example uses two skills. Both `scripts` folders must be on the Python path, for example (adjust the paths to where the skills are installed):
+
 ```python
+import sys
+sys.path.insert(0, "path/to/harvard-library-catalog/scripts")
+sys.path.insert(0, "path/to/hathitrust-catalog/scripts")
+
 # 1. Search Harvard for a title
 from harvard_api import HarvardLibraryAPI
 harvard = HarvardLibraryAPI()
@@ -131,7 +145,7 @@ from hathitrust_api import HathiTrustAPI
 ht = HathiTrustAPI()
 record = ht.lookup_isbn(isbn)
 if record and ht.has_full_view(record):
-    print("Full text available:", ht.get_items(record)[0]["itemURL"])
+    print("Full text available:", ht.get_full_view_url(record))
 ```
 
 ## API Etiquette

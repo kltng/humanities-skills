@@ -80,16 +80,26 @@ Returns HTTP 200 with `{"records": {}, "items": []}`.
 
 ## Rights Codes
 
-| Code | Meaning |
-|------|---------|
-| `pd` | Public domain — full text available |
-| `ic` | In-copyright — search only |
-| `op` | Out of print (as determined by rightsholders) |
-| `orph` | Orphaned work |
-| `und` | Undetermined copyright |
-| `cc-by`, `cc-by-sa`, etc. | Creative Commons licenses |
+Source: HathiTrust's catalog indexer, which maps each code to full view or search only
+(github.com/hathitrust/hathitrust_catalog_indexer, `availability_map_ht.rb` for the US and
+`availability_map_ht_intl.rb` for other countries). Checked 2026-10-26.
 
-`usRightsString` values: `"Full View"` or `"Limited (search-only)"`.
+| Code | Meaning | Full view in US | Full view outside US |
+|------|---------|-----------------|----------------------|
+| `pd` | Public domain | yes | yes |
+| `pdus` | Public domain in the US only | yes | no |
+| `icus` | In copyright in the US only | no | yes |
+| `ic-world` | In copyright, opened worldwide by the rights holder | yes | yes |
+| `und-world` | Undetermined status, opened worldwide | yes | yes |
+| `cc-*` (`cc-by-3.0`, `cc-by-4.0`, `cc-zero`, ...) | Creative Commons licenses | yes | yes |
+| `ic` | In copyright | no | no |
+| `op` | Out of print (as determined by rightsholders) | no | no |
+| `orph`, `orphcand` | Orphan work / orphan candidate | no | no |
+| `und` | Undetermined copyright | no | no |
+| `umall`, `nobody`, `pd-pvt`, `supp` | Restricted, private, or suppressed | no | no |
+
+`usRightsString` values: `"Full view"` (the live API uses a lowercase v) or `"Limited (search-only)"`.
+It is computed for US readers, so `pdus` shows as `"Full view"`. Compare it case-insensitively.
 
 ## Authentication & Rate Limits
 

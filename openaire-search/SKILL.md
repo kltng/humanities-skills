@@ -1,7 +1,7 @@
 ---
 name: openaire-search
 description: Search the OpenAIRE Graph, Europe's open scholarly knowledge graph, through its free public API (no key needed). It merges Crossref, DataCite, ORCID, arXiv, Zenodo, and thousands of institutional repositories into one index of publications, theses, datasets, software, projects, organizations, and repositories. Use this skill whenever the user wants doctoral theses or repository copies (HKU Scholars Hub, Oxford ORA, Ghent, ...), open-access versions of an article, datasets or Zenodo deposits on a topic, outputs of one repository or funded project, or a check of which repositories hold a DOI. Use it alongside crossref-search for literature searches.
-version: 1.0.0
+version: 1.0.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -108,7 +108,7 @@ oa.get("doi_dedup___::5619fd1bdb39d6549898d1c1583fcdea")
 print(oa.rate_limit)                    # latest x-ratelimit headers
 ```
 
-Each research-product summary has `id`, `type`, `instance_types`, `title`, `subtitle`, `other_titles`, `authors`, `publication_date`, `year`, `publisher`, `container` (journal), `volume`, `issue`, `pages`, `language`, `pids` (doi, handle, pmid, arXiv, ...), `doi`, `access`, `oa_color`, `is_green`, `subjects`, `description`, `citation_count`, `copies` (url, type, hosted_by, access, license), `open_urls`, and `collected_from`.
+Each research-product summary has `id`, `type`, `instance_types`, `title`, `subtitle`, `other_titles`, `authors`, `publication_date`, `year`, `publisher`, `container` (journal), `volume`, `issue`, `pages`, `language`, `pids` (doi, handle, pmid, arXiv, ...), `doi` (from `pids`; if `pids` has no DOI, taken from a `https://doi.org/...` copy URL), `access`, `oa_color`, `is_green`, `subjects`, `description`, `citation_count`, `copies` (url, type, hosted_by, access, license), `open_urls`, and `collected_from`.
 
 Friendly filter names: `title`, `description`, `author`, `author_id` (ORCID), `type`, `instance_type`, `access`, `language`, `country`, `subjects`, `fos` (field of science), `publisher`, `pid`, `organization`, `datasource_id`, `project`, `funder`, `from_date`, `to_date`, `peer_reviewed`, `oa_color`. Any other API parameter can be passed by its own name.
 

@@ -11,7 +11,7 @@ description: >
   or any spatial/temporal query about Chinese historical geography. This skill
   is relevant even for casual questions like "tell me about ancient Chang'an"
   or "Tang dynasty cities near the Yellow River".
-version: 1.0.1
+version: 1.0.2
 ---
 
 # TGAZ Historical Gazetteer Query Skill
@@ -50,6 +50,10 @@ Download it only once. The file is 228 MB and GitHub gives 1 GB of free LFS
 traffic per month, so about four downloads use up the whole monthly quota.
 After that, LFS clones fail until the quota resets.
 
+If git-lfs is missing (or the quota is used up), the clone gives you a small
+text "pointer" file instead of the database. `query_tgaz.py` checks for this
+and says so. Install git-lfs and run `git lfs pull` inside the clone.
+
 ---
 
 You have access to `tgaz.db`, a SQLite database containing the full China
@@ -62,9 +66,14 @@ and 25,655 historical notes covering 763 BCE to 1911 CE.
 For common lookups, `scripts/query_tgaz.py` is fastest. Run it via Bash from the skill directory:
 
 ```bash
-# Search by name (Chinese or romanized)
+# Search by name (simplified, traditional, or romanized)
 python3 scripts/query_tgaz.py "北京"
-python3 scripts/query_tgaz.py "Chang'an"
+python3 scripts/query_tgaz.py "蘇州"          # traditional forms come from the spelling table
+python3 scripts/query_tgaz.py "Chang'an"      # spaces and apostrophes are ignored
+python3 scripts/query_tgaz.py "suzhou" --year 1100   # also finds "Su Zhou"
+
+# Leave out rows with broken coordinates (see "Data Cautions")
+python3 scripts/query_tgaz.py "蘇州" --good-coords
 
 # Name + temporal filter
 python3 scripts/query_tgaz.py "长安" --year -200
@@ -80,8 +89,9 @@ python3 scripts/query_tgaz.py --bbox 108,34,110,36 --year -200
 python3 scripts/query_tgaz.py --feature-type xian --year 1820 --limit 20
 python3 scripts/query_tgaz.py --feature-type county --year 1820 --limit 20
 
-# Children of a jurisdiction
+# Children of a jurisdiction (uses part_of, so it follows the year)
 python3 scripts/query_tgaz.py --parent hvd_9659 --year 1820
+python3 scripts/query_tgaz.py --parent hvd_30037 --year 1600   # Ming Zhejiang: 11 prefectures
 
 # All name forms for a place (simplified, traditional, pinyin)
 python3 scripts/query_tgaz.py --spellings hvd_70621
@@ -98,6 +108,19 @@ python3 scripts/query_tgaz.py --stats
 # Raw SQL (read-only; must start with SELECT or WITH)
 python3 scripts/query_tgaz.py --sql "SELECT name, transcription, beg_yr, end_yr FROM mv_pn_srch WHERE ftype_tr = 'fu' AND beg_yr <= 1400 AND end_yr >= 1400 ORDER BY name"
 ```
+
+### How name search works
+
+- It matches the **start** of a name. `苏州` finds 苏州 and 苏州府.
+- It looks in the simplified name, the romanized name, and every form in the
+  `spelling` table. So `蘇州` (traditional) works as well as `苏州`.
+- Romanized input ignores case, spaces and apostrophes. TGAZ writes some
+  names with a space and others without: 苏州 (589-1112) is "Su Zhou",
+  苏州府 (from 1367) is "Suzhou Fu". It also mixes "Changan" and "Chang'an". `suzhou` finds all of them.
+- If nothing matches, the CLI tries full-text search. It prints a note
+  to stderr when it does this. `--year` and `--feature-type` still apply.
+- With `--year`, the `parent_*` columns show the parent **in that year**
+  (from `part_of`). Without `--year`, they show the earliest parent only.
 
 ## When to Use SQL Directly
 
@@ -121,9 +144,13 @@ This pre-joined table has everything for 90% of queries:
 | `x_coord` / `y_coord` | Longitude / Latitude (as TEXT, cast to REAL for math) |
 | `ftype_vn` | Feature type in Chinese (e.g., 县) |
 | `ftype_tr` | Feature type romanized (e.g., xian) |
-| `parent_sys_id` | Parent jurisdiction ID |
-| `parent_vn` / `parent_tr` | Parent name (Chinese / romanized) |
+| `parent_sys_id` | Parent jurisdiction ID (the **earliest** parent only) |
+| `parent_vn` / `parent_tr` | Parent name (Chinese / romanized), earliest parent only |
 | `data_src` | Source code (CHGIS, TBRC, HGR) |
+
+For the parent in a given year, use `part_of` (it has `begin_year` and
+`end_year`). Example: 杭州府 (hvd_32337) has 江南行省 in `mv_pn_srch`, but in
+1600 its parent was 浙江布政使司 (hvd_30037).
 
 ### Other key tables
 
@@ -169,6 +196,22 @@ This pre-joined table has everything for 90% of queries:
     `gun`, `uezd`; `prefecture` → `zhou`, `fu`, `di qu`, `ken`. `--fts`
     does the same when the plain query finds nothing, since only the TGAZ
     terms are indexed. In raw SQL, use the TGAZ terms.
+
+## Data Cautions
+
+Measured in the 2026-03-25 release of `tgaz.db` (on 2026-10-26):
+
+- **Broken coordinates.** 6,004 rows are `obj_type = 'POLYGON'`. Almost all
+  of them (6,003) have longitude 0 or near 0, and 1,099 also have latitude
+  0. They repeat a place that also has a POINT row with good coordinates
+  (for example hvd_90239 repeats 苏州 hvd_32071). 122 other rows also have
+  longitude 0 (most are 0,0). In all, 6,125 rows are affected.
+  On a map these land near Africa. The CLI adds a `bad_coords` column
+  (1 = broken) and `--good-coords` drops those rows. In SQL, add
+  `AND ABS(CAST(x_coord AS REAL)) >= 10 AND CAST(y_coord AS REAL) <> 0`.
+- **End year before begin year.** 251 rows have `end_yr < beg_yr`, for
+  example hvd_112536 吴郡 runs from 129 to 0. Year filters skip them.
+- **Earliest parent only** in `mv_pn_srch`; see above.
 
 ## Common Query Patterns
 
@@ -251,15 +294,6 @@ When answering user questions about historical places:
 4. **Use both Chinese and romanized names** — e.g., "长安县 (Chang'an Xian)."
 5. **Mention modern location** when relevant — use `--history` or `present_loc` table.
 6. **For JSON output to feed into other tools**, use `--format json` or `--format jsonl`.
-
-## Inside the Ming research suite
-
-When working in `ming-qing-research-suite`, the `sino-authorities` MCP
-server (`sino_authorities/` in that repo) is the preferred route for
-resolution: name to id, id to record, era date to JDN. It reads the same
-database as this skill and returns the federation's `pack {corpus,
-pack_version, build_hash}` envelope. Use this skill for exploration:
-graphs, exports, bounding boxes, raw SQL.
 
 ## Feedback and Citation
 

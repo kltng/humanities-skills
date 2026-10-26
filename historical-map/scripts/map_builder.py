@@ -7,6 +7,7 @@ overlays, and layer controls. All loaded from CDN — no server needed.
 """
 
 import json
+import warnings
 from typing import Any, Optional
 
 
@@ -17,11 +18,16 @@ _LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 _LEAFLET_CSS_SRI = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
 _LEAFLET_JS_SRI = "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
 
-# Pre-configured basemap tile URLs
+# Pre-configured basemap tile URLs.
+# Tested 2026-10-26: only "osm" works without an account. CARTO tiles show
+# "API KEY REQUIRED" on every tile, and Stadia answers 401 to a map opened
+# as a local file. Those entries have "needs_key": True.
+DEFAULT_BASEMAP = "osm"
+
 BASEMAPS = {
     "osm": {
         "name": "OpenStreetMap",
-        "url": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         "attribution": '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         "max_zoom": 19,
     },
@@ -30,25 +36,50 @@ BASEMAPS = {
         "url": "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg",
         "attribution": '&copy; <a href="https://stadiamaps.com/">Stadia</a> &copy; <a href="https://stamen.com/">Stamen</a>',
         "max_zoom": 16,
+        "needs_key": True,
     },
     "toner_lite": {
         "name": "Stamen Toner Lite",
         "url": "https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}.png",
         "attribution": '&copy; <a href="https://stadiamaps.com/">Stadia</a> &copy; <a href="https://stamen.com/">Stamen</a>',
         "max_zoom": 20,
+        "needs_key": True,
     },
     "carto_light": {
         "name": "CartoDB Positron",
         "url": "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
         "attribution": '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         "max_zoom": 20,
+        "needs_key": True,
     },
     "carto_dark": {
         "name": "CartoDB Dark Matter",
         "url": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         "attribution": '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         "max_zoom": 20,
+        "needs_key": True,
     },
+}
+
+# Academia Sinica CCTS layers drawn from Tan Qixiang's Historical Atlas of
+# China (谭其骧《中国历史地图集》). IDs from the WMTS capabilities file; all are
+# PNG tiles on the Google/XYZ grid. Checked 2026-10-26.
+SINICA_TILE_URL = "https://gis.sinica.edu.tw/ccts/file-exists.php?img={layer}-png-{{z}}-{{x}}-{{y}}"
+SINICA_LAYERS = {
+    "bc0210": "Qin (秦代歷史地圖)",
+    "bc0007": "Western Han (西漢歷史地圖)",
+    "ad0140": "Eastern Han (東漢歷史地圖)",
+    "ad0262": "Three Kingdoms (三國歷史地圖)",
+    "ad0281": "Western Jin (西晉歷史地圖)",
+    "ad0382": "Eastern Jin (東晉歷史地圖)",
+    "ad0497": "Southern and Northern Dynasties (南北朝歷史地圖)",
+    "ad0612": "Sui (隋代歷史地圖)",
+    "ad0741": "Tang (唐代歷史地圖)",
+    "ad1111": "Northern Song (北宋歷史地圖)",
+    "ad1208": "Southern Song (南宋歷史地圖)",
+    "ad1330": "Yuan (元代歷史地圖)",
+    "ad1582": "Ming (明代歷史地圖)",
+    "ad1820": "Qing (清代歷史地圖)",
 }
 
 # Historical boundary GeoJSON URLs (aourednik/historical-basemaps)
@@ -112,7 +143,7 @@ class HistoricalMapBuilder:
         title: str = "Historical Map",
         center: tuple[float, float] = (35.0, 105.0),
         zoom: int = 5,
-        basemap: str = "carto_light",
+        basemap: str = DEFAULT_BASEMAP,
     ) -> None:
         self.title = title
         # Cast now: these are written into the page as raw JS numbers, so a
@@ -120,6 +151,13 @@ class HistoricalMapBuilder:
         self.center = (float(center[0]), float(center[1]))
         self.zoom = int(zoom)
         self.basemap = basemap
+        if BASEMAPS.get(basemap, {}).get("needs_key"):
+            warnings.warn(
+                f"Basemap {basemap!r} needs an API key or a registered domain; "
+                "without one its tiles fail (CARTO shows 'API KEY REQUIRED', "
+                "Stadia returns 401). Use basemap='osm' unless you have a key.",
+                stacklevel=2,
+            )
 
         self._markers: list[dict[str, Any]] = []
         self._geojson_layers: list[dict[str, Any]] = []
@@ -162,6 +200,15 @@ class HistoricalMapBuilder:
         group : str, optional
             Layer group name (for layer control toggle).
         """
+        if float(lat) == 0.0 or float(lng) == 0.0:
+            # TGAZ (chgis-tgaz, tgaz-sqlite) has thousands of POLYGON
+            # duplicates with longitude 0; they would land near Africa.
+            warnings.warn(
+                f"Marker {label!r} has latitude or longitude 0 ({lat}, {lng}). "
+                "If it came from TGAZ, it is probably a POLYGON duplicate with a "
+                "broken longitude; use the POINT record of the same place.",
+                stacklevel=2,
+            )
         self._markers.append({
             "lat": float(lat),
             "lng": float(lng),
@@ -315,6 +362,33 @@ class HistoricalMapBuilder:
             "opacity": float(opacity),
             "overlay": overlay,
         })
+        return self
+
+    def add_sinica_layer(
+        self,
+        layer_id: str,
+        name: Optional[str] = None,
+        *,
+        opacity: float = 0.7,
+    ) -> "HistoricalMapBuilder":
+        """Add an Academia Sinica historical atlas layer (WMTS, XYZ grid).
+
+        Parameters
+        ----------
+        layer_id : str
+            A key of ``SINICA_LAYERS`` (e.g. ``"ad1582"`` for the Ming atlas),
+            or any other PNG layer ID from the CCTS capabilities file.
+        name : str, optional
+            Layer name. Defaults to the ``SINICA_LAYERS`` label.
+        opacity : float
+            Layer opacity (0–1).
+        """
+        self.add_tile_layer(
+            SINICA_TILE_URL.format(layer=layer_id),
+            name or SINICA_LAYERS.get(layer_id, layer_id),
+            attribution='<a href="https://gis.sinica.edu.tw/ccts/">Academia Sinica CCTS</a>',
+            opacity=opacity,
+        )
         return self
 
     def add_mapwarper_layer(
@@ -695,7 +769,7 @@ def main() -> None:
         title="Silk Road: Key Cities & Han Dynasty Boundaries",
         center=(35.0, 80.0),
         zoom=4,
-        basemap="carto_light",
+        basemap="osm",
     )
 
     # Historical boundaries — Han dynasty era (100 CE)

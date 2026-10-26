@@ -1,7 +1,7 @@
 ---
 name: argue-against-me
 description: Structured academic debate — Claude adopts an opposing position (from named historiographical schools or disciplinary counter-positions) and challenges your thesis through formal rounds with adjustable intensity. Produces a scorecard, revised thesis, and bibliography gap analysis. Use when stress-testing arguments, preparing for peer review, or strengthening a thesis before publication.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -28,8 +28,10 @@ All arguments are optional.
 | Argument | Values | Default |
 |----------|--------|---------|
 | `intensity` | `gentle`, `firm`, `ruthless` | `firm` |
-| `rounds` | any integer | `3` |
+| `rounds` | integer from 1 to 10 | `3` |
 | `school` | free text (e.g., "revisionist", "Marxist historiography", "postcolonial") | auto-selected: strongest opposing tradition for humanities; strongest disciplinary counter-position otherwise |
+
+If the user asks for more than 10 rounds, use 10 and say so. Long debates repeat themselves; it is better to `resolve` and start a new debate with a different `school`.
 
 ### Intensity Levels
 
@@ -40,6 +42,8 @@ All arguments are optional.
 **ruthless** — Assumes nothing is established. Attacks everything including framing, definitions, periodization, and unstated assumptions. Use when preparing for hostile peer review or defending a controversial thesis.
 
 ## How It Works
+
+**This skill is interactive.** Each round waits for the user's reply. It does not work as a one-shot headless job (for example `claude -p`). In that case, give only the Round 1 attack and say that the debate needs a live session.
 
 ### Starting a Debate
 
@@ -71,7 +75,7 @@ Round N of M
 
 At any point during the debate, you can say:
 
-- **extend** — add more rounds beyond the original count
+- **extend** — add more rounds beyond the original count (up to 10 rounds in total)
 - **resolve** — end the debate early and skip to the closing output
 - **concede [point]** — acknowledge a specific point to narrow the remaining debate
 
@@ -110,11 +114,23 @@ Specific suggestions for strengthening your argument:
 - Primary sources that could fill evidentiary gaps
 - Methodological frameworks that could shore up weak points
 - Where relevant, suggests using other skills to find sources:
-  - Library catalogs (Columbia CLIO, Harvard, HathiTrust, LOC, NLB Singapore)
+  - Articles and DOIs: **crossref-search**, **openaire-search** (better for CJK titles, theses, and repository copies)
+  - Library catalogs (Harvard, HathiTrust, LOC, alma-sru-catalogs, NLB Singapore)
   - Biographical databases (CBDB, JBDB)
   - Wikidata for linked data and identifiers
   - arXiv for relevant preprints
   - Zotero for managing found references
+
+#### Verify Every Suggested Source
+
+Do not list a reference you have not checked. Model memory can produce titles that look right but do not exist, or that have the wrong year or journal.
+
+1. For each article or chapter, run crossref-search `match` with the full reference, then compare title, authors, year, and journal. Add the DOI when it matches.
+2. If Crossref has nothing (common for Chinese, Japanese, and Korean titles), try openaire-search with a quoted title phrase, or the English title form.
+3. For books, check a library catalog (harvard-library-catalog, loc-catalog, alma-sru-catalogs).
+4. Mark each item **verified** (with DOI or catalog link) or **unverified**. Drop an unverified item, or say clearly that it could not be checked. Never invent page numbers or DOIs.
+
+If none of these skills is installed, say that the list is unverified.
 
 ## Best Practices
 

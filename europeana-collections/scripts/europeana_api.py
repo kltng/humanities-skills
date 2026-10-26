@@ -97,50 +97,27 @@ class EuropeanaAPI:
             start: Start offset (1-based)
             profile: Response detail: minimal, standard, rich
         """
-        params = {
-            "query": query,
-            "wskey": self._api_key,
-            "rows": str(rows),
-            "start": str(start),
-            "profile": profile,
-        }
+        items, _ = self.search_with_count(
+            query, type=type, country=country, language=language,
+            provider=provider, data_provider=data_provider,
+            reusability=reusability, media=media,
+            rows=rows, start=start, profile=profile,
+        )
+        return items
 
-        qf_parts = []
-        if type:
-            if type.upper() not in VALID_TYPES:
-                raise ValueError(f"Invalid type: {type}. Must be one of {VALID_TYPES}")
-            qf_parts.append(f"TYPE:{type.upper()}")
-        if country:
-            qf_parts.append(f"COUNTRY:{country}")
-        if language:
-            qf_parts.append(f"LANGUAGE:{language}")
-        if provider:
-            qf_parts.append(f"PROVIDER:{provider}")
-        if data_provider:
-            qf_parts.append(f"DATA_PROVIDER:{data_provider}")
+    @staticmethod
+    def _qf(field: str, value: str) -> str:
+        """Build one qf filter. The value is always put in double quotes, so
+        multi-word values such as "United Kingdom" match the whole phrase.
+        Without quotes Europeana reads COUNTRY:United Kingdom as COUNTRY:United
+        plus a free word "Kingdom", and returns 0 results."""
+        value = str(value).strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]  # caller already quoted it
+        value = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'{field}:"{value}"'
 
-        if reusability:
-            if reusability not in VALID_REUSABILITY:
-                raise ValueError(f"Invalid reusability: {reusability}")
-            params["reusability"] = reusability
-        if media is not None:
-            params["media"] = "true" if media else "false"
-
-        # Build URL
-        qs = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-        for qf in qf_parts:
-            qs += f"&qf={urllib.parse.quote(qf, safe=':')}"
-
-        url = f"{BASE_URL}/search.json?{qs}"
-        data = self._get_json(url)
-
-        if not data.get("success"):
-            raise RuntimeError(f"Europeana API error: {data.get('error', 'unknown')}")
-
-        return data.get("items", [])
-
-    def search_with_count(self, query: str, **kwargs) -> tuple:
-        """Search and return (items, total_count)."""
+    def _search_url(self, query: str, **kwargs: Any) -> str:
         params = {
             "query": query,
             "wskey": self._api_key,
@@ -157,7 +134,7 @@ class EuropeanaAPI:
                     val = val.upper()
                     if val not in VALID_TYPES:
                         raise ValueError(f"Invalid type: {val}. Must be one of {VALID_TYPES}")
-                qf_parts.append(f"{key.upper()}:{val}")
+                qf_parts.append(self._qf(key.upper(), val))
 
         if kwargs.get("reusability"):
             if kwargs["reusability"] not in VALID_REUSABILITY:
@@ -169,9 +146,12 @@ class EuropeanaAPI:
         qs = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
         for qf in qf_parts:
             qs += f"&qf={urllib.parse.quote(qf, safe=':')}"
+        return f"{BASE_URL}/search.json?{qs}"
 
-        url = f"{BASE_URL}/search.json?{qs}"
-        data = self._get_json(url)
+    def search_with_count(self, query: str, **kwargs: Any) -> tuple:
+        """Search and return (items, total_count). Takes the same keyword
+        arguments as search()."""
+        data = self._get_json(self._search_url(query, **kwargs))
         if not data.get("success"):
             raise RuntimeError(f"Europeana API error: {data.get('error', 'unknown')}")
         return data.get("items", []), data.get("totalResults", 0)

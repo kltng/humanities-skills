@@ -1,7 +1,7 @@
 ---
 name: harvard-library-catalog
 description: Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO. Use this skill whenever the user wants to look up books, manuscripts, finding aids, or other items in Harvard's library catalog, verify bibliographic information (title, author, ISBN, publication date), find digital collections, or retrieve detailed catalog records. Also triggers when a user extracts a book title from a document and wants to find its full bibliographic metadata.
-version: 1.0.2
+version: 1.0.3
 ---
 
 # Harvard Library API Skill
@@ -21,21 +21,41 @@ WRONG:     https://api.lib.harvard.edu/v2/items?q=title:hamlet
 
 The `q=` parameter is for **keyword search across all fields**. Field-specific search uses dedicated parameters like `title=`, `name=`, `subject=`, `identifier=`, etc.
 
-### Quote phrases: unquoted words are ORed
+### Search CJK and romanized titles differently
 
-Field searches match **any** word, and CJK text is split into single characters. Put multi-word and CJK terms in double quotes (October 2026 counts):
+Field searches treat CJK text and romanized (pinyin, Hepburn, etc.) text differently. Counts below were measured on 26 October 2026.
+
+**CJK: put the term in double quotes.** Unquoted CJK is split into single characters and any character can match.
 
 | Query | Results |
 |---|---|
+| `title=天工開物` | 88,962 (noise) |
+| `title="天工開物"` | 16 (all relevant) |
 | `title=文廟` | 168,900 (top hit is a book on 聖母廟) |
 | `title="文廟"` | 47 |
-| `title=wen miao` | 478 |
-| `title="wen miao"` | 19 |
+
+A quoted CJK term also matches inside longer words: `title="明史"` (700) finds 日本文明史 too. Check the titles you get back.
+
+**Romanized words: do not quote them.** Plain words are already ANDed (all words must appear, in any order). Quoted pinyin phrases of three or more syllables return 0, and two-syllable quotes match across word breaks (`"wen miao"` finds *Shen Congwen miao yu lu*).
+
+| Query | Results |
+|---|---|
+| `title=tian gong kai wu` (same as `tian AND gong AND kai AND wu`) | 22 |
+| `title_exact=Tian gong kai wu` (the words as one phrase) | 5 |
+| `title="tian gong kai wu"` | 0 |
+| `title="si ku quan shu"` / `title="Hui zhou fu zhi"` | 0 / 0 |
+| `title=Hui zhou fu zhi` | 48 (loose: any title with all four syllables) |
+| `title="great gatsby"` | 0 |
+| `title=great gatsby` / `title_exact=great Gatsby` | 116 / 16 |
+
+So: for a known Chinese, Japanese or Korean title, search the original script in quotes first. With only a romanized title, use plain words, then `title_exact` to narrow. Pinyin syllables are ambiguous, so check the original-script title of each hit (`get_title()` shows it, see below).
 
 For subject headings, use `subject_exact` with the heading as written, without quotes: `subject_exact=Temples, Confucian` → 65 (`subject=Temples, Confucian` → 176 loose matches; `subject="Temples, Confucian"` → 0).
 
 ```python
-api.search(title='"文廟"')                       # the quotes are part of the value
+api.search(title='"文廟"')                       # CJK: the quotes are part of the value
+api.search(title="tian gong kai wu")             # romanized: no quotes
+api.search(title_exact="Tian gong kai wu")       # romanized phrase
 api.search(subject_exact="Temples, Confucian")
 ```
 
@@ -47,6 +67,17 @@ LibraryCloud converts MODS XML to JSON, so the same field takes different shapes
 from scripts.harvard_api import mods_text
 mods_text(record["titleInfo"][0].get("subTitle"))   # '8 juan'
 ```
+
+### Original-script titles
+
+For CJK and other non-Latin books, `titleInfo` is a list. The romanized title and the original-script title share one `@altRepGroup`:
+
+```
+[{"@altRepGroup": "02", "title": "Tian gong kai wu", "subTitle": "3 juan"},
+ {"@altRepGroup": "02", "title": "天工開物", "subTitle": "三卷"}]
+```
+
+`get_title()` shows both, original script first: `天工開物 : 三卷 (Tian gong kai wu : 3 juan)`. `get_title(record, original=False)` gives only the romanized form. `get_original_title()` gives only the original script (empty if there is none). `summarize()` returns `title`, `title_romanized` and `title_original`.
 
 ### JSON requires `.json` in the URL path
 
@@ -109,7 +140,7 @@ results = api.search(title="The Great Gatsby", name="Fitzgerald")
 # 2. Get the first match's summary
 if results:
     summary = api.summarize(results[0])
-    # → title, author, publisher, date, ISBN, subjects, language, physical description
+    # → title (original script + romanized), author, publisher, date, ISBN, subjects, language, physical description
 
 # 3. For deeper data, get MARC via PRESTO
 hollis_id = api.get_record_id(results[0])

@@ -44,7 +44,7 @@ Each row represents one lunar month within an era.
 | `last_jdn` | INTEGER | JDN of last day of month |
 | `ganzhi` | TEXT | Sexagenary year designation (e.g., 庚午) |
 | `start_from` | INTEGER | Day numbering start (usually 1) |
-| `status` | TEXT | `'S'` standard, `'P'` proleptic |
+| `status` | TEXT | `'S'` standard; `'P'` = era counted on after its official end (e.g. 崇禎 after 1644-04-25, used by Ming loyalists and Joseon Korea). The converter shows this as `continued_use`. |
 | `eclipse` | INTEGER | Eclipse flag |
 
 ### `era_summary` (view)
@@ -127,7 +127,7 @@ ORDER BY start_jdn;
 |---|---|---|
 | 4713 BCE Jan 1 (Julian) | 0 | JDN epoch |
 | 1582 Oct 15 (Gregorian) | 2,299,161 | Gregorian reform |
-| 1644 Mar 19 (Gregorian) | 2,321,597 | Fall of Ming |
+| 1644 Apr 25 (Gregorian) | 2,321,634 | 崇禎十七年三月十九日, fall of Beijing (the lunar date is 三月十九日) |
 | 1868 Oct 23 (Gregorian) | 2,403,629 | Meiji era proclaimed (first Meiji month row in the DB) |
 
 ## Day Counting

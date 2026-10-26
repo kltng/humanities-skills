@@ -202,6 +202,7 @@ class PrincetonCatalogAPI:
         start: int = 1,
         raw: bool = False,
         phrase: bool = False,
+        known_dates: bool = False,
         **fields: Optional[str],
     ) -> Dict[str, Any]:
         """
@@ -209,7 +210,8 @@ class PrincetonCatalogAPI:
 
         Args:
             cql: Raw CQL query (optional; combined with any field arguments)
-            sort: date_desc, date_asc, title, or author (default: relevance)
+            sort: date_desc, date_asc, title, or author (default: the server's
+                  own order, which is not relevance ranking)
             limit: Records to return (1–50)
             start: 1-based position of the first record
             raw: If True, records are MARC dicts instead of summaries
@@ -217,11 +219,16 @@ class PrincetonCatalogAPI:
                     connected phrase (SRU `=` matches the words anywhere).
                     `total` stays the server's count; `returned` is the page
                     size before filtering.
+            known_dates: Drop records whose year (MARC 008) is not four
+                    digits, such as `####`, `19uu`, or blank. Alma still
+                    lets these pass date filters and sorts them first.
             **fields: keyword, title, author, subject, isbn, issn, oclc, lccn,
                       publisher, series, call_number, language, mms_id
         """
         if phrase and (raw or not fields.get("title")):
             raise ValueError("phrase=True needs a title search and summary records (raw=False)")
+        if known_dates and raw:
+            raise ValueError("known_dates=True needs summary records (raw=False)")
         query = self.build_cql(cql=cql, sort=sort, **fields)
         params = {
             "version": "1.2",
@@ -240,6 +247,8 @@ class PrincetonCatalogAPI:
         returned = len(records)
         if phrase:
             records = [r for r in records if title_matches(r, fields["title"])]
+        if known_dates:
+            records = [r for r in records if has_known_year(r)]
         return {"total": total, "start": start, "query": query, "returned": returned, "records": records}
 
     def search_all(self, max_results: int = 100, **kwargs: Any) -> List[Dict[str, Any]]:
@@ -252,8 +261,9 @@ class PrincetonCatalogAPI:
         records: List[Dict[str, Any]] = []
         start = 1
         while len(records) < max_results:
-            # with phrase filtering, fetch full pages because some records are dropped
-            size = MAX_PAGE_SIZE if kwargs.get("phrase") else min(MAX_PAGE_SIZE, max_results - len(records))
+            # with filtering, fetch full pages because some records are dropped
+            filtering = kwargs.get("phrase") or kwargs.get("known_dates")
+            size = MAX_PAGE_SIZE if filtering else min(MAX_PAGE_SIZE, max_results - len(records))
             try:
                 page = self.search(limit=size, start=start, **kwargs)
             except (SRUError, ET.ParseError) + NETWORK_ERRORS as e:
@@ -343,8 +353,12 @@ def _display(items: List[Dict[str, str]]) -> str:
     if not items:
         return ""
     first = items[0]
-    if first.get("vernacular"):
-        return f"{first['vernacular']} ({first['romanized']})"
+    vern = first.get("vernacular")
+    if vern:
+        # Some libraries (e.g. NTU) already put the romanized form inside the 880 field
+        if _normalize(first["romanized"]) in _normalize(vern):
+            return " ".join(vern.split())
+        return f"{vern} ({first['romanized']})"
     return first["romanized"]
 
 
@@ -373,6 +387,11 @@ def title_matches(record: Dict[str, Any], term: str) -> bool:
             if not cjk and f" {needle} " in f" {hay} ":
                 return True
     return False
+
+
+def has_known_year(record: Dict[str, Any]) -> bool:
+    """True if the summary's year is four digits (not `####`, `19uu`, or blank)."""
+    return bool(re.fullmatch(r"\d{4}", record.get("year", "")))
 
 
 def holdings(marc: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
@@ -409,15 +428,29 @@ SUBJECT_SOURCES = {"0": "lcsh", "1": "lcshac", "2": "mesh", "3": "nal", "5": "ca
 CLASS_TAGS = {"050": "lcc", "060": "nlm", "080": "udc", "082": "ddc", "084": ""}
 
 
+# Subfields that belong to the main heading (name, dates, title, parts); only
+# $v $x $y $z are subdivisions joined with " -- ".
+HEADING_CODES = "abcdfgklmnopqrst"
+SUBDIVISION_CODES = "vxyz"
+
+
+def _heading(field: Dict[str, Any]) -> str:
+    """'Song, Yingxing, 1587-approximately 1666. Tian gong kai wu -- Criticism' style."""
+    main = " ".join(v.strip() for c, v in field["subfields"] if c in HEADING_CODES and v.strip())
+    parts = [main.rstrip(" ,.:;")] if main else []
+    parts += [v.strip().rstrip(" .") for c, v in field["subfields"] if c in SUBDIVISION_CODES and v.strip()]
+    return " -- ".join(p for p in parts if p)
+
+
 def subject_headings(marc: Dict[str, Any]) -> List[Dict[str, str]]:
     """Subject headings with their vocabulary (lcsh, csht, fast, ...)."""
     out = []
     for f in _fields(marc, "600", "610", "611", "630", "648", "650", "651", "655"):
-        parts = [v.strip(" .") for c, v in f["subfields"] if c in "abcdtvxyz" and v.strip()]
-        if not parts:
+        heading = _heading(f)
+        if not heading:
             continue
         source = SUBJECT_SOURCES.get(f["ind2"]) or next(iter(_sub(f, "2")), "") or "unspecified"
-        out.append({"heading": " -- ".join(parts), "source": source, "tag": f["tag"]})
+        out.append({"heading": heading, "source": source, "tag": f["tag"]})
     return out
 
 
@@ -445,11 +478,7 @@ def summarize(marc: Dict[str, Any]) -> Dict[str, Any]:
     edition = _paired(marc, ("250",), "ab")
     series = _paired(marc, ("490", "830"), "av")
 
-    subjects = []
-    for f in _fields(marc, "600", "610", "611", "630", "650", "651"):
-        parts = [v.strip(" .") for c, v in f["subfields"] if c in "abcdtvxyz" and v.strip()]
-        if parts:
-            subjects.append(" -- ".join(parts))
+    subjects = [h for h in (_heading(f) for f in _fields(marc, "600", "610", "611", "630", "650", "651")) if h]
 
     oclc = []
     for f in _fields(marc, "035"):
@@ -511,6 +540,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--limit", type=int, default=10)
     s.add_argument("--start", type=int, default=1)
     s.add_argument("--phrase", action="store_true", help="Keep only titles containing --title as one connected phrase")
+    s.add_argument("--known-dates", action="store_true",
+                   help="Drop records whose year is a placeholder such as #### or 19uu")
     s.add_argument("--json", action="store_true", help="Print JSON instead of a short list")
 
     r = sub.add_parser("record", help="Fetch one record by MMS ID")
@@ -524,13 +555,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "search":
         fields = {name: getattr(args, name) for name in FIELD_INDEXES}
         result = api.search(cql=args.cql, sort=args.sort, limit=args.limit, start=args.start,
-                            phrase=args.phrase, **fields)
+                            phrase=args.phrase, known_dates=args.known_dates, **fields)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             shown = result["returned"]
-            if args.phrase:
-                print(f"{len(result['records'])} of {shown} records on this page contain the phrase")
+            if args.phrase or args.known_dates:
+                print(f"{len(result['records'])} of {shown} records on this page passed the filter")
             if shown:
                 print(f"{result['total']} results (showing {args.start}–{args.start + shown - 1})\n")
             else:

@@ -55,7 +55,7 @@ Quirks:
 - `cursor` with a date sort fails: `Sorting by [issued, published, published-print, published-online] is not supported when using a cursor`.
 - `offset=10000` fails: `offset must be ... less than or equal to 9997. Use the cursor parameter`.
 - Words are ORed. `total-results` counts every loose match (330,847 for "Ming dynasty examination").
-- CJK text is matched by single characters.
+- CJK text is matched by single characters, so recall for CJK terms is poor and can be zero (see SKILL.md, "CJK searches"). Many CJK titles are only in `alternate_titles`; search the English title form as well.
 
 ## Useful filters
 

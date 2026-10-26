@@ -87,6 +87,24 @@ class CBDBAPITest(unittest.TestCase):
         self.assertIn("## Social Associations (2 records)", summary)
         self.assertIn("- 歐陽修 (黨魁為Y)", summary)
 
+    def test_summary_says_when_lists_are_cut(self):
+        posts = [{"OfficeName": f"官{i}", "FirstYear": "1100"} for i in range(25)]
+        person = {"BasicInfo": {"ChName": "某"}, "PersonPostings": {"Posting": posts}}
+        summary = self.api.summarize(person)
+        self.assertIn("## Official Positions (25 records, first 20 shown)", summary)
+        self.assertIn("- ... and 5 more", summary)
+        full = self.api.summarize(person, max_items=None)
+        self.assertIn("## Official Positions (25 records)", full)
+        self.assertIn("- 官24 (1100)", full)
+        self.assertNotIn("more", full)
+
+    def test_name_match(self):
+        """Issue #25: tell primary-name hits from alt-name hits."""
+        self.assertEqual(self.api.name_match(CURRENT_SCHEMA_PERSON, "蘇軾"), "primary")
+        self.assertEqual(self.api.name_match(CURRENT_SCHEMA_PERSON, "su shi"), "primary")
+        self.assertEqual(self.api.name_match(CURRENT_SCHEMA_PERSON, "子瞻"), "alias")
+        self.assertEqual(self.api.name_match(CURRENT_SCHEMA_PERSON, "東坡"), "other")
+
 
 if __name__ == "__main__":
     unittest.main()

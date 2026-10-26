@@ -1,3 +1,4 @@
+import contextlib
 import io
 import json
 import sys
@@ -192,6 +193,45 @@ class NetworkRetryTest(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             TimdexAPI(min_interval=0).query("{ ping }")
         self.assertEqual(len(calls), self.module.MAX_ATTEMPTS)
+
+
+class CliTest(unittest.TestCase):
+    """Issue #24: the CLI --limit default matches the Python default (20)."""
+
+    def setUp(self):
+        self._search = TimdexAPI.search
+        self.calls = []
+
+        def fake_search(api, searchterm=None, **kwargs):
+            self.calls.append(kwargs)
+            return {"total": 0, "start": 0, "returned": 0, "records": []}
+
+        TimdexAPI.search = fake_search
+
+    def tearDown(self):
+        TimdexAPI.search = self._search
+
+    def run_main(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = timdex_api.main(list(argv))
+        return code, out.getvalue()
+
+    def test_limit_default_is_20(self):
+        import inspect
+        self.assertEqual(inspect.signature(self._search).parameters["limit"].default, 20)
+        self.run_main("search", "明史")
+        self.assertEqual(self.calls[-1]["limit"], 20)
+        self.run_main("search", "明史", "--limit", "5")
+        self.assertEqual(self.calls[-1]["limit"], 5)
+
+    def test_filter_only_search_is_a_clean_error(self):
+        TimdexAPI.search = self._search  # the real method raises ValueError before any request
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+            timdex_api.main(["search", "--source", "MIT Alma"])
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Give search words", err.getvalue())
 
 
 if __name__ == "__main__":

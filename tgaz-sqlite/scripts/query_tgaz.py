@@ -67,7 +67,34 @@ def resolve_db(explicit=None):
     sys.exit(f"Error: tgaz.db not found. Looked in:\n{looked}\n\n{DOWNLOAD_HINT}")
 
 
+LFS_POINTER_PREFIX = b"version https://git-lfs"
+SQLITE_HEADER = b"SQLite format 3\x00"
+
+
+def check_db_file(db_path):
+    """Exit with a clear message when the file is not a SQLite database.
+
+    A clone made without git-lfs leaves a small text "pointer" file in place
+    of the 228 MB database. SQLite would only say "file is not a database".
+    """
+    try:
+        with open(db_path, "rb") as f:
+            head = f.read(64)
+    except OSError as e:
+        sys.exit(f"Error: cannot read {db_path}: {e}")
+    if head.startswith(LFS_POINTER_PREFIX):
+        sys.exit(
+            f"Error: {db_path} is a Git LFS pointer file, not the database.\n"
+            "The real file was not downloaded (git-lfs was missing, or the LFS\n"
+            "quota was used up). Install git-lfs and run `git lfs pull` in that\n"
+            f"clone, or download it again.\n\n{DOWNLOAD_HINT}"
+        )
+    if not head.startswith(SQLITE_HEADER):
+        sys.exit(f"Error: {db_path} is not a SQLite database.\n\n{DOWNLOAD_HINT}")
+
+
 def get_conn(db_path):
+    check_db_file(db_path)
     # as_uri() percent-encodes '?', '#' and '%' so odd paths still open read-only.
     conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
@@ -103,19 +130,41 @@ def english_feature_terms(conn, word):
     return [r["name_tr"] for r in rows]
 
 
-def _feature_type_filter(conn, feature_type):
+def _feature_type_filter(conn, feature_type, prefix=""):
     """SQL clause and params for --feature-type.
 
     English types match their TGAZ terms exactly; anything else (xian, 县)
-    keeps the substring match.
+    keeps the substring match. `prefix` is a table alias such as "m.".
     """
     terms = english_feature_terms(conn, feature_type)
     if terms:
         marks = ", ".join("?" * len(terms))
-        return f" AND LOWER(ftype_tr) IN ({marks})", [t.lower() for t in terms]
+        return f" AND LOWER({prefix}ftype_tr) IN ({marks})", [t.lower() for t in terms]
     ft = _like_escape(feature_type)
-    return (" AND (ftype_tr LIKE ? ESCAPE '\\' OR ftype_vn LIKE ? ESCAPE '\\')",
+    return (f" AND ({prefix}ftype_tr LIKE ? ESCAPE '\\' OR {prefix}ftype_vn LIKE ? ESCAPE '\\')",
             [f"%{ft}%", f"%{ft}%"])
+
+
+def bad_coords_sql(prefix=""):
+    """SQL test for coordinates that cannot be right.
+
+    About 6,000 POLYGON rows (many with hvd_90xxx ids) repeat a place that
+    also has a POINT row, but their longitude is 0 (a few have 1-5). About
+    120 other rows are 0,0. On a map these land near Africa. No real TGAZ
+    place is within 10 degrees of longitude 0.
+    """
+    return (f"(ABS(CAST({prefix}x_coord AS REAL)) < 10"
+            f" OR CAST({prefix}y_coord AS REAL) = 0)")
+
+
+def _year_filter(year, prefix=""):
+    if year is None:
+        return "", []
+    return f" AND {prefix}beg_yr <= ? AND {prefix}end_yr >= ?", [year, year]
+
+
+def _coords_filter(good_coords, prefix=""):
+    return f" AND NOT {bad_coords_sql(prefix)}" if good_coords else ""
 
 
 def _expand_feature_words(conn, query):
@@ -141,101 +190,208 @@ def _expand_feature_words(conn, query):
     return " ".join(words) if changed else None
 
 
-def search_fts(conn, query, limit=50):
+def search_fts(conn, query, limit=50, year=None, feature_type=None, good_coords=False):
     """Full-text search across names, transcriptions, feature types.
 
     The query is tried as FTS5 syntax first (so AND/OR/NEAR/prefix* work).
     If that is a syntax error, it is retried as plain quoted words. If it
     finds nothing, English feature words ("county") are retried as TGAZ
-    terms ("xian"), since only the TGAZ terms are indexed.
+    terms ("xian"), since only the TGAZ terms are indexed. The year,
+    feature-type and coordinate filters apply to every try.
     """
+    filters = (year, feature_type, good_coords)
     try:
-        rows = _search_fts(conn, query, limit)
+        rows = _search_fts(conn, query, limit, *filters)
     except sqlite3.OperationalError:
         query = _fts_phrase(query)
         if not query:
             return []
-        rows = _search_fts(conn, query, limit)
+        rows = _search_fts(conn, query, limit, *filters)
     if rows:
         return rows
     expanded = _expand_feature_words(conn, query)
-    return _search_fts(conn, expanded, limit) if expanded else rows
+    return _search_fts(conn, expanded, limit, *filters) if expanded else rows
 
 
-def _search_fts(conn, query, limit):
-    return conn.execute("""
-        SELECT f.sys_id, f.name, f.ftype_vn, f.ftype_tr,
-               f.parent_vn, f.parent_tr, f.data_src, f.beg_yr, f.end_yr,
-               m.x_coord AS longitude, m.y_coord AS latitude, m.transcription
+def _search_fts(conn, query, limit, year=None, feature_type=None, good_coords=False):
+    sql = f"""
+        SELECT f.sys_id, m.name, m.ftype_vn, m.ftype_tr,
+               m.parent_sys_id, m.parent_vn, m.parent_tr, m.data_src, m.beg_yr, m.end_yr,
+               m.x_coord AS longitude, m.y_coord AS latitude, m.transcription,
+               m.obj_type, {bad_coords_sql("m.")} AS bad_coords
         FROM search_fts f
         JOIN mv_pn_srch m ON m.sys_id = f.sys_id
         WHERE search_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?
-    """, (query, limit)).fetchall()
+    """
+    params = [query]
+    clause, more = _year_filter(year, "m.")
+    sql += clause
+    params.extend(more)
+    if feature_type:
+        clause, more = _feature_type_filter(conn, feature_type, "m.")
+        sql += clause
+        params.extend(more)
+    sql += _coords_filter(good_coords, "m.")
+    sql += " ORDER BY rank LIMIT ?"
+    params.append(limit)
+    return with_parent_at_year(conn, conn.execute(sql, params).fetchall(), year)
 
 
-def search_name(conn, name, year=None, feature_type=None, limit=50):
-    """Search by name (Chinese or romanized) with optional filters."""
-    sql = """
+def parents_at_year(conn, sys_ids, year):
+    """Map child sys_id -> its parent in `year`, from the part_of table.
+
+    mv_pn_srch.parent_* holds only the earliest parent (杭州府 -> 江南行省,
+    from 1366). part_of has every parent with its years.
+    """
+    found = {}
+    ids = list(dict.fromkeys(sys_ids))
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        marks = ", ".join("?" * len(chunk))
+        for r in conn.execute(f"""
+            SELECT c.sys_id AS child, p.sys_id AS parent_sys_id,
+                   m.name AS parent_vn, m.transcription AS parent_tr
+            FROM part_of po
+            JOIN placename c ON po.child_id = c.id
+            JOIN placename p ON po.parent_id = p.id
+            LEFT JOIN mv_pn_srch m ON m.sys_id = p.sys_id
+            WHERE c.sys_id IN ({marks})
+              AND po.begin_year <= ? AND po.end_year >= ?
+            ORDER BY po.begin_year
+        """, (*chunk, year, year)):
+            found.setdefault(r["child"], dict(r))
+    return found
+
+
+def with_parent_at_year(conn, rows, year):
+    """Replace the earliest parent with the parent in `year`, when known."""
+    if year is None or not rows or "parent_sys_id" not in rows[0].keys():
+        return rows
+    parents = parents_at_year(conn, [r["sys_id"] for r in rows], year)
+    out = []
+    for r in rows:
+        d = dict(r)
+        p = parents.get(d["sys_id"])
+        if p:
+            d["parent_sys_id"] = p["parent_sys_id"]
+            d["parent_vn"] = p["parent_vn"]
+            d["parent_tr"] = p["parent_tr"]
+        out.append(d)
+    return out
+
+
+def _squash(text):
+    """Lower-case and drop spaces and apostrophes: "Chang'an" -> "changan".
+
+    TGAZ writes one name as "Su Zhou" and "Suzhou Fu", or as "Changan Xian"
+    and "Chang'an Xian", so name search also compares the squashed forms.
+    """
+    for ch in (" ", "'", "’"):
+        text = text.replace(ch, "")
+    return text.lower()
+
+
+SQUASHED_TRANSCRIPTION = (
+    "LOWER(REPLACE(REPLACE(REPLACE(transcription, ' ', ''), char(39), ''), char(8217), ''))"
+)
+
+
+def search_name(conn, name, year=None, feature_type=None, limit=50, good_coords=False):
+    """Search by name (Chinese or romanized) with optional filters.
+
+    Matches the start of the simplified name, of the romanized name (also
+    with spaces and apostrophes ignored), and of every form in the spelling
+    table, so traditional characters (蘇州) find the place too.
+    """
+    prefix = _like_escape(name)
+    squashed = _like_escape(_squash(name))
+    sql = f"""
         SELECT sys_id, name, transcription, beg_yr, end_yr, obj_type,
                x_coord AS longitude, y_coord AS latitude,
-               ftype_vn, ftype_tr, parent_sys_id, parent_vn, parent_tr, data_src
+               ftype_vn, ftype_tr, parent_sys_id, parent_vn, parent_tr, data_src,
+               {bad_coords_sql()} AS bad_coords
         FROM mv_pn_srch
-        WHERE (name LIKE ? ESCAPE '\\' OR transcription LIKE ? ESCAPE '\\')
+        WHERE (name LIKE ? ESCAPE '\\' OR transcription LIKE ? ESCAPE '\\'
+               OR (? <> '' AND {SQUASHED_TRANSCRIPTION} LIKE ? ESCAPE '\\')
+               OR sys_id IN (
+                   SELECT p.sys_id FROM spelling s
+                   JOIN placename p ON p.id = s.placename_id
+                   WHERE s.written_form >= ? AND s.written_form < ?))
     """
-    params = [f"{_like_escape(name)}%", f"{_like_escape(name)}%"]
-    if year is not None:
-        sql += " AND beg_yr <= ? AND end_yr >= ?"
-        params.extend([year, year])
+    # A range on written_form can use its index. The upper bound is the
+    # prefix followed by the highest code point.
+    params = [f"{prefix}%", f"{prefix}%", squashed, f"{squashed}%",
+              name, name + "\U0010ffff"]
+    clause, more = _year_filter(year)
+    sql += clause
+    params.extend(more)
     if feature_type:
-        clause, ft_params = _feature_type_filter(conn, feature_type)
+        clause, more = _feature_type_filter(conn, feature_type)
         sql += clause
-        params.extend(ft_params)
+        params.extend(more)
+    sql += _coords_filter(good_coords)
     sql += " ORDER BY beg_yr LIMIT ?"
     params.append(limit)
-    return conn.execute(sql, params).fetchall()
+    return with_parent_at_year(conn, conn.execute(sql, params).fetchall(), year)
 
 
-def search_by_year(conn, year, feature_type=None, limit=50):
+def search_by_year(conn, year, feature_type=None, limit=50, good_coords=False):
     """Find all places existing in a given year."""
-    sql = "SELECT * FROM mv_pn_srch WHERE beg_yr <= ? AND end_yr >= ?"
+    sql = (f"SELECT *, {bad_coords_sql()} AS bad_coords FROM mv_pn_srch"
+           " WHERE beg_yr <= ? AND end_yr >= ?")
     params = [year, year]
     if feature_type:
-        clause, ft_params = _feature_type_filter(conn, feature_type)
+        clause, more = _feature_type_filter(conn, feature_type)
         sql += clause
-        params.extend(ft_params)
+        params.extend(more)
+    sql += _coords_filter(good_coords)
     sql += " ORDER BY name LIMIT ?"
     params.append(limit)
-    return conn.execute(sql, params).fetchall()
+    return with_parent_at_year(conn, conn.execute(sql, params).fetchall(), year)
 
 
 def search_bbox(conn, lon_min, lat_min, lon_max, lat_max, year=None, limit=100):
     """Search within a geographic bounding box."""
-    sql = """
-        SELECT * FROM mv_pn_srch
+    sql = f"""
+        SELECT *, {bad_coords_sql()} AS bad_coords FROM mv_pn_srch
         WHERE CAST(x_coord AS REAL) BETWEEN ? AND ?
         AND CAST(y_coord AS REAL) BETWEEN ? AND ?
     """
     params = [lon_min, lon_max, lat_min, lat_max]
-    if year is not None:
-        sql += " AND beg_yr <= ? AND end_yr >= ?"
-        params.extend([year, year])
+    clause, more = _year_filter(year)
+    sql += clause
+    params.extend(more)
     sql += " ORDER BY name LIMIT ?"
     params.append(limit)
-    return conn.execute(sql, params).fetchall()
+    return with_parent_at_year(conn, conn.execute(sql, params).fetchall(), year)
 
 
-def search_parent(conn, parent_sys_id, year=None, limit=100):
-    """Find children of a parent jurisdiction."""
-    sql = "SELECT * FROM mv_pn_srch WHERE parent_sys_id = ?"
+def search_parent(conn, parent_sys_id, year=None, limit=100, good_coords=False):
+    """Find children of a parent jurisdiction.
+
+    Uses the part_of table, which has every parent a place had and when.
+    mv_pn_srch.parent_sys_id has only the earliest parent, so it misses
+    most children (浙江布政使司 in 1600: 11 prefectures in part_of, 1 there).
+    """
+    sql = f"""
+        SELECT DISTINCT m.*, {bad_coords_sql("m.")} AS bad_coords
+        FROM part_of po
+        JOIN placename c ON po.child_id = c.id
+        JOIN placename p ON po.parent_id = p.id
+        JOIN mv_pn_srch m ON m.sys_id = c.sys_id
+        WHERE p.sys_id = ?
+    """
     params = [parent_sys_id]
     if year is not None:
-        sql += " AND beg_yr <= ? AND end_yr >= ?"
+        sql += " AND po.begin_year <= ? AND po.end_year >= ?"
         params.extend([year, year])
-    sql += " ORDER BY name LIMIT ?"
+        clause, more = _year_filter(year, "m.")
+        sql += clause
+        params.extend(more)
+    sql += _coords_filter(good_coords, "m.")
+    sql += " ORDER BY m.name LIMIT ?"
     params.append(limit)
-    return conn.execute(sql, params).fetchall()
+    return with_parent_at_year(conn, conn.execute(sql, params).fetchall(), year)
 
 
 def get_spellings(conn, sys_id):
@@ -398,6 +554,9 @@ def main():
     parser.add_argument("--stats", action="store_true")
     parser.add_argument("--format", choices=["table", "json", "jsonl"], default="table")
     parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--good-coords", action="store_true",
+                        help="Drop rows with broken coordinates (longitude 0, mostly POLYGON "
+                             "duplicates). Results also have a bad_coords column (1 = broken).")
 
     args = parser.parse_args()
     conn = get_conn(resolve_db(args.db))
@@ -426,11 +585,13 @@ def main():
         return
 
     if args.fts:
-        format_rows(search_fts(conn, args.fts, args.limit), args.format)
+        format_rows(search_fts(conn, args.fts, args.limit, args.year, args.feature_type,
+                               args.good_coords), args.format)
         return
 
     if args.parent:
-        format_rows(search_parent(conn, args.parent, args.year, args.limit), args.format)
+        format_rows(search_parent(conn, args.parent, args.year, args.limit, args.good_coords),
+                    args.format)
         return
 
     if args.bbox:
@@ -440,11 +601,13 @@ def main():
             parts = []
         if len(parts) != 4:
             sys.exit("Error: --bbox needs 4 numbers: lon_min,lat_min,lon_max,lat_max")
-        format_rows(search_bbox(conn, *parts, args.year, args.limit), args.format)
+        rows = search_bbox(conn, *parts, args.year, args.limit)
+        format_rows(rows, args.format)
         return
 
     if args.year is not None and not args.search and not args.name:
-        format_rows(search_by_year(conn, args.year, args.feature_type, args.limit), args.format)
+        format_rows(search_by_year(conn, args.year, args.feature_type, args.limit,
+                                   args.good_coords), args.format)
         return
 
     query = args.search or args.name
@@ -452,9 +615,11 @@ def main():
         parser.print_help()
         return
 
-    rows = search_name(conn, query, args.year, args.feature_type, args.limit)
+    rows = search_name(conn, query, args.year, args.feature_type, args.limit, args.good_coords)
     if not rows:
-        rows = search_fts(conn, query, args.limit)
+        # The fallback keeps --year and --feature-type, and says it ran.
+        print("No name match; trying full-text search with the same filters.", file=sys.stderr)
+        rows = search_fts(conn, query, args.limit, args.year, args.feature_type, args.good_coords)
     format_rows(rows, args.format)
 
 

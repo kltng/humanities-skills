@@ -6,13 +6,15 @@ Complete reference for basemaps, tile servers, historical boundary datasets, and
 
 Pre-configured in `BASEMAPS` dict:
 
-| Key | Name | Style | Max Zoom |
-|-----|------|-------|----------|
-| `osm` | OpenStreetMap | Standard street map | 19 |
-| `watercolor` | Stamen Watercolor | Artistic, painterly (good for historical feel) | 16 |
-| `toner_lite` | Stamen Toner Lite | Minimal black/white | 20 |
-| `carto_light` | CartoDB Positron | Clean, muted (default — ideal for data overlays) | 20 |
-| `carto_dark` | CartoDB Dark Matter | Dark theme | 20 |
+| Key | Name | Style | Max Zoom | Key needed? |
+|-----|------|-------|----------|-------------|
+| `osm` | OpenStreetMap | Standard street map (**default**) | 19 | No |
+| `watercolor` | Stamen Watercolor (Stadia) | Artistic, painterly | 16 | Yes: HTTP 401 without one |
+| `toner_lite` | Stamen Toner Lite (Stadia) | Minimal black/white | 20 | Yes: HTTP 401 without one |
+| `carto_light` | CartoDB Positron | Clean, muted | 20 | Yes: tiles say "API KEY REQUIRED" |
+| `carto_dark` | CartoDB Dark Matter | Dark theme | 20 | Yes: tiles say "API KEY REQUIRED" |
+
+Tested 2026-10-26. Entries that need a key have `"needs_key": True` in `BASEMAPS`, and the builder warns when you choose one.
 
 ### Using a custom basemap
 
@@ -42,12 +44,15 @@ The server speaks WMTS only; WMS `GetMap` requests get an XML reply, not an imag
 
 **Usage with builder:**
 ```python
-m.add_tile_layer(
-    "https://gis.sinica.edu.tw/ccts/file-exists.php?img=LAYER_ID-png-{z}-{x}-{y}",
-    name="Historical China",
-    attribution='<a href="https://gis.sinica.edu.tw/">Academia Sinica</a>',
-)
+m.add_sinica_layer("ad1582")   # Ming volume of the Tan Qixiang atlas
 ```
+
+Dynasty layers (keys of `SINICA_LAYERS`): `bc0210` Qin, `bc0007` Western Han,
+`ad0140` Eastern Han, `ad0262` Three Kingdoms, `ad0281` Western Jin,
+`ad0382` Eastern Jin, `ad0497` Southern and Northern Dynasties, `ad0612` Sui,
+`ad0741` Tang, `ad1111` Northern Song, `ad1208` Southern Song, `ad1330` Yuan,
+`ad1582` Ming, `ad1820` Qing. All are PNG. Tile URL:
+`https://gis.sinica.edu.tw/ccts/file-exists.php?img=ad1582-png-{z}-{x}-{y}`
 
 **Explorer:** https://gis.sinica.edu.tw/worldmap/
 
@@ -60,10 +65,11 @@ https://mapwarper.net/maps/tile/{map_id}/{z}/{x}/{y}.png
 
 **Usage with builder:**
 ```python
-m.add_mapwarper_layer(14781, name="Historical Map Name")
+m.add_mapwarper_layer(MAP_ID, name="Historical Map Name")
 ```
 
-**Browse maps:** https://mapwarper.net/
+**Browse maps:** https://mapwarper.net/ (in a browser). Check that the map is
+rectified before using its ID; unrectified maps return HTTP 500 for tiles.
 
 ### NYPL Map Warper
 
@@ -125,6 +131,10 @@ CE:
 
 ### CHGIS (China Historical GIS)
 
+**Warning for TGAZ points:** the TGAZ gazetteer (chgis-tgaz, tgaz-sqlite skills)
+has duplicate POLYGON records with longitude 0 (a few 1-5). Filter them out
+before plotting, or they appear near Africa.
+
 **Source:** https://chgis.fas.harvard.edu/
 **Download:** https://dataverse.harvard.edu/dataverse/chgis_v6
 **Format:** Shapefiles (convertible to GeoJSON)
@@ -150,7 +160,7 @@ CE:
 ### Tile Layer
 
 ```javascript
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap',
     maxZoom: 19,
     opacity: 0.7

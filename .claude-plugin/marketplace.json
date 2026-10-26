@@ -22,7 +22,7 @@
       "name": "cbdb-api",
       "source": "./cbdb-api",
       "description": "Query the China Biographical Database API for comprehensive biographical data about historical Chinese figures from the 7th century BCE through the 19th century CE",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -32,7 +32,7 @@
       "name": "chgis-tgaz",
       "source": "./chgis-tgaz",
       "description": "Query the CHGIS Temporal Gazetteer API for historical Chinese placenames and administrative units from 222 BCE to 1911 CE",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -42,7 +42,7 @@
       "name": "wikidata-search",
       "source": "./wikidata-search",
       "description": "Search Wikidata for items, properties, and external identifiers using keyword search, semantic/hybrid search, SPARQL, and direct entity retrieval",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -52,7 +52,7 @@
       "name": "cbdb-local",
       "source": "./cbdb-local",
       "description": "Query the China Biographical Database locally via SQLite for 656K+ historical Chinese figures — biographical data, kinship networks, official postings, social associations, and examination records (7th c. BCE to 19th c. CE)",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -62,7 +62,7 @@
       "name": "jbdb-api",
       "source": "./jbdb-api",
       "description": "Query the Japan Biographical Database API for biographical data about historical Japanese figures — persons, kinship, events, occupations, and geographic data via LoopBack REST",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -72,7 +72,7 @@
       "name": "cjk-calendar",
       "source": "./cjk-calendar",
       "description": "Convert between Chinese, Japanese, Korean, and Vietnamese lunisolar calendar dates and Gregorian/Julian dates using a local SQLite database (~220 BCE to 1945 CE)",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -82,7 +82,7 @@
       "name": "tgaz-sqlite",
       "source": "./tgaz-sqlite",
       "description": "Query the TGAZ (Temporal Gazetteer) SQLite database locally for 82,000+ historical Chinese placenames spanning 763 BCE to 1911 CE — name search, spatial bounding box, temporal filtering, full-text search, administrative hierarchies, and raw SQL",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -92,7 +92,7 @@
       "name": "arxiv-search",
       "source": "./arxiv-search",
       "description": "Search arXiv for preprints and scholarly articles across physics, mathematics, computer science, and more — field-specific queries, boolean logic, date filtering, and bulk retrieval with pagination",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -102,7 +102,7 @@
       "name": "crossref-search",
       "source": "./crossref-search",
       "description": "Search Crossref's 188M+ DOI records — articles, books, chapters, JSTOR DOIs — with field queries and filters; look up DOIs, match free-text references, format citations (CSL, BibTeX, RIS), list references, and check DOI registration agencies",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -112,7 +112,7 @@
       "name": "openaire-search",
       "source": "./openaire-search",
       "description": "Search the OpenAIRE Graph — publications, theses, datasets, and repository copies from Crossref, DataCite, and thousands of repositories — with phrase search, open-access filters, and every known copy of a DOI",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -132,7 +132,7 @@
       "name": "historical-map",
       "source": "./historical-map",
       "description": "Generate interactive historical maps as standalone HTML files using Leaflet.js — markers, GeoJSON boundary overlays, historical tile layers, image overlays, WMS, and layer controls",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -142,7 +142,7 @@
       "name": "europeana-collections",
       "source": "./europeana-collections",
       "description": "Search Europeana's 50M+ cultural heritage items from 4,000+ European museums, galleries, libraries, and archives — art, manuscripts, photographs, maps, 3D objects, audio, and video",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -152,7 +152,7 @@
       "name": "harvard-library-catalog",
       "source": "./harvard-library-catalog",
       "description": "Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO — books, manuscripts, finding aids, and digital collections",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -162,7 +162,7 @@
       "name": "hathitrust-catalog",
       "source": "./hathitrust-catalog",
       "description": "Look up bibliographic records and digitized volumes in HathiTrust's 17M+ volume collection by ISBN, OCLC, LCCN, ISSN, or HathiTrust ID",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -192,7 +192,7 @@
       "name": "umich-library-catalog",
       "source": "./umich-library-catalog",
       "description": "Search the University of Michigan Library catalog via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, print call numbers and availability, and online access",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -202,7 +202,7 @@
       "name": "princeton-library-catalog",
       "source": "./princeton-library-catalog",
       "description": "Search the Princeton University Library catalog via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, East Asian Library call numbers and availability, and online access",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -212,7 +212,7 @@
       "name": "yale-library-catalog",
       "source": "./yale-library-catalog",
       "description": "Search the Yale University Library catalog via Alma's public SRU interface (CJK vernacular fields, call numbers, availability, online access links) and Yale LUX across Yale's libraries, museums, and archives",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -222,7 +222,7 @@
       "name": "pitt-library-catalog",
       "source": "./pitt-library-catalog",
       "description": "Search the University of Pittsburgh Library System catalog (PittCat) via Alma's public SRU interface — title/author/subject/ISBN/OCLC/call number searches, CJK vernacular (880) fields, call numbers and availability, and online access",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -232,7 +232,7 @@
       "name": "alma-sru-catalogs",
       "source": "./alma-sru-catalogs",
       "description": "Search 21 research library catalogs at once via public Alma SRU — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, Berkeley, UCLA, Toronto, Oxford, Cambridge, Edinburgh, Sydney, and six Taiwan universities (NTU, NCCU, NCKU, NSYSU, NCHU, CCU) — with CJK fields, holdings, subject vocabularies, and classification schemes",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -242,7 +242,7 @@
       "name": "mit-timdex",
       "source": "./mit-timdex",
       "description": "Search MIT Libraries through TIMDEX, MIT's official GraphQL discovery API — library catalog, DSpace@MIT, ArchivesSpace, digital collections, and GIS data, with filters, facets, and semantic search",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -271,8 +271,8 @@
     {
       "name": "zotero-local",
       "source": "./zotero-local",
-      "description": "Interact with a local Zotero 8 desktop application through its HTTP API — search, fetch, add, edit, and organize bibliographic items, import citations, attach files, manage collections and tags",
-      "version": "1.0.1",
+      "description": "Search, read, export, and add items in a local Zotero 8 desktop library through its HTTP API — import citations and PDFs, list collections and tags, read full text; with the optional Debug Bridge add-on, attach files and create collections. Cannot edit or delete existing items",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -282,7 +282,7 @@
       "name": "argue-against-me",
       "source": "./argue-against-me",
       "description": "Structured academic debate — Claude adopts an opposing position from named historiographical schools and challenges your thesis through formal rounds with adjustable intensity, producing a scorecard, revised thesis, and bibliography gap analysis",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -292,7 +292,7 @@
       "name": "human-eval-review",
       "source": "./human-eval-review",
       "description": "Generate a single self-contained HTML file for human-in-the-loop evaluation of model output — confirm candidate matches, pick one, rate on a scale, judge yes/no, or free-text correct, with progress tracking, keyboard nav, browser autosave, and JSON export/resume",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"

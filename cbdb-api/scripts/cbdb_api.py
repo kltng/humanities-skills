@@ -108,6 +108,22 @@ class CBDBAPI:
         """Query CBDB by name and return all matching Person dicts (may be empty)."""
         return self._extract_persons(self._request({"name": name}))
 
+    def name_match(self, person: dict, name: str) -> str:
+        """Say how `name` matched the returned person.
+
+        "primary": the main Chinese or English name.
+        "alias": exactly one of the person's alternative names (字, 號 ...).
+            The API then returns only one person, even when several people
+            share that alt name, so check the result.
+        "other": neither (e.g. the API matched part of an alt name).
+        """
+        basic = self.get_basic_info(person)
+        query = name.strip().casefold()
+        if query in {str(basic.get(k, "")).strip().casefold() for k in ("ChName", "EngName")}:
+            return "primary"
+        aliases = {str(a.get("AliasName", "")).strip().casefold() for a in self.get_alt_names(person)}
+        return "alias" if query in aliases else "other"
+
     @staticmethod
     def _section_list(person: dict, section: str, key: str) -> list:
         """Return person[section][key] as a list.
@@ -152,8 +168,18 @@ class CBDBAPI:
         """Extract addresses (PersonAddresses.Address)."""
         return self._section_list(person, "PersonAddresses", "Address")
 
-    def summarize(self, person: dict) -> str:
-        """Generate a formatted biographical summary."""
+    @staticmethod
+    def _count_label(shown: int, total: int) -> str:
+        if shown < total:
+            return f"{total} records, first {shown} shown"
+        return f"{total} records"
+
+    def summarize(self, person: dict, max_items: Optional[int] = 20) -> str:
+        """Generate a formatted biographical summary.
+
+        Lists at most `max_items` postings and associations (None = all) and
+        says how many were left out.
+        """
         basic = self.get_basic_info(person)
         lines: list[str] = []
 
@@ -179,24 +205,26 @@ class CBDBAPI:
 
         postings = self.get_postings(person)
         if postings:
-            lines.append(f"\n## Official Positions ({len(postings)} records)")
-            for p in postings[:20]:
+            shown = postings if max_items is None else postings[:max_items]
+            lines.append(f"\n## Official Positions ({self._count_label(len(shown), len(postings))})")
+            for p in shown:
                 office = p.get("OfficeName", "")
                 year = p.get("FirstYear", "")
                 # CBDB uses "0" for an unknown year.
                 lines.append(f"- {office} ({year})" if year and year != "0" else f"- {office}")
-            if len(postings) > 20:
-                lines.append(f"- ... and {len(postings) - 20} more")
+            if len(postings) > len(shown):
+                lines.append(f"- ... and {len(postings) - len(shown)} more")
 
         assocs = self.get_social_associations(person)
         if assocs:
-            lines.append(f"\n## Social Associations ({len(assocs)} records)")
-            for a in assocs[:20]:
+            shown = assocs if max_items is None else assocs[:max_items]
+            lines.append(f"\n## Social Associations ({self._count_label(len(shown), len(assocs))})")
+            for a in shown:
                 assoc_name = a.get("AssocPersonName", "")
                 assoc_type = a.get("AssocName", "")
                 lines.append(f"- {assoc_name} ({assoc_type})")
-            if len(assocs) > 20:
-                lines.append(f"- ... and {len(assocs) - 20} more")
+            if len(assocs) > len(shown):
+                lines.append(f"- ... and {len(assocs) - len(shown)} more")
 
         return "\n".join(lines)
 

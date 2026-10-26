@@ -372,7 +372,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--mode", choices=("keyword", "semantic", "hybrid"))
     s.add_argument("--boolean", choices=("AND", "OR"))
     s.add_argument("--start", type=int, default=0)
-    s.add_argument("--limit", type=int, default=10)
+    s.add_argument("--limit", type=int, default=20, help="Records per page (default 20, max 100)")
     s.add_argument("--facets", action="store_true", help="Show counts by source, type, language, format, subject")
     s.add_argument("--phrase", action="store_true", help="Keep only titles containing the search text as one phrase")
     s.add_argument("--json", action="store_true")
@@ -386,8 +386,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "search":
         extra = {n: getattr(args, n) for n in list(SEARCH_FIELDS)[1:] + list(FILTERS)}
-        result = api.search(args.searchterm, mode=args.mode, boolean=args.boolean, start=args.start,
-                            limit=args.limit, facets=args.facets, phrase=args.phrase, **extra)
+        try:
+            result = api.search(args.searchterm, mode=args.mode, boolean=args.boolean, start=args.start,
+                                limit=args.limit, facets=args.facets, phrase=args.phrase, **extra)
+        except ValueError as e:
+            parser.error(str(e))
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0

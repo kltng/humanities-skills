@@ -1,7 +1,7 @@
 ---
 name: europeana-collections
 description: Search Europeana's 50M+ cultural heritage items from 4,000+ European museums, galleries, libraries, and archives. Use this skill whenever the user wants to find European art, manuscripts, photographs, maps, 3D objects, audio, or video from institutions like the Rijksmuseum, British Library, Louvre, or Gallica. Also triggers when searching for open-access European cultural heritage, IIIF resources, or cross-referencing European collections with other library catalogs.
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Europeana Collections API Skill
@@ -76,6 +76,29 @@ Returns only items with open licenses (Public Domain, CC0, CC BY, CC BY-SA).
 | `when` | Time period |
 
 Multiple filters: repeat `qf=` parameter.
+
+**Put multi-word values in double quotes:** `qf=COUNTRY:"United Kingdom"`. Without quotes,
+`qf=COUNTRY:United Kingdom` silently returns 0 results. The Python script adds the quotes for
+you (for `type`, `country`, `language`, `provider`, `data_provider`). Quoting a one-word value
+is harmless. On 2026-10-26, `query=China` with `COUNTRY:"United Kingdom"` gave 119,453 results;
+without quotes it gave 0.
+
+### Chinese, Japanese, and Korean (CJK) searches
+
+Europeana has few East Asian items, and most of them are catalogued in romanized form, not in
+Chinese characters. Searches in characters often find nothing. Tests on 2026-10-26:
+
+| Query | Results |
+|-------|---------|
+| `天工開物` | 3 |
+| `四庫全書`, `四庫`, `府志` | 0 |
+| `Siku quanshu` | 26 |
+| `Tiangong kaiwu` | 0 |
+| `Tian gong kai wu` | 17 |
+
+So try the characters first, then romanized forms. Spelling differs between libraries: try
+pinyin with and without spaces between syllables (`Tiangong kaiwu`, `Tian gong kai wu`), and
+older systems such as Wade-Giles (e.g. `Ssu-k'u ch'üan-shu`).
 
 ## Record Lookup
 

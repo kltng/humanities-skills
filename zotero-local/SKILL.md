@@ -1,7 +1,7 @@
 ---
 name: zotero-local
-description: Interact with a local Zotero 8 desktop application through its HTTP API at localhost:23119. Use this skill whenever the user wants to search, fetch, add, edit, or organize bibliographic items in their Zotero library, import citations (BibTeX, RIS, etc.), attach files, manage collections and tags, or retrieve full-text content from Zotero. Triggers on mentions of Zotero, citation management, reference libraries, bibliographic databases, or local library management. Also use when chaining with other catalog skills (Harvard, LOC, HathiTrust, etc.) to save found records into the user's Zotero library.
-version: 1.0.1
+description: Interact with a local Zotero 8 desktop application through its HTTP API at localhost:23119. Use this skill whenever the user wants to search, read, or export items in their Zotero library, add new items (with tags and notes), import citations (BibTeX, RIS, etc.) or PDFs, list collections and tags, or retrieve full-text content from Zotero. With the optional Debug Bridge add-on it can also attach files to existing items and create or delete collections. It cannot edit or delete existing items. Triggers on mentions of Zotero, citation management, reference libraries, bibliographic databases, or local library management. Also use when chaining with other catalog skills (Harvard, LOC, HathiTrust, etc.) to save found records into the user's Zotero library.
+version: 1.0.2
 ---
 
 # Zotero Local API Skill
@@ -123,11 +123,13 @@ Returns `{"canRecognize": true}` on success (201).
 
 ### Attach a File to an Existing Item
 
-Requires the **Better BibTeX (BBT)** extension for its debug-bridge endpoint. Without BBT, use `import_pdf()` to import as a standalone item instead.
+Requires the **Debug Bridge** add-on and its token (see "Debug Bridge add-on" below). Without
+it, use `import_pdf()` to import the file as a standalone item instead.
 
 ```bash
 POST http://127.0.0.1:23119/debug-bridge/execute
-Content-Type: application/javascript
+Authorization: Bearer <token>
+Content-Type: text/plain
 
 var item = await Zotero.Items.getByLibraryAndKeyAsync(
     Zotero.Libraries.userLibraryID, 'ITEMKEY'
@@ -171,16 +173,16 @@ GET http://localhost:23119/api/users/0/collections/top?format=json
 GET http://localhost:23119/api/users/0/collections/{collectionKey}/items?format=json
 ```
 
-### Create / Delete Collections (requires BBT)
+### Create / Delete Collections (requires the Debug Bridge add-on)
 
-These operations use the Better BibTeX debug-bridge. See the "Better BibTeX" section below.
+These operations use the Debug Bridge add-on. See the "Debug Bridge add-on" section below.
 
 ```python
-z = ZoteroLocal()
+z = ZoteroLocal()   # reads the token from ZOTERO_DEBUG_BRIDGE_TOKEN
 
-# Check if BBT is available
-if not z.check_bbt():
-    print("Install Better BibTeX: https://retorque.re/zotero-better-bibtex/installation/")
+# Check that the Debug Bridge is installed and the token works
+if not z.check_debug_bridge():
+    print("See the 'Debug Bridge add-on' section to set it up.")
 
 # Create a top-level collection
 col = z.create_collection("My Research")
@@ -207,12 +209,18 @@ GET http://localhost:23119/api/users/0/tags?format=json
 ### Export Citations
 
 ```
-GET http://localhost:23119/api/users/0/items?format=bibtex
+GET http://localhost:23119/api/users/0/items?format=bibtex&limit=100
 GET http://localhost:23119/api/users/0/items/{itemKey}?format=ris
 GET http://localhost:23119/api/users/0/items?format=bib&style=chicago-author-date
 ```
 
 Supported export formats: `bibtex`, `ris`, `csljson`, `mods`, `refer`, `rdf_bibliontology`, `rdf_dc`, `rdf_zotero`, `tei`, `wikipedia`.
+
+**Always set `limit` when you export without item keys.** The local API has no default limit,
+so `items?format=bibtex` returns the whole library in one call, which can be thousands of
+entries. (Notes and attachments give no entry.)
+`export_items()` in the Python script uses `limit=100` by default. Use `start` to page, or
+pass `limit=None` only if you really want everything.
 
 ### Execute Saved Searches
 
@@ -280,45 +288,58 @@ result = z.import_pdf("/path/to/paper.pdf")
 # Download an attachment
 path = z.download_attachment("ATTKEY12", "/tmp/")
 
-# Check if Better BibTeX is available
-if z.check_bbt():
-    # Attach file to existing item (requires BBT)
+# Check if the Debug Bridge add-on is ready (token from ZOTERO_DEBUG_BRIDGE_TOKEN)
+if z.check_debug_bridge():
+    # Attach file to existing item
     z.attach_file("/path/to/paper.pdf", "ITEMKEY1")
 
-    # Create/delete collections (requires BBT)
+    # Create/delete collections
     col = z.create_collection("My Collection")
     sub = z.create_collection("Sub-Collection", parent_key=col["key"])
     z.delete_collection(sub["key"])
 
-# Export
-bibtex = z.export_items(format="bibtex")
+# Export (at most 100 items unless you pass keys or a larger limit)
+bibtex = z.export_items(format="bibtex", tag="history")
+bibtex = z.export_items(keys=["ABC12345", "DEF67890"])
 ```
 
-## Better BibTeX (BBT)
+## Debug Bridge add-on
 
-Some features require the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) extension, which provides a debug-bridge for executing JavaScript inside Zotero. BBT is free and open-source — any user can install it.
+Some features run JavaScript inside Zotero through the `/debug-bridge/execute` endpoint. This
+endpoint comes from the **Debug Bridge** add-on, not from Better BibTeX. (The add-on is made by
+the Better BibTeX author and lives in the same repository, which caused the confusion.) Without
+it, the endpoint returns 404.
 
-**Features requiring BBT:**
-- Creating and deleting collections/sub-collections
+**Features that need it:**
+- Creating and deleting collections and sub-collections
 - Attaching files to existing items
 
-**Check if BBT is installed:**
+**Set it up (once):**
+1. Download `debug-bridge-*.xpi` from
+   https://github.com/retorquere/zotero-better-bibtex/releases/tag/debug-bridge
+2. In Zotero: Tools → Plugins → gear icon → Install Plugin From File.
+3. In Zotero: Settings → Advanced → Config Editor. Add a new **string** pref
+   `extensions.zotero.debug-bridge.token` and give it a secret value.
+4. Give the same value to the script: `export ZOTERO_DEBUG_BRIDGE_TOKEN=<value>`, or
+   `ZoteroLocal(debug_bridge_token="<value>")`.
+
+**Check it:**
 ```python
 z = ZoteroLocal()
-if z.check_bbt():
-    print("BBT is available")
-else:
-    print("Install BBT: https://retorque.re/zotero-better-bibtex/installation/")
+print(z.check_debug_bridge())   # True when the add-on is installed and the token is right
 ```
 
-**Install BBT:** Download the latest `.xpi` from [BBT releases](https://retorque.re/zotero-better-bibtex/installation/), then in Zotero: Tools → Add-ons → gear icon → Install Add-on From File.
+`check_bbt()` still works as an old name for `check_debug_bridge()`.
+
+**Be careful:** the Debug Bridge runs any JavaScript it receives, with full access to your
+library. Keep the token secret.
 
 ## Limitations
 
-- **No PATCH/PUT/DELETE**: The local API is read-only. Items can only be created through connector endpoints, not updated or deleted programmatically.
+- **No editing of existing items**: The local API is read-only (no PATCH/PUT/DELETE). New items can be created through the connector endpoints, with tags and notes. This skill has no function to change or delete an existing item, or to add or remove tags on one.
 - **Connector write format**: `saveItems` requires `uri` and `sessionID` wrapper fields around the items array.
 - **No item templates**: The `/api/items/new?itemType=` endpoint returns empty on the local API. Use `/api/itemTypeFields?itemType=` to discover fields instead.
-- **Collection management and file attachment**: Requires Better BibTeX (BBT) extension. Without BBT, use `import_pdf()` to import files as standalone items with auto-recognition instead.
+- **Collection management and file attachment**: Requires the Debug Bridge add-on and its token. Without it, use `import_pdf()` to import files as standalone items with auto-recognition instead.
 
 ## Resources
 

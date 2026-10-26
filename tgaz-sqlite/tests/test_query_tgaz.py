@@ -80,6 +80,24 @@ class TGAZCLITest(unittest.TestCase):
         self.assertEqual(history["place"]["sys_id"], "hvd_70621")
         self.assertGreaterEqual(len(history["spellings"]), 3)
 
+    def test_traditional_characters_find_places(self):
+        rows = self.run_cli_json("蘇州", "--good-coords")
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertTrue(all(row["bad_coords"] == 0 for row in rows))
+
+    def test_romanization_with_space_and_year(self):
+        rows = self.run_cli_json("suzhou", "--year", "1100")
+        self.assertIn("hvd_32071", [row["sys_id"] for row in rows])
+        self.assertTrue(all(row["beg_yr"] <= 1100 <= row["end_yr"] for row in rows))
+
+    def test_parent_in_year_asked(self):
+        rows = self.run_cli_json("杭州府", "--year", "1600", "--good-coords")
+        self.assertEqual(rows[0]["parent_vn"], "浙江布政使司")
+
+    def test_children_of_ming_zhejiang(self):
+        rows = self.run_cli_json("--parent", "hvd_30037", "--year", "1600")
+        self.assertEqual(len(rows), 11)
+
     def test_bad_sql_exits_cleanly(self):
         cp = self.run_cli("--sql", "SELECT * FROM missing_table", check=False)
         self.assertNotEqual(cp.returncode, 0)

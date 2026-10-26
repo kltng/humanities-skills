@@ -315,6 +315,12 @@ def _fix_url(url: str) -> str:
     return re.sub(r"^https?://(dx\.)?doi\.org/", "https://doi.org/", url, flags=re.I)
 
 
+def _doi_from_url(url: str) -> str:
+    """Return the DOI in a https://doi.org/10.... URL, or ''."""
+    m = re.match(r"^https://doi\.org/(10\.\d{4,9}/\S+)$", url or "", flags=re.I)
+    return urllib.parse.unquote(m.group(1)) if m else ""
+
+
 def summarize_product(r: Dict[str, Any]) -> Dict[str, Any]:
     """Summarize a research product into a clean dict."""
     pids: Dict[str, List[str]] = {}
@@ -346,6 +352,9 @@ def summarize_product(r: Dict[str, Any]) -> Dict[str, Any]:
     indicators = ((r.get("indicators") or {}).get("citationImpact") or {})
     citations = indicators.get("citationCount")
     descriptions = [_clean(d) for d in r.get("descriptions") or [] if d]
+    # Some records (NDL 10.11501, NIJL 10.20730, ...) have no DOI pid, only a doi.org copy URL
+    doi = (pids.get("doi") or [""])[0] or next(
+        (d for d in (_doi_from_url(c["url"]) for c in copies) if d), "")
     return {
         "id": r.get("id", ""),
         "type": r.get("type", ""),
@@ -363,7 +372,7 @@ def summarize_product(r: Dict[str, Any]) -> Dict[str, Any]:
         "pages": pages,
         "language": (r.get("language") or {}).get("label", ""),
         "pids": pids,
-        "doi": (pids.get("doi") or [""])[0],
+        "doi": doi,
         "access": (r.get("bestAccessRight") or {}).get("label", ""),
         "oa_color": r.get("openAccessColor") or "",
         "is_green": bool(r.get("isGreen")),

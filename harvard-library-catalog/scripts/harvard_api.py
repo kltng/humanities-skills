@@ -8,6 +8,7 @@ retrieving bibliographic records from Harvard Library's 13M+ catalog.
 import email.utils
 import json
 import time
+import unicodedata
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -49,6 +50,25 @@ EXACT_FIELDS = {
     "subject.topic", "subject.geographic", "subject.temporal",
     "subject.name", "subject.genre", "subject.titleInfo",
 }
+
+
+def _is_latin(text: str) -> bool:
+    """True if every letter in text is Latin script (pinyin, Hepburn, English...)."""
+    for ch in text:
+        # Skip modifier letters such as ʾ and ʻ (used in McCune-Reischauer)
+        if unicodedata.category(ch) == "Lm":
+            continue
+        if ch.isalpha() and not unicodedata.name(ch, "").startswith("LATIN"):
+            return False
+    return True
+
+
+def _is_latin_entry(entry: Dict[str, Any]) -> bool:
+    """Is this titleInfo entry in Latin script? Uses @script when present."""
+    script = entry.get("@script") if isinstance(entry, dict) else None
+    if script:
+        return str(script).lower().startswith("latn")
+    return _is_latin(mods_text(entry.get("title")) + mods_text(entry.get("subTitle")))
 
 
 def mods_text(value: Any, sep: str = "; ") -> str:
@@ -248,11 +268,8 @@ class HarvardLibraryAPI:
     # ── Record Extraction Helpers ──
 
     @staticmethod
-    def get_title(record: Dict) -> str:
-        """Extract title from a MODS record."""
-        ti = record.get("titleInfo", {})
-        if isinstance(ti, list):
-            ti = ti[0]
+    def _format_title(ti: Any) -> str:
+        """Join nonSort, title and subTitle of one titleInfo entry."""
         if not isinstance(ti, dict):
             return mods_text(ti)
         parts = []
@@ -266,6 +283,57 @@ class HarvardLibraryAPI:
         if subtitle:
             parts.append(f": {subtitle}")
         return " ".join(parts).strip()
+
+    @staticmethod
+    def _main_title_pair(record: Dict) -> Tuple[Any, Any]:
+        """
+        Return (romanized entry, original-script entry or None) for the main title.
+
+        For CJK and other non-Latin books, MODS has two titleInfo entries with
+        the same @altRepGroup: one romanized ("Tian gong kai wu") and one in
+        the original script ("天工開物"). An @script attribute, when present,
+        says which is which; otherwise the script is detected from the text.
+        """
+        ti = record.get("titleInfo", {})
+        if not isinstance(ti, list):
+            return ti, None
+        entries = [t for t in ti if t]
+        if not entries:
+            return {}, None
+        main = next((t for t in entries if isinstance(t, dict) and not t.get("@type")), entries[0])
+        group = main.get("@altRepGroup") if isinstance(main, dict) else None
+        if not group:
+            return main, None
+        members = [t for t in entries
+                   if isinstance(t, dict) and t.get("@altRepGroup") == group
+                   and t.get("@type") == main.get("@type")]
+        latin = [t for t in members if _is_latin_entry(t)]
+        other = [t for t in members if not _is_latin_entry(t)]
+        if latin and other:
+            return latin[0], other[0]
+        return main, None
+
+    @staticmethod
+    def get_original_title(record: Dict) -> str:
+        """Return the main title in its original script (e.g. 天工開物), or ''."""
+        _, original = HarvardLibraryAPI._main_title_pair(record)
+        return HarvardLibraryAPI._format_title(original) if original else ""
+
+    @staticmethod
+    def get_title(record: Dict, original: bool = True) -> str:
+        """
+        Extract the main title from a MODS record.
+
+        For non-Latin titles the original script comes first, with the
+        romanized form in brackets: '天工開物 : 三卷 (Tian gong kai wu : 3 juan)'.
+        Pass original=False for the romanized title only.
+        """
+        roman, orig = HarvardLibraryAPI._main_title_pair(record)
+        roman_text = HarvardLibraryAPI._format_title(roman)
+        orig_text = HarvardLibraryAPI._format_title(orig) if orig else ""
+        if original and orig_text:
+            return f"{orig_text} ({roman_text})" if roman_text else orig_text
+        return roman_text
 
     @staticmethod
     def get_names(record: Dict) -> List[str]:
@@ -401,7 +469,10 @@ class HarvardLibraryAPI:
         """
         Extract key bibliographic fields into a clean summary dict.
 
-        Returns: {title, authors, date, publisher, language, subjects,
+        title shows the original script first when there is one;
+        title_romanized and title_original give the two forms separately.
+
+        Returns: {title, title_romanized, title_original, authors, date, publisher, language, subjects,
                   identifiers, record_id, physical_description}
         """
         phys = record.get("physicalDescription", {})
@@ -411,6 +482,8 @@ class HarvardLibraryAPI:
 
         return {
             "title": self.get_title(record),
+            "title_romanized": self.get_title(record, original=False),
+            "title_original": self.get_original_title(record),
             "authors": self.get_names(record),
             "date": self.get_date(record),
             "publisher": self.get_publisher(record),

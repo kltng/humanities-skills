@@ -1,7 +1,7 @@
 ---
 name: cbdb-local
 description: Query the China Biographical Database (CBDB) locally via SQLite for biographical data on 656K+ historical Chinese figures from the 7th century BCE through the 19th century CE. Use when searching for Chinese historical figures, scholars, officials, or literary figures — their biographical details, family/kinship networks, official postings, social associations, examination records, or addresses. Runs entirely locally after initial database download (~556 MB). Faster and more flexible than the API version.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -32,6 +32,14 @@ The script resolves the **current download URL** from the project's
 `.zip`, verifies its SHA-256, extracts it, creates search indexes, and records
 the release version. No external tools are required for the default download.
 
+By default the database lives at `scripts/cbdb.db`. To keep it somewhere else, pass `--db PATH` to any command, or set the environment variable `CBDB_DB_PATH`:
+
+```bash
+python3 scripts/cbdb_query.py --db ~/data/cbdb.db setup
+export CBDB_DB_PATH=~/data/cbdb.db
+python3 scripts/cbdb_query.py person "蘇軾"
+```
+
 Setup is one-time. To check whether a newer release is available, or to update:
 
 ```bash
@@ -58,8 +66,12 @@ This variant is a `.7z` archive and **requires 7z**:
 ### Search by Name
 
 ```bash
-# Chinese name (exact match, then alt names, then fuzzy)
+# Chinese name (exact main name, then pinyin, then alt names, then partial)
 python3 scripts/cbdb_query.py person "蘇軾"
+
+# Alt name (字, 號, 室名 ...), or surname + alt name
+python3 scripts/cbdb_query.py person "陽明"     # list of candidates
+python3 scripts/cbdb_query.py person "王陽明"   # 王 + 陽明先生 → 王守仁 (30374)
 
 # Pinyin name
 python3 scripts/cbdb_query.py person "Su Shi"
@@ -68,14 +80,30 @@ python3 scripts/cbdb_query.py person "Su Shi"
 python3 scripts/cbdb_query.py person --id 3767
 ```
 
-Single match returns a **full profile** (bio + alt names + kinship + offices + associations + addresses + entries + status + texts + institutions + posting addresses). Multiple matches return a list of candidates.
+Single match returns a **full profile** (bio + alt names + kinship + offices + associations + addresses + entries + status + texts + institutions + posting addresses). Multiple matches return a list of candidates. Pick one and run `person --id <ID>`.
+
+**How a name is matched.** Each candidate has a `match_type`:
+
+| `match_type` | Meaning | Exact? |
+|---|---|---|
+| `name` | Main Chinese name (`c_name_chn`) | Yes |
+| `pinyin` | Main pinyin name | Yes |
+| `alt_name` | An alternative name is exactly the query | No |
+| `surname_plus_alt_name` | Query = surname + alt name, e.g. 王陽明 = 王 + 陽明先生 | No |
+| `alt_name_partial` | An alt name starts with or contains the query, e.g. 陽明 → 陽明先生 | No |
+| `partial_name` | Main name contains the query | No |
+
+Alt-name candidates also have `matched_name` (the alt name that matched). All alt-name matches are listed together. Example: `陽明` returns 毛燧傳 (alt name 陽明) **and** 王守仁 (alt name 陽明先生). It does not pick one silently. If there is only one loose match, the profile starts with a `match` block and a warning, and a note goes to stderr. Always check loose matches before you use them.
+
+People often write surname + 號 (王陽明, 蘇東坡). CBDB usually stores the 號 in a longer form (陽明先生, 陽明子, 東坡居士) and never as 王陽明. The `surname_plus_alt_name` step handles this: it splits off a 1- or 2-character surname and looks for alt names that equal or start with the rest, for people with that surname.
 
 ### Specific Data
 
 ```bash
 python3 scripts/cbdb_query.py kinship 3767       # Family tree
 python3 scripts/cbdb_query.py offices 3767        # Official postings
-python3 scripts/cbdb_query.py associations 3767   # Social network
+python3 scripts/cbdb_query.py associations 3767   # Social network (first 100)
+python3 scripts/cbdb_query.py associations 3767 --all     # All associations (or --limit N)
 python3 scripts/cbdb_query.py addresses 3767      # Places/addresses
 python3 scripts/cbdb_query.py entries 3767        # Exam/entry records
 python3 scripts/cbdb_query.py altnames 3767       # Alternative names
@@ -84,6 +112,10 @@ python3 scripts/cbdb_query.py texts 3767          # Writings/texts
 python3 scripts/cbdb_query.py institutions 3767   # Academies, temples, etc.
 python3 scripts/cbdb_query.py postaddr 3767       # Places of official service
 ```
+
+**Associations are capped at 100.** Both `associations` and the full profile return at most 100 associations. Dated ones come first, then undated ones (CBDB uses NULL, 0, -1 and -9999 for "unknown year"; the output shows `null`). When the list is cut, `associations` prints a note to stderr, and the profile has `associations_total` and a `truncated` note. Example: 王守仁 (30374) has 383 associations. Use `associations <ID> --all` to get them all.
+
+**Offices** are sorted by first year. Posts with no year come last.
 
 ### Raw SQL
 
@@ -124,9 +156,13 @@ All commands output JSON. Example for `person "蘇軾"`:
     { "title_chn": "東坡集", "role_chn": "撰著者", "role": "Author" }
   ],
   "institutions": [...],
-  "posted_addresses": [...]
+  "posted_addresses": [...],
+  "associations_total": 1033,
+  "truncated": ["associations: showing 100 of 1033 (dated first). Run `associations 3767 --all` for all."]
 }
 ```
+
+`truncated` appears only when a list was cut.
 
 ## Kinship Tree Visualization
 
@@ -153,7 +189,8 @@ python3 scripts/cbdb_query.py tree 3767 -d 2 -f svg -o su_shi.svg
 
 - **Gold** node = ego (the queried person)
 - **Blue** nodes = male, **Pink** nodes = female
-- **Solid arrows** = parent → child
+- **Solid arrows** = parent → child (one generation)
+- **Long dashed/dotted arrows** = lineal kin more than one generation apart (祖父, 孫, 曾孫). They span the right number of levels, so a grandson is drawn two levels below, not as a son
 - **Dashed lines** = marriage / affinal relations
 - **Dotted lines** = siblings
 - Nodes show name and birth–death years when known
@@ -333,14 +370,13 @@ export_network(network, "su_shi_kin.gexf", "gexf")
 - Source: [cbdb-project/cbdb_sqlite](https://github.com/cbdb-project/cbdb_sqlite)
 - CBDB Project: https://projects.iq.harvard.edu/cbdb
 
-## Inside the Ming research suite
+## Note for the author's own projects
 
-When working in `ming-qing-research-suite`, the `sino-authorities` MCP
-server (`sino_authorities/` in that repo) is the preferred route for
-resolution: name to id, id to record, era date to JDN. It reads the same
-database as this skill and returns the federation's `pack {corpus,
-pack_version, build_hash}` envelope. Use this skill for exploration:
-graphs, exports, bounding boxes, raw SQL.
+Most users can skip this section. The author also runs a separate, private
+project with a `sino-authorities` MCP server. It reads the same CBDB
+database. If (and only if) that server is available in your session, you can
+use it for quick lookups (name → person ID, ID → record). Use this skill for
+everything else: graphs, exports, and raw SQL.
 
 ## Feedback and Citation
 

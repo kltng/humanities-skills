@@ -11,11 +11,22 @@ import time
 import urllib.request
 import urllib.parse
 import urllib.error
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
 BASE_URL = "https://catalog.hathitrust.org/api/volumes"
 
 VALID_ID_TYPES = {"isbn", "lccn", "oclc", "issn", "htid", "recordnumber"}
+
+# Which rights codes give full view. Source: HathiTrust's own catalog indexer
+# (github.com/hathitrust/hathitrust_catalog_indexer, translation_maps/ht/
+# availability_map_ht.rb and availability_map_ht_intl.rb), checked 2026-10-26.
+# Every other code (ic, op, orph, orphcand, und, umall, nobody, pd-pvt, supp)
+# is search-only. "cc-*" (all Creative Commons codes) is full view everywhere.
+FULL_VIEW_US = {"pd", "pdus", "ic-world", "und-world", "world"}
+# Outside the US: pdus (public domain in the US only) is NOT open, and icus
+# (in copyright in the US only) IS open.
+FULL_VIEW_NON_US = {"pd", "icus", "ic-world", "und-world", "world"}
 
 
 def _encode_id(id_value: str) -> str:
@@ -198,19 +209,64 @@ class HathiTrustAPI:
                 return marc
         return None
 
-    @staticmethod
-    def has_full_view(response: Dict) -> bool:
-        """Check if any item in the response has full-view access."""
-        for item in response.get("items", []):
-            if item.get("rightsCode") == "pd" or item.get("usRightsString") == "Full View":
-                return True
-        return False
+    @classmethod
+    def get_original_title(cls, response: Dict) -> str:
+        """
+        Title in the original script (e.g. Chinese characters) from a /full/
+        response, read from MARC field 880 linked to 245. The `titles` field
+        of the API is romanized only. Returns "" if there is no such field
+        (or if the response is a /brief/ one, which has no MARC-XML).
+        """
+        marc = cls.get_marc_xml(response)
+        if not marc:
+            return ""
+        try:
+            root = ET.fromstring(marc)
+        except ET.ParseError:
+            return ""
+        ns = "{http://www.loc.gov/MARC21/slim}"
+        for field in root.iter(f"{ns}datafield"):
+            if field.get("tag") != "880":
+                continue
+            subs = [(sf.get("code"), sf.text or "") for sf in field.findall(f"{ns}subfield")]
+            if not any(c == "6" and t.startswith("245") for c, t in subs):
+                continue
+            parts = [t for c, t in subs if c in ("a", "b", "n", "p")]
+            return " ".join(" ".join(parts).split()).rstrip(" /:;,.")
+        return ""
 
     @staticmethod
-    def get_full_view_url(response: Dict) -> Optional[str]:
-        """Get the URL of the first full-view item, if any."""
+    def is_full_view(item: Dict, us: bool = True) -> bool:
+        """
+        True if one item (volume) is full view.
+
+        us=True (default): for readers in the United States. This matches the
+        API's own `usRightsString` ("Full view"). pd, pdus, ic-world,
+        und-world and cc-* are open; pdus is open in the US only.
+        us=False: for readers outside the US. pdus is not open there; icus is.
+        HathiTrust may still limit some non-US access; check the item page.
+        """
+        code = str(item.get("rightsCode") or "").strip().lower()
+        if code:
+            if code.startswith("cc-"):
+                return True
+            return code in (FULL_VIEW_US if us else FULL_VIEW_NON_US)
+        # No rights code: fall back to the US rights string (case-insensitive;
+        # the live API says "Full view", older docs said "Full View").
+        if us:
+            return str(item.get("usRightsString") or "").strip().lower() == "full view"
+        return False
+
+    @classmethod
+    def has_full_view(cls, response: Dict, us: bool = True) -> bool:
+        """Check if any item in the response is full view (US readers by default)."""
+        return any(cls.is_full_view(item, us) for item in response.get("items", []))
+
+    @classmethod
+    def get_full_view_url(cls, response: Dict, us: bool = True) -> Optional[str]:
+        """Get the URL of the first full-view item, if any (US readers by default)."""
         for item in response.get("items", []):
-            if item.get("rightsCode") == "pd" or item.get("usRightsString") == "Full View":
+            if cls.is_full_view(item, us):
                 return item.get("itemURL")
         return None
 

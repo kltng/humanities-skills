@@ -14,6 +14,10 @@ from typing import Optional, Iterable, Any
 from urllib.error import HTTPError, URLError
 
 
+class MaxlagError(RuntimeError):
+    """Raised when the Action API keeps answering with a maxlag error."""
+
+
 class WikidataAPI:
     """Client for Wikidata API operations."""
     
@@ -28,6 +32,15 @@ class WikidataAPI:
     # Wikidata Vector Database
     VDB_BASE_URL = "https://wd-vectordb.wmcloud.org"
     
+    # Placeholder only. Pass your own user_agent or set WIKIDATA_USER_AGENT.
+    DEFAULT_USER_AGENT = (
+        "WikidataSearchSkill/1.1 (https://github.com/kltng/humanities-skills; "
+        "contact: example@example.com)"
+    )
+
+    # Seconds to wait between maxlag retries when no Retry-After is sent.
+    MAXLAG_WAIT_CAP = 10.0
+
     # Common external identifier properties
     IDENTIFIER_PROPERTIES = {
         "P214": "VIAF ID",
@@ -60,17 +73,35 @@ class WikidataAPI:
 
     def __init__(
         self,
-        user_agent: str = "WikidataSearchSkill/1.0 (https://www.wikidata.org; contact: example@example.com)",
+        user_agent: str = DEFAULT_USER_AGENT,
         min_request_interval: float = 0.5,
         max_retries: int = 4,
         maxlag: Optional[int] = 5,
         vectordb_api_secret: Optional[str] = None,
+        maxlag_retries: int = 2,
+        maxlag_fallback: bool = True,
     ):
+        """
+        Args:
+            user_agent: Set your own, with real contact info (a URL or email).
+                Falls back to the WIKIDATA_USER_AGENT environment variable.
+            maxlag: Sent with Action API calls. Wikidata answers "maxlag" when
+                its servers are behind by more than this many seconds.
+            maxlag_retries: How many times to wait and retry after a maxlag error.
+            maxlag_fallback: All Action API calls in this client are read-only.
+                If maxlag errors persist after the retries, send the request once
+                more without maxlag instead of failing. Set False to raise.
+        """
+        env_ua = os.environ.get("WIKIDATA_USER_AGENT")
+        if env_ua and user_agent == self.DEFAULT_USER_AGENT:
+            user_agent = env_ua
         self.user_agent = user_agent
         self._last_request_time = 0
         self._min_request_interval = float(min_request_interval)
         self._max_retries = int(max_retries)
         self._maxlag = int(maxlag) if maxlag is not None else None
+        self._maxlag_retries = max(0, int(maxlag_retries))
+        self._maxlag_fallback = bool(maxlag_fallback)
         self._vectordb_api_secret = (
             vectordb_api_secret
             if vectordb_api_secret is not None
@@ -129,6 +160,7 @@ class WikidataAPI:
             headers.update(extra_headers)
 
         last_error: Optional[Exception] = None
+        maxlag_hits = 0
         for attempt in range(self._max_retries + 1):
             self._rate_limit()
 
@@ -142,12 +174,17 @@ class WikidataAPI:
                 # The Action API reports maxlag as HTTP 200 with an error body.
                 error = data.get("error") if isinstance(data, dict) else None
                 if isinstance(error, dict) and error.get("code") == "maxlag":
-                    last_error = RuntimeError(
+                    maxlag_hits += 1
+                    last_error = MaxlagError(
                         f"Wikidata maxlag: {error.get('info', '')} "
                         "(for read-only use you can pass maxlag=None or a higher value)"
                     )
+                    if maxlag_hits > self._maxlag_retries:
+                        raise last_error
                     wait = self._retry_after_seconds(retry_after)
-                    time.sleep(wait if wait is not None else 5.0)
+                    wait = 5.0 if wait is None else wait
+                    # Back off a little more each time, but keep the wait short.
+                    time.sleep(min(self.MAXLAG_WAIT_CAP, wait * maxlag_hits))
                     continue
                 return data
             except HTTPError as e:
@@ -175,9 +212,19 @@ class WikidataAPI:
     def _request(self, params: dict) -> dict:
         """Make Wikidata Action API request with rate limiting and retries."""
         params = dict(params)
-        if self._maxlag is not None:
-            params.setdefault("maxlag", str(self._maxlag))
         params.setdefault("formatversion", "2")
+        if self._maxlag is None:
+            return self._request_json(self.BASE_URL, params)
+        lagged = dict(params)
+        lagged.setdefault("maxlag", str(self._maxlag))
+        try:
+            return self._request_json(self.BASE_URL, lagged)
+        except MaxlagError:
+            if not self._maxlag_fallback:
+                raise
+        # Every Action API call made by this client is a read (no edits).
+        # maxlag mainly protects the servers from bots that edit. After waiting
+        # and retrying, one read without maxlag is an acceptable load.
         return self._request_json(self.BASE_URL, params)
     
     def search(
@@ -483,7 +530,12 @@ class WikidataAPI:
         ids = [pid for pid in property_ids if pid]
         if not ids:
             return {}
-        entities = self.get_entities(ids[:50], props=["labels"], languages=[language])
+        entities: dict = {}
+        # wbgetentities accepts at most 50 IDs per call, so ask in batches.
+        for start in range(0, len(ids), 50):
+            entities.update(
+                self.get_entities(ids[start:start + 50], props=["labels"], languages=[language])
+            )
         out: dict[str, str] = {}
         for pid, ent in entities.items():
             labels = ent.get("labels", {})

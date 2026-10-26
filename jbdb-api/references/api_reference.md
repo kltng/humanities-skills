@@ -2,7 +2,9 @@
 
 ## API Endpoint
 
-Base URL: `https://jbdb.jp/api`
+Base URL: `https://app.jbdb.jp/api`
+
+(The old `https://jbdb.jp/api` fails with a TLS hostname error; the API moved to `app.jbdb.jp`. Checked 2026-10-26.)
 
 The API uses LoopBack 3 REST conventions. No authentication is required.
 
@@ -73,6 +75,12 @@ GET /BiogMains?filter={...}
 **Find by ID:**
 ```
 GET /BiogMains/{id}
+```
+Note: an ID that does not exist returns HTTP 500 `{"error":{"statusCode":500,...}}`, not 404. To test for existence, use `GET /BiogMains?filter={"where":{"cPersonid":{id}}}`, which returns `[]`.
+
+**Names for many IDs in one call:**
+```
+GET /BiogMains?filter={"where":{"cPersonid":{"inq":[2562,2564]}},"fields":{"cPersonid":true,"cName":true,"cNameRomaji":true}}
 ```
 
 #### BiogMain Schema

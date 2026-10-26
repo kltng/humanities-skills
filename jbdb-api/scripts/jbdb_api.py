@@ -16,7 +16,9 @@ from urllib.error import HTTPError, URLError
 class JBDBAPI:
     """Client for the Japan Biographical Database API."""
 
-    BASE_URL = "https://jbdb.jp/api"
+    # The API moved from jbdb.jp/api to app.jbdb.jp/api (jbdb.jp has no valid
+    # TLS certificate for the API). Checked 2026-10-26.
+    BASE_URL = "https://app.jbdb.jp/api"
     DEFAULT_USER_AGENT = "JBDBAPISkill/1.0 (https://github.com/kltng/humanities-skills)"
 
     def __init__(self, min_request_interval: float = 1.0, max_retries: int = 3,
@@ -26,6 +28,7 @@ class JBDBAPI:
         self._max_retries = max_retries
         self._user_agent = user_agent
         self._nengo_cache: dict[int, dict] = {}
+        self._code_cache: dict[tuple[str, int], Optional[dict]] = {}
 
     def _rate_limit(self) -> None:
         elapsed = time.time() - self._last_request_time
@@ -88,8 +91,32 @@ class JBDBAPI:
     # ── Person queries ──────────────────────────────────────────
 
     def query_by_id(self, person_id: int) -> Optional[dict]:
-        """Query JBDB by person ID. Returns the BiogMain dict or None."""
-        return self._request(f"BiogMains/{person_id}")
+        """Query JBDB by person ID. Returns the BiogMain dict or None.
+
+        Uses a `where` filter instead of GET /BiogMains/{id}: the server answers
+        an unknown ID on that path with HTTP 500, not 404."""
+        result = self._request("BiogMains", {"where": {"cPersonid": int(person_id)}, "limit": 1})
+        return result[0] if isinstance(result, list) and result else None
+
+    def get_names(self, person_ids: list[int], chunk_size: int = 50) -> dict[int, dict]:
+        """Look up names for many person IDs at once.
+
+        Returns {person_id: {"cPersonid", "cName", "cNameRomaji"}}. Costs one
+        request per `chunk_size` IDs (one request for most people)."""
+        ids = sorted({int(i) for i in person_ids if i})
+        names: dict[int, dict] = {}
+        for start in range(0, len(ids), chunk_size):
+            chunk = ids[start:start + chunk_size]
+            filter_obj = {
+                "where": {"cPersonid": {"inq": chunk}},
+                "fields": {"cPersonid": True, "cName": True, "cNameRomaji": True},
+                "limit": len(chunk),
+            }
+            result = self._request("BiogMains", filter_obj)
+            for row in result if isinstance(result, list) else []:
+                if row.get("cPersonid") is not None:
+                    names[int(row["cPersonid"])] = row
+        return names
 
     def search_by_name(self, name: str, limit: int = 20) -> list[dict]:
         """Search across all name fields (Japanese, furigana, romaji).
@@ -165,13 +192,19 @@ class JBDBAPI:
         """Resolve a place code."""
         return self._request(f"PlaceCodes/{code}")
 
+    def _cached_code(self, table: str, code: int) -> Optional[dict]:
+        key = (table, int(code))
+        if key not in self._code_cache:
+            self._code_cache[key] = self._request(f"{table}/{int(code)}")
+        return self._code_cache[key]
+
     def resolve_kinship_code(self, code: int) -> Optional[dict]:
-        """Resolve a kinship type code."""
-        return self._request(f"KinshipCodes/{code}")
+        """Resolve a kinship type code (cached)."""
+        return self._cached_code("KinshipCodes", code)
 
     def resolve_nonkinship_code(self, code: int) -> Optional[dict]:
-        """Resolve a non-kinship type code."""
-        return self._request(f"NonkinshipCodes/{code}")
+        """Resolve a non-kinship type code (cached)."""
+        return self._cached_code("NonkinshipCodes", code)
 
     # ── Date conversion ─────────────────────────────────────────
 
@@ -187,8 +220,25 @@ class JBDBAPI:
 
     # ── Summary ─────────────────────────────────────────────────
 
-    def summarize(self, person: dict) -> str:
-        """Generate a formatted biographical summary."""
+    @staticmethod
+    def _person_label(person_id: Any, names: dict[int, dict]) -> str:
+        row = names.get(int(person_id)) if person_id else None
+        if not row:
+            return f"person ID {person_id}"
+        name = row.get("cName") or ""
+        romaji = row.get("cNameRomaji") or ""
+        label = f"{name} ({romaji})" if name and romaji else (name or romaji)
+        return f"{label} [ID {person_id}]"
+
+    def summarize(self, person: dict, resolve_names: bool = True, max_rows: int = 20) -> str:
+        """Generate a formatted biographical summary.
+
+        API cost: kinship and non-kinship lists (2 requests), alt names (1),
+        one request per new nengo/occupation/relation code (codes are cached),
+        and, when resolve_names is True, one more request to look up the names
+        of all related people together. Set resolve_names=False to skip it.
+        Events and personal history are not included (use get_events() and
+        get_personal_history() for those)."""
         lines: list[str] = []
 
         name = person.get("cName", "")
@@ -258,20 +308,44 @@ class JBDBAPI:
                 if display:
                     lines.append(f"- {display}")
 
+        pid = person.get("cPersonid", 0)
+        kin = self.get_kinship(pid)
+        nonkin = self.get_nonkinship(pid)
+        names: dict[int, dict] = {}
+        if resolve_names:
+            related = [k.get("cKinId") for k in kin[:max_rows]]
+            related += [n.get("cNonkinId") for n in nonkin[:max_rows]]
+            if any(related):
+                names = self.get_names(related)
+
         # Kinship
-        kin = self.get_kinship(person.get("cPersonid", 0))
         if kin:
             lines.append(f"\n## Kinship Relations ({len(kin)} records)")
-            for k in kin[:20]:
+            for k in kin[:max_rows]:
                 kin_code = k.get("cKinCode")
-                kin_id = k.get("cKinId")
                 rel_info = self.resolve_kinship_code(kin_code) if kin_code else None
                 rel_name = ""
                 if rel_info:
                     rel_name = rel_info.get("cKinrelTrans") or rel_info.get("cKinrel", "")
-                lines.append(f"- {rel_name} → person ID {kin_id}")
-            if len(kin) > 20:
-                lines.append(f"- ... and {len(kin) - 20} more")
+                lines.append(f"- {rel_name or '?'} → {self._person_label(k.get('cKinId'), names)}")
+            if len(kin) > max_rows:
+                lines.append(f"- ... and {len(kin) - max_rows} more")
+
+        # Non-kinship
+        if nonkin:
+            lines.append(f"\n## Non-kin Associations ({len(nonkin)} records)")
+            for n in nonkin[:max_rows]:
+                code = n.get("cNonkinCode")
+                rel_info = self.resolve_nonkinship_code(code) if code else None
+                rel_name = ""
+                if rel_info:
+                    rel_name = rel_info.get("cNonkinrelTrans") or rel_info.get("cNonkinrel", "")
+                lines.append(f"- {rel_name or '?'} → {self._person_label(n.get('cNonkinId'), names)}")
+            if len(nonkin) > max_rows:
+                lines.append(f"- ... and {len(nonkin) - max_rows} more")
+
+        if kin or nonkin:
+            lines.append("\n(Read relations as: this person is <relation> <other person>.)")
 
         return "\n".join(lines)
 
@@ -279,8 +353,8 @@ class JBDBAPI:
 def main() -> None:
     api = JBDBAPI()
 
-    print("=== Search by name: Matsuo Basho ===")
-    persons = api.search_by_name("Matsuo Basho")
+    print("=== Search by name: 本居宣長 ===")
+    persons = api.search_by_name("本居宣長")
     if persons:
         print(f"Found {len(persons)} result(s)")
         print(api.summarize(persons[0]))

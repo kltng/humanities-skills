@@ -10,6 +10,7 @@ to communicate with Zotero" enabled in preferences.
 """
 
 import json
+import os
 import re
 import time
 import uuid
@@ -58,9 +59,15 @@ def _file_url_to_path(file_url: str) -> str:
 class ZoteroLocal:
     """Client for the Zotero 8 local HTTP API."""
 
-    def __init__(self, base_url: str = "http://localhost:23119", min_interval: float = 0.1):
+    def __init__(self, base_url: str = "http://localhost:23119", min_interval: float = 0.1,
+                 debug_bridge_token: Optional[str] = None):
         self._api_base = f"{base_url}/api"
         self._connector_base = f"{base_url}/connector"
+        self._debug_bridge_url = f"{base_url}/debug-bridge/execute"
+        # Token for the Debug Bridge add-on (must match the Zotero pref
+        # extensions.zotero.debug-bridge.token).
+        self._debug_bridge_token = (debug_bridge_token
+                                    or os.environ.get("ZOTERO_DEBUG_BRIDGE_TOKEN"))
         self._min_interval = min_interval
         self._last_request = 0.0
 
@@ -266,9 +273,15 @@ class ZoteroLocal:
     # ── Read: Export ──
 
     def export_items(self, format: str = "bibtex", keys: Optional[List[str]] = None,
-                     item_type: Optional[str] = None, tag: Optional[str] = None) -> str:
+                     item_type: Optional[str] = None, tag: Optional[str] = None,
+                     limit: Optional[int] = 100, start: int = 0) -> str:
         """Export items in a bibliographic format.
         Formats: bibtex, ris, csljson, mods, refer, tei, wikipedia
+
+        With ``keys``, exports exactly those items. Without ``keys``, exports
+        at most ``limit`` items (default 100), starting at ``start``. Pass
+        ``limit=None`` to export the whole (filtered) library; this can be
+        thousands of entries.
         """
         if keys:
             # Export specific items
@@ -279,7 +292,11 @@ class ZoteroLocal:
                     results.append(r)
             return "\n".join(results)
         else:
-            params = {"format": format}
+            params: Dict[str, Any] = {"format": format}
+            if limit is not None:
+                params["limit"] = limit
+                if start:
+                    params["start"] = start
             if item_type:
                 params["itemType"] = item_type
             if tag:
@@ -413,12 +430,21 @@ class ZoteroLocal:
         except urllib.error.HTTPError:
             return None
 
-    # ── Better BibTeX Debug Bridge ──
+    # ── Debug Bridge add-on ──
+    #
+    # The Debug Bridge is a separate Zotero add-on (id debug-bridge@iris-advies.com).
+    # It is built in the Better BibTeX repository, but Better BibTeX itself does
+    # NOT provide this endpoint. Install the .xpi from
+    # https://github.com/retorquere/zotero-better-bibtex/releases/tag/debug-bridge
+    # and set a token in Zotero's Config Editor: extensions.zotero.debug-bridge.token
+
+    DEBUG_BRIDGE_URL = "https://github.com/retorquere/zotero-better-bibtex/releases/tag/debug-bridge"
 
     def _debug_bridge(self, js_code: str) -> Any:
-        """Execute JavaScript inside Zotero via the Better BibTeX debug-bridge.
+        """Execute JavaScript inside Zotero via the Debug Bridge add-on.
 
-        Requires the Better BibTeX (BBT) extension to be installed.
+        Requires the Debug Bridge add-on and a token (the
+        ``debug_bridge_token`` argument or ZOTERO_DEBUG_BRIDGE_TOKEN).
 
         Args:
             js_code: JavaScript code to execute (runs as async function body).
@@ -429,15 +455,14 @@ class ZoteroLocal:
         Raises:
             RuntimeError: If the debug-bridge is not available or returns an error.
         """
-        url = f"{self._connector_base.rsplit('/', 1)[0]}/debug-bridge/execute"
         self._rate_limit()
+        # Zotero no longer accepts application/javascript here; use text/plain.
+        headers = {"Content-Type": "text/plain", "User-Agent": "ZoteroLocalSkill/1.0"}
+        if self._debug_bridge_token:
+            headers["Authorization"] = f"Bearer {self._debug_bridge_token}"
         req = urllib.request.Request(
-            url, data=js_code.encode("utf-8"),
-            headers={
-                "Content-Type": "application/javascript",
-                "User-Agent": "ZoteroLocalSkill/1.0",
-            },
-            method="POST",
+            self._debug_bridge_url, data=js_code.encode("utf-8"),
+            headers=headers, method="POST",
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -447,29 +472,46 @@ class ZoteroLocal:
                 except (json.JSONDecodeError, ValueError):
                     return raw
         except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace") if e.fp else ""
             if e.code == 404:
                 raise RuntimeError(
-                    "debug-bridge not available. Install Better BibTeX (BBT): "
-                    "https://retorque.re/zotero-better-bibtex/installation/"
+                    "Debug Bridge add-on not installed (Better BibTeX alone does not "
+                    f"provide it). Get it from {self.DEBUG_BRIDGE_URL}"
                 )
-            body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+            if e.code == 401:
+                raise RuntimeError(
+                    "Debug Bridge refused the request: missing or wrong token. Set "
+                    "ZOTERO_DEBUG_BRIDGE_TOKEN to the value of the Zotero pref "
+                    "extensions.zotero.debug-bridge.token."
+                )
+            if "token not configured" in body:
+                raise RuntimeError(
+                    "Debug Bridge has no token yet. In Zotero: Settings > Advanced > "
+                    "Config Editor, add the string pref extensions.zotero.debug-bridge.token, "
+                    "and use the same value in ZOTERO_DEBUG_BRIDGE_TOKEN."
+                )
             raise RuntimeError(f"debug-bridge error ({e.code}): {body}")
 
-    def check_bbt(self) -> bool:
-        """Check if Better BibTeX is installed and the debug-bridge is available.
+    def check_debug_bridge(self) -> bool:
+        """Return True if the Debug Bridge add-on is installed and the token works.
 
-        Returns True if BBT is available, False otherwise.
+        Runs a tiny script (``return 'ok'``) that does not touch the library.
         """
         try:
             self._debug_bridge("return 'ok';")
             return True
-        except (RuntimeError, Exception):
+        except Exception:
             return False
+
+    def check_bbt(self) -> bool:
+        """Deprecated name for check_debug_bridge(). Despite the name, this
+        checks the Debug Bridge add-on, not Better BibTeX."""
+        return self.check_debug_bridge()
 
     def attach_file(self, file_path: str, parent_key: str) -> bool:
         """Attach a file to an existing Zotero item.
 
-        Requires the Better BibTeX (BBT) extension for its debug-bridge.
+        Requires the Debug Bridge add-on and its token (see _debug_bridge).
 
         Args:
             file_path: Absolute path to the file.
@@ -503,12 +545,12 @@ class ZoteroLocal:
         self._debug_bridge(js_code)
         return True
 
-    # ── Write: Collections (requires BBT) ──
+    # ── Write: Collections (requires the Debug Bridge add-on) ──
 
     def create_collection(self, name: str, parent_key: Optional[str] = None) -> Dict:
         """Create a collection or sub-collection.
 
-        Requires the Better BibTeX (BBT) extension for its debug-bridge.
+        Requires the Debug Bridge add-on and its token (see _debug_bridge).
 
         Args:
             name: Collection name.
@@ -554,7 +596,7 @@ class ZoteroLocal:
     def delete_collection(self, collection_key: str, delete_items: bool = False) -> bool:
         """Delete a collection.
 
-        Requires the Better BibTeX (BBT) extension for its debug-bridge.
+        Requires the Debug Bridge add-on and its token (see _debug_bridge).
         Zotero also deletes all sub-collections of this collection.
 
         Args:
@@ -710,15 +752,16 @@ if __name__ == "__main__":
 
     print("=== Zotero is running ===")
     items = z.get_items(limit=5)
-    print(f"\nLibrary has {len(items)} items (showing up to 5):")
+    print(f"\nFirst {len(items)} items:")
     for item in items:
         s = z.summarize(item)
         print(f"  [{s['key']}] {s['title']} — {s['creators']} ({s['date']})")
 
+    collections = z.get_collections()
+    print(f"\nCollections: {len(collections)}")
+
     tags = z.get_tags()
     if tags:
-        print(f"\nTags: {', '.join(t.get('tag', '') for t in tags)}")
-
-    collections = z.get_collections()
-    if collections:
-        print(f"\nCollections: {len(collections)}")
+        names = [t.get("tag", "") for t in tags[:10]]
+        more = f" (and {len(tags) - 10} more)" if len(tags) > 10 else ""
+        print(f"\nTags: {', '.join(names)}{more}")

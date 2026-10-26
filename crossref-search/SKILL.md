@@ -1,7 +1,7 @@
 ---
 name: crossref-search
 description: Search Crossref's 188M+ DOI records (journal articles, books, book chapters, conference papers) through its free public REST API, no API key. Use this skill whenever the user wants to find scholarly articles or chapters by topic, author, or journal; look up or verify a DOI; turn a free-text reference into a DOI; format a citation (Chicago, APA, MLA, BibTeX, RIS); list a work's references or its citation count; browse a journal by ISSN; or find JSTOR links (3.3M JSTOR DOIs with prefix 10.2307). Also use it to check which agency registered a DOI (Crossref, DataCite, CNKI, ISTIC, Airiti).
-version: 1.0.0
+version: 1.0.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -46,9 +46,22 @@ Field queries (`--title`, `--author`, `--container`, ...) must all match, so com
 - `--author-match` keeps only items with an author or editor whose name contains every word of `--author`. `--author "Kwok-leong Tang"` → 2 of 20 items (the others are Leong Kwok Onn, Kwok Peng Leong, ...).
 - Both filter one page after the search. Use a larger `--rows` (up to 1000) to scan more.
 
-### CJK searches
+### CJK searches: weak recall, try English and OpenAIRE
 
-Crossref splits CJK text into single characters, so `明代科舉` also returns 新时代斗争精神 (shares 代 and 科). Relevant titles still rank near the top. Check titles by eye, or use `--phrase`. A related title that splits the term (科舉‧家族‧女德：明代楊文儷) is dropped by `--phrase`, so also try the words separately (`"明代 科舉"`).
+Crossref is weak for Chinese, Japanese, and Korean terms. Expect few hits, and sometimes none.
+
+- Crossref splits Chinese and Japanese text into single characters. `明代科舉` also matches 新时代斗争精神 (shares 代 and 科), so `total` is huge and almost all loose matches.
+- When relevant records exist, they usually rank first. But there are often very few. Tests on 2026-10-26 (counting the title and `alternate_titles`):
+  - `孔廟`: 0 relevant in the first 1,000 of 14,123 hits. `--title 孔廟`: 0 in 200.
+  - `文廟`: 19 in the first 1,000. `孔庙`: 6.
+  - Korean `문묘`: only 6 hits in all (all relevant). `석전`: 7 hits.
+  - For comparison, openaire-search with a quoted phrase found 10 records with 孔廟 and 77 with 文廟.
+- Many Korean, Taiwanese, Japanese, and mainland journals deposit the English title as the main `title` and the CJK title only in `alternate_titles`. So:
+  1. **Search the English form too.** `--title "Confucian temple"` gave 20 relevant items in the first 100, many with a CJK alternate title (文庙, 문묘). Try romanized forms as well (`--title Munmyo` → 13 hits).
+  2. **Check `alternate_titles`, not only `title`,** when you read results by eye. `--phrase` already checks both.
+  3. **Use openaire-search for CJK phrases** (`search '"孔廟"'`). It does phrase matching and also covers NDL, J-STAGE, and repository records.
+- `--phrase` drops a related title that splits the term (科舉‧家族‧女德：明代楊文儷), so also try the words separately (`"明代 科舉"`).
+- A zero count for a CJK term in Crossref does **not** mean that no literature exists.
 
 Coverage: Taiwanese and Hong Kong journals often use Crossref (明代研究 via Angle Publishing, *Sino-Humanitas* via HKBU), and Korean journals are well covered. **Most mainland Chinese DOIs are not in Crossref**. CNKI and ISTIC (Wanfang) register them, and many Taiwanese DOIs are registered with Airiti. For those, `work` returns nothing; run `agency` to see who registered the DOI.
 
@@ -118,7 +131,7 @@ Each summary has `doi`, `type`, `title` (with subtitle), `alternate_titles`, `au
 
 ## Best Practices
 
-1. **Verify a reference with `match`, then `work`.** The top `match` result is a guess. Compare title, authors, and year before using the DOI. Scores are not comparable across queries.
+1. **Verify a reference with `match`, then `work`.** The top `match` result is a guess. Compare title, authors, and year before using the DOI. Scores are not comparable across queries. For CJK references the top match is often a wrong work: in two tests on 2026-10-26, two Chinese journal references (何淑宜 2000, 黃進興 1993) both returned unrelated Taiwanese papers. `match` is also slower for long CJK strings: about 1.5–2 s per call today, and up to about 4 s per call in an earlier bulk run (English about 1 s). For a long list (2,000+ references) plan for one to two hours, and save results as you go.
 2. **Narrow before you sort.** Add `--type`, years, `--issn`, or `--jstor` first. Then sorting by `is-referenced-by-count` is meaningful.
 3. **Use facets to explore** (`--facets type-name:10,container-title:10,publisher-name:10`), but remember they count the loose matches too.
 4. **`cited_by` is Crossref's count only.** It is usually lower than Google Scholar's and covers only citing works with deposited references.

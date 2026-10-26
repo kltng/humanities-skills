@@ -25,6 +25,23 @@ _NS = {
 
 _BASE_URL = "https://export.arxiv.org/api/query"
 
+# Percent-escapes for the characters of arXiv query syntax: " ( ) [ ] : and space.
+_PRE_ENCODED = re.compile(r"%(22|28|29|5B|5D|3A|20)", re.IGNORECASE)
+
+
+def normalize_query(query: str) -> str:
+    """Undo hand-made URL encoding in a search query.
+
+    The client URL-encodes the query itself. A query that was already encoded
+    by hand (``ti:%22classical+Chinese%22``) would be encoded twice and return
+    0 results. If the query contains one of the escapes above, decode it once
+    (``%22`` -> ``"``, ``+`` -> space). Otherwise return it unchanged, so a
+    literal ``+`` (as in ``ti:C++``) is kept.
+    """
+    if _PRE_ENCODED.search(query):
+        return urllib.parse.unquote_plus(query)
+    return query
+
 
 class ArxivAPI:
     """Lightweight client for the arXiv Query API."""
@@ -56,7 +73,9 @@ class ArxivAPI:
         Parameters
         ----------
         query : str
-            arXiv search query (e.g. ``"ti:attention AND cat:cs.CL"``).
+            arXiv search query, NOT URL-encoded (e.g.
+            ``'ti:"classical Chinese" AND cat:cs.CL'``). The client encodes it.
+            Hand-encoded input (``%22``, ``%28``, ``+``) is decoded first.
         start : int
             Zero-based offset for pagination.
         max_results : int
@@ -73,7 +92,7 @@ class ArxivAPI:
             ``entries`` (list of article dicts).
         """
         params: dict[str, str] = {
-            "search_query": query,
+            "search_query": normalize_query(query),
             "start": str(start),
             "max_results": str(max_results),
         }

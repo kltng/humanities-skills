@@ -1,7 +1,7 @@
 ---
 name: arxiv-search
 description: Search arXiv for preprints and scholarly articles across physics, mathematics, computer science, quantitative biology, quantitative finance, statistics, electrical engineering, systems science, and economics. Supports field-specific queries (title, author, abstract, category), boolean logic, date filtering, and bulk retrieval with pagination.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -36,14 +36,21 @@ search_query=ti:attention AND ti:transformer
 search_query=cat:cs.AI ANDNOT cat:cs.CL
 ```
 
-### Parentheses and quotes must be URL-encoded
+### Write queries in plain text; do not URL-encode them
 
-- Parentheses: `%28` and `%29`
-- Quotes (phrase search): `%22`
+Pass the query to the Python script exactly as you would type it, with real quotes, parentheses and spaces. The script URL-encodes it for you:
+
+```python
+api.search('ti:"classical Chinese"')                        # phrase search
+api.search('au:bengio AND (cat:cs.LG OR cat:cs.AI)')         # grouping
+```
+
+Do **not** write `%22`, `%28` or `+` yourself. If you do, the query is encoded twice and arXiv finds nothing (`ti:%22classical+Chinese%22` returned 0 results, `ti:"classical Chinese"` returned 36, checked 2026-10-26). Since version 1.0.2 the script detects hand-encoded input (`%22`, `%28`, `%29`, `%5B`, `%5D`, `%3A`, `%20`) and decodes it once, but plain text is the clear way.
+
+Only when you build a raw URL yourself (for example with `curl`) must you encode: quotes `%22`, parentheses `%28` `%29`, spaces `+`:
 
 ```
-search_query=ti:%22large+language+model%22
-search_query=au:bengio+AND+%28cat:cs.LG+OR+cat:cs.AI%29
+https://export.arxiv.org/api/query?search_query=ti:%22large+language+model%22
 ```
 
 ### Date range filtering uses a special syntax
@@ -80,7 +87,14 @@ arXiv asks for a minimum 3-second delay between API calls. Results update once d
 
 ## Python Script
 
-Use `scripts/arxiv_api.py` for programmatic access (zero dependencies):
+Use `scripts/arxiv_api.py` for programmatic access (zero dependencies).
+
+**Working directory:** `from scripts.arxiv_api import ArxivAPI` only works when Python runs from inside the skill folder (the folder that holds this `SKILL.md`). From anywhere else, add the folder to the path first:
+
+```python
+import sys
+sys.path.insert(0, "/path/to/arxiv-search")   # the folder with SKILL.md
+```
 
 ```python
 from scripts.arxiv_api import ArxivAPI
@@ -94,6 +108,11 @@ results = api.search("ti:diffusion AND cat:cs.CV", max_results=5)
 
 # Author search
 results = api.search("au:hinton AND cat:cs.LG", max_results=20)
+
+# Humanities example: NLP work on premodern Chinese texts
+# (18 results on 2026-10-26)
+results = api.search('ti:"ancient Chinese" AND cat:cs.CL', max_results=20)
+results = api.search('ti:"classical Chinese" AND (cat:cs.CL OR cat:cs.AI)')  # 35 results
 
 # Date-filtered search
 results = api.search(
@@ -110,7 +129,8 @@ results = api.fetch_by_ids(["2301.07041", "2303.08774", "2305.10601"])
 page1 = api.search("cat:cs.CL", max_results=100, start=0)
 page2 = api.search("cat:cs.CL", max_results=100, start=100)
 
-# Each result is a dict with keys:
+# The search returns a dict: total_results, start_index, items_per_page, entries.
+# Each item in results["entries"] is a dict with keys:
 # id, title, summary, authors, published, updated,
 # categories, primary_category, links, comment, journal_ref, doi
 ```

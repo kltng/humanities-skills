@@ -68,6 +68,7 @@ GET /placename
 - Default output is XML unless `fmt=json` is specified
 - Multiple parameters can be combined in a single query
 - **Prefix matching**: The `n` parameter uses wildcard suffix matching (e.g., `n=beijing` matches "北京路", "北京行省", "北井县", etc.)
+- **Spaces in romanized names**: Some records split syllables with a space ("Su Zhou" for 苏州, 589-1112), others do not ("Suzhou Fu"). `n=suzhou&yr=1100` returns 0 results; `n=su zhou&yr=1100` returns 4 (tested 2026-10-26). Chinese characters (traditional or simplified) avoid this.
 
 **Example Requests:**
 
@@ -137,6 +138,8 @@ Historical Chinese administrative units include:
 
 **Note:** The `memo` field shows the actual query pattern used, including the wildcard suffix (`%`). This confirms the API uses prefix matching.
 
+**Warning: longitude-0 duplicates.** Many places also have a `"object type": "POLYGON"` record (often an `hvd_90xxx` id) whose `xy coordinates` has longitude `0.00000` (sometimes 1-5), e.g. `"0.00000, 31.276870"` for hvd_90496 苏州. Some other records are `"0.00000, 0.00000"`. Plotted, these land near Africa. Skip any result with longitude below 10 or latitude 0, and use the POINT record of the same place. In the local copy of this data (tgaz-sqlite skill), 6,125 of 82,117 rows have this problem.
+
 ### Canonical Lookup JSON Response
 
 ```json
@@ -183,6 +186,7 @@ Historical Chinese administrative units include:
 
 Notes on the canonical record:
 - `subordinate units` and `preceded by` appear only when the place has them (the `subordinate units` sample above is from `hvd_30015`, Zhejiang Sheng).
+- `subordinate units` lists **direct** children only. Zhejiang in 1850 lists 12 units (11 prefectures and 定海厅), no counties. Look up each child record to go one level lower (75 counties for Zhejiang 1850).
 - `subordinate units` entries use `begin_year`/`end_year` (underscore); `part of` entries use `begin year`/`end year` (space).
 - An unknown ID returns HTTP 404 with an HTML body, not JSON.
 

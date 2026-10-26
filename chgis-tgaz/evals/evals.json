@@ -29,12 +29,13 @@
     {
       "id": 3,
       "prompt": "Find all the counties (xian) in Zhejiang province around 1850 using CHGIS",
-      "expected_output": "List of counties within Zhejiang from TGAZ, whether via faceted search or hierarchical drill-down",
+      "expected_output": "List of counties within Zhejiang from TGAZ via a two-level drill-down: the province record lists 12 units (11 prefectures and Dinghai Ting) in 1850; each of those records lists its counties (75 in total)",
       "files": [],
       "expectations": [
         "The correct API domain was used (chgis.hudci.org)",
         "A year around 1850 was used to filter results",
         "Counties are listed with names and/or TGAZ IDs",
+        "The answer goes below the prefecture level (prefectures alone are not counties)",
         "Multiple county results are presented (Zhejiang had ~75 counties in 1850)"
       ]
     }

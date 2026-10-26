@@ -71,12 +71,36 @@ class TGAZAPI:
             raise last_error
         raise RuntimeError("Request failed")
 
+    @staticmethod
+    def has_bad_coords(result: dict) -> bool:
+        """True when a search result's coordinates cannot be right.
+
+        Many places have a second POLYGON record (often an hvd_90xxx id)
+        whose longitude is 0 (or 1-5). Some other records are 0, 0. On a
+        map these land near Africa. No real TGAZ place is within 10 degrees
+        of longitude 0. Accepts a search result ("xy coordinates": "lon, lat")
+        or a full record (spatial.longitude / spatial.latitude).
+        """
+        lon = lat = None
+        xy = result.get("xy coordinates")
+        if isinstance(xy, str) and "," in xy:
+            lon, lat = (v.strip() for v in xy.split(",", 1))
+        elif isinstance(result.get("spatial"), dict):
+            lon = result["spatial"].get("longitude")
+            lat = result["spatial"].get("latitude")
+        try:
+            lon_f, lat_f = float(lon), float(lat)
+        except (TypeError, ValueError):
+            return True
+        return abs(lon_f) < 10 or lat_f == 0
+
     def search(
         self,
         name: str,
         year: Optional[int] = None,
         feature_type: Optional[str] = None,
         parent: Optional[str] = None,
+        drop_bad_coords: bool = False,
     ) -> list:
         """Search for placenames using the faceted search endpoint.
 
@@ -84,12 +108,17 @@ class TGAZAPI:
             name: Place name (Chinese characters or Romanized).
                   Note: API uses prefix matching. "beijing" matches 北京路, 北京行省, etc.
                   Note: Some romanizations differ from modern pinyin (e.g., Ningbo → "Ningpo").
+                  Note: Some records split syllables with a space: 苏州 before 1367 is
+                  "Su Zhou", so "suzhou" with year=1100 finds nothing. Search
+                  Chinese characters when you can (蘇州 or 苏州 both work).
             year: Historical year (-222 to 1911). Negative for BCE.
             feature_type: Administrative type filter (xian, fu, zhou, sheng, dao, lu, jun).
             parent: Parent administrative unit name (ipar parameter).
                     WARNING: The ipar parameter is unreliable. For hierarchical queries,
                     prefer using get_by_id() on the parent record and reading its
                     subordinate units.
+            drop_bad_coords: Leave out results whose coordinates are broken
+                    (see has_bad_coords). Use this before putting results on a map.
 
         Returns:
             List of placename result dicts.
@@ -104,9 +133,13 @@ class TGAZAPI:
 
         data = self._request(self.BASE_URL, params)
         if isinstance(data, list):
-            return data
-        # Sometimes the API wraps results
-        return data.get("placenames", data.get("results", [data]))
+            results = data
+        else:
+            # The API wraps results in {"placenames": [...]}.
+            results = data.get("placenames", data.get("results", [data]))
+        if drop_bad_coords:
+            results = [r for r in results if not self.has_bad_coords(r)]
+        return results
 
     def get_by_id(self, tgaz_id: str, fmt: str = "json") -> dict:
         """Retrieve a specific placename record by TGAZ ID.
@@ -189,6 +222,43 @@ class TGAZAPI:
         if isinstance(parts, dict):
             return [parts]
         return parts
+
+    @staticmethod
+    def _in_year(unit: dict, year: Optional[int]) -> bool:
+        if year is None:
+            return True
+        try:
+            return int(unit["begin_year"]) <= year <= int(unit["end_year"])
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    def get_descendants(self, tgaz_id: str, year: Optional[int] = None,
+                        levels: int = 2) -> list:
+        """Drill down the hierarchy, `levels` steps below a unit.
+
+        A province's record lists only the next level (prefectures, 府/州/厅).
+        Counties sit one level lower, so "all counties in Zhejiang" needs
+        levels=2: one request for the province plus one per prefecture
+        (about 13 requests, 1 per second). Each returned unit gets "level"
+        (1 = direct child) and "parent id". Units are filtered to `year`,
+        and each child id is returned once.
+        """
+        found: list = []
+        seen = set()
+        frontier = [str(tgaz_id)]
+        for level in range(1, levels + 1):
+            next_frontier = []
+            for parent_id in frontier:
+                record = self.get_by_id(parent_id)
+                for unit in self.get_subordinates(record):
+                    child = unit.get("child id")
+                    if not child or child in seen or not self._in_year(unit, year):
+                        continue
+                    seen.add(child)
+                    found.append({**unit, "level": level, "parent id": parent_id})
+                    next_frontier.append(child)
+            frontier = next_frontier
+        return found
 
     def summarize(self, record: dict) -> str:
         """Generate a formatted summary of a placename record."""

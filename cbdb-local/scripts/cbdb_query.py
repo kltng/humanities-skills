@@ -15,7 +15,8 @@ Usage:
     python3 cbdb_query.py person --id 3767             # Look up by person ID
     python3 cbdb_query.py kinship 3767                 # Family/kinship network
     python3 cbdb_query.py offices 3767                 # Official postings
-    python3 cbdb_query.py associations 3767            # Social associations
+    python3 cbdb_query.py associations 3767            # Social associations (first 100)
+    python3 cbdb_query.py associations 3767 --all      # ... all of them (or --limit N)
     python3 cbdb_query.py addresses 3767               # Addresses/places
     python3 cbdb_query.py entries 3767                 # Entry/exam data
     python3 cbdb_query.py status 3767                  # Social status
@@ -36,6 +37,9 @@ Usage:
     python3 cbdb_query.py export-network 3767 -d 2 -o combined.gexf
     python3 cbdb_query.py export-office "知州" --dynasty 15 -o co_office.gexf
     python3 cbdb_query.py export-place "眉山" -o place.gexf
+
+    Database location: --db PATH (any command), or env var CBDB_DB_PATH,
+                       default scripts/cbdb.db
 
     Export options: --format/-f gexf|csv|json  --depth/-d N  --output/-o FILE
                     --dynasty N  --year-from N  --year-to N  --addr-type N
@@ -63,9 +67,23 @@ from typing import Any, Optional
 # ---------------------------------------------------------------------------
 
 DB_DIR = Path(__file__).resolve().parent
-DB_PATH = DB_DIR / "cbdb.db"
-# Sidecar recording which release produced the local cbdb.db (for `check`).
-META_PATH = DB_DIR / "cbdb.db.release.json"
+# Database location: `--db PATH` on the command line, else the CBDB_DB_PATH
+# environment variable, else scripts/cbdb.db next to this file.
+DB_ENV_VAR = "CBDB_DB_PATH"
+
+
+def _meta_path_for(db_path: Path) -> Path:
+    """Sidecar recording which release produced the database (for `check`)."""
+    return db_path.with_name(db_path.name + ".release.json")
+
+
+def _default_db_path() -> Path:
+    env = os.environ.get(DB_ENV_VAR)
+    return Path(env).expanduser() if env else DB_DIR / "cbdb.db"
+
+
+DB_PATH = _default_db_path()
+META_PATH = _meta_path_for(DB_PATH)
 
 # CBDB no longer ships the database via GitHub LFS. The current download URL,
 # filename, checksum, and release date live in this metadata file in the repo;
@@ -265,6 +283,8 @@ def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = Fa
             url = DB_DOWNLOAD_URL_FALLBACK
             print(f"Using fallback download URL: {url}")
 
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    meta_path = _meta_path_for(dest)
     archive_ext = ".7z" if url.lower().endswith(".7z") else ".zip"
     archive_path = dest.parent / f"cbdb_download{archive_ext}"
 
@@ -298,11 +318,11 @@ def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = Fa
     # Record the release that produced this database (for `check`).
     if meta:
         try:
-            META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError:
             pass
     elif zzz:
-        META_PATH.write_text(json.dumps({"variant": "zzz", "download_url": url},
+        meta_path.write_text(json.dumps({"variant": "zzz", "download_url": url},
                                         ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Create indexes for fast name lookups
@@ -391,90 +411,136 @@ def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
 # Query functions
 # ---------------------------------------------------------------------------
 
-def search_person(conn: sqlite3.Connection, query: str) -> list[dict]:
-    """Search for a person by Chinese name, pinyin, or partial match."""
-    results = []
+_PERSON_COLS = """
+    b.c_personid, b.c_name_chn, b.c_name, d.c_dynasty_chn, d.c_dynasty,
+    b.c_birthyear, b.c_deathyear, b.c_surname_chn, b.c_mingzi_chn,
+    b.c_female, b.c_index_year, b.c_notes
+"""
 
+# How a name search matched. Only "name" and "pinyin" are exact matches on
+# the primary name; the others are loose and may point to the wrong person.
+EXACT_MATCH_TYPES = ("name", "pinyin")
+
+
+def _person_row_to_dict(row: sqlite3.Row) -> dict:
+    return {
+        "person_id": row["c_personid"],
+        "name_chn": row["c_name_chn"],
+        "name_pinyin": row["c_name"],
+        "dynasty_chn": row["c_dynasty_chn"],
+        "dynasty": row["c_dynasty"],
+        "birth_year": row["c_birthyear"],
+        "death_year": row["c_deathyear"],
+        "surname_chn": row["c_surname_chn"],
+        "mingzi_chn": row["c_mingzi_chn"],
+        "female": bool(row["c_female"]) if row["c_female"] is not None else None,
+        "index_year": row["c_index_year"],
+        "notes": row["c_notes"],
+    }
+
+
+def _altname_matches(conn: sqlite3.Connection, query: str) -> list[dict]:
+    """Collect people whose alternative names (字, 號, 室名, 諡號 ...) match.
+
+    Order: exact alt name, then surname + alt name (e.g. 王陽明 → 王 + 陽明先生),
+    then alt names that start with or contain the query.
+    """
+    found: dict[int, dict] = {}
+
+    def add(rows: list, match_type: str) -> None:
+        for row in rows:
+            pid = row["c_personid"]
+            if pid in found:
+                continue
+            item = _person_row_to_dict(row)
+            item["match_type"] = match_type
+            item["matched_name"] = row["c_alt_name_chn"] or row["c_alt_name"]
+            found[pid] = item
+
+    base = f"""
+        SELECT {_PERSON_COLS}, a.c_alt_name_chn, a.c_alt_name
+        FROM ALTNAME_DATA a
+        JOIN BIOG_MAIN b ON b.c_personid = a.c_personid
+        LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
+    """
+
+    # 1. Exact alt name (Chinese or pinyin).
+    add(conn.execute(base + """
+        WHERE a.c_alt_name_chn = ? OR a.c_alt_name = ? COLLATE NOCASE
+        ORDER BY b.c_index_year
+    """, (query, query)).fetchall(), "alt_name")
+
+    # 2. Surname + alt name. People often write 姓 + 號, e.g. 王陽明 or 蘇東坡,
+    #    while CBDB stores the 號 as 陽明先生 / 陽明子 or 東坡居士.
+    for cut in (1, 2):
+        surname, rest = query[:cut], query[cut:]
+        if not rest or not all("\u3400" <= ch <= "\u9fff" for ch in query):
+            continue
+        if len(rest) == 1:
+            cond, args = "a.c_alt_name_chn = ?", (rest,)
+        else:
+            cond, args = "(a.c_alt_name_chn = ? OR a.c_alt_name_chn LIKE ?)", (rest, rest + "%")
+        add(conn.execute(base + f"""
+            WHERE b.c_surname_chn = ? AND {cond}
+            ORDER BY b.c_index_year
+            LIMIT 50
+        """, (surname, *args)).fetchall(), "surname_plus_alt_name")
+
+    # 3. Alt name starts with or contains the query (e.g. 陽明 → 陽明先生).
+    add(conn.execute(base + """
+        WHERE a.c_alt_name_chn LIKE ? OR a.c_alt_name LIKE ? COLLATE NOCASE
+        ORDER BY (a.c_alt_name_chn LIKE ?) DESC, b.c_index_year
+        LIMIT 50
+    """, (f"%{query}%", f"%{query}%", f"{query}%")).fetchall(), "alt_name_partial")
+
+    return list(found.values())
+
+
+def search_person(conn: sqlite3.Connection, query: str) -> list[dict]:
+    """Search for a person by Chinese name, pinyin, alt name, or partial match.
+
+    Each result has "match_type": "name" or "pinyin" (exact primary name),
+    "alt_name", "surname_plus_alt_name", "alt_name_partial" (with
+    "matched_name"), or "partial_name". Only the first two are exact.
+    """
     # Exact match on Chinese name
-    rows = conn.execute("""
-        SELECT b.c_personid, b.c_name_chn, b.c_name, d.c_dynasty_chn, d.c_dynasty,
-               b.c_birthyear, b.c_deathyear, b.c_surname_chn, b.c_mingzi_chn,
-               b.c_female, b.c_index_year, b.c_notes
+    rows = conn.execute(f"""
+        SELECT {_PERSON_COLS}
         FROM BIOG_MAIN b
         LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
         WHERE b.c_name_chn = ?
         ORDER BY b.c_index_year
     """, (query,)).fetchall()
+    if rows:
+        return [dict(_person_row_to_dict(r), match_type="name") for r in rows]
 
-    if not rows:
-        # Try pinyin (case-insensitive)
-        rows = conn.execute("""
-            SELECT b.c_personid, b.c_name_chn, b.c_name, d.c_dynasty_chn, d.c_dynasty,
-                   b.c_birthyear, b.c_deathyear, b.c_surname_chn, b.c_mingzi_chn,
-                   b.c_female, b.c_index_year, b.c_notes
-            FROM BIOG_MAIN b
-            LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
-            WHERE b.c_name = ? COLLATE NOCASE
-            ORDER BY b.c_index_year
-        """, (query,)).fetchall()
+    # Pinyin (case-insensitive)
+    rows = conn.execute(f"""
+        SELECT {_PERSON_COLS}
+        FROM BIOG_MAIN b
+        LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
+        WHERE b.c_name = ? COLLATE NOCASE
+        ORDER BY b.c_index_year
+    """, (query,)).fetchall()
+    if rows:
+        return [dict(_person_row_to_dict(r), match_type="pinyin") for r in rows]
 
-    if not rows:
-        # Try alt names (Chinese)
-        rows = conn.execute("""
-            SELECT DISTINCT b.c_personid, b.c_name_chn, b.c_name, d.c_dynasty_chn, d.c_dynasty,
-                   b.c_birthyear, b.c_deathyear, b.c_surname_chn, b.c_mingzi_chn,
-                   b.c_female, b.c_index_year, b.c_notes
-            FROM ALTNAME_DATA a
-            JOIN BIOG_MAIN b ON b.c_personid = a.c_personid
-            LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
-            WHERE a.c_alt_name_chn = ?
-            ORDER BY b.c_index_year
-        """, (query,)).fetchall()
+    # Alternative names: all kinds of alt-name match together, so that an
+    # exact hit on an obscure person does not hide a famous one.
+    results = _altname_matches(conn, query)
+    if results:
+        return results
 
-    if not rows:
-        # Try alt names (fuzzy)
-        rows = conn.execute("""
-            SELECT DISTINCT b.c_personid, b.c_name_chn, b.c_name, d.c_dynasty_chn, d.c_dynasty,
-                   b.c_birthyear, b.c_deathyear, b.c_surname_chn, b.c_mingzi_chn,
-                   b.c_female, b.c_index_year, b.c_notes
-            FROM ALTNAME_DATA a
-            JOIN BIOG_MAIN b ON b.c_personid = a.c_personid
-            LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
-            WHERE a.c_alt_name_chn LIKE ? OR a.c_alt_name LIKE ? COLLATE NOCASE
-            ORDER BY b.c_index_year
-            LIMIT 50
-        """, (f"%{query}%", f"%{query}%")).fetchall()
-
-    if not rows:
-        # Fuzzy match (LIKE) on main Chinese name
-        rows = conn.execute("""
-            SELECT b.c_personid, b.c_name_chn, b.c_name, d.c_dynasty_chn, d.c_dynasty,
-                   b.c_birthyear, b.c_deathyear, b.c_surname_chn, b.c_mingzi_chn,
-                   b.c_female, b.c_index_year, b.c_notes
-            FROM BIOG_MAIN b
-            LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
-            WHERE b.c_name_chn LIKE ? OR b.c_name LIKE ? COLLATE NOCASE
-            ORDER BY b.c_index_year
-            LIMIT 50
-        """, (f"%{query}%", f"%{query}%")).fetchall()
-
-    for row in rows:
-        results.append({
-            "person_id": row["c_personid"],
-            "name_chn": row["c_name_chn"],
-            "name_pinyin": row["c_name"],
-            "dynasty_chn": row["c_dynasty_chn"],
-            "dynasty": row["c_dynasty"],
-            "birth_year": row["c_birthyear"],
-            "death_year": row["c_deathyear"],
-            "surname_chn": row["c_surname_chn"],
-            "mingzi_chn": row["c_mingzi_chn"],
-            "female": bool(row["c_female"]) if row["c_female"] is not None else None,
-            "index_year": row["c_index_year"],
-            "notes": row["c_notes"],
-        })
-
-    return results
+    # Partial match (LIKE) on main name
+    rows = conn.execute(f"""
+        SELECT {_PERSON_COLS}
+        FROM BIOG_MAIN b
+        LEFT JOIN DYNASTIES d ON d.c_dy = b.c_dy
+        WHERE b.c_name_chn LIKE ? OR b.c_name LIKE ? COLLATE NOCASE
+        ORDER BY b.c_index_year
+        LIMIT 50
+    """, (f"%{query}%", f"%{query}%")).fetchall()
+    return [dict(_person_row_to_dict(r), match_type="partial_name") for r in rows]
 
 
 def get_person_by_id(conn: sqlite3.Connection, person_id: int) -> Optional[dict]:
@@ -564,7 +630,8 @@ def get_offices(conn: sqlite3.Connection, person_id: int) -> list[dict]:
         JOIN OFFICE_CODES oc ON oc.c_office_id = po.c_office_id
         LEFT JOIN DYNASTIES d ON d.c_dy = po.c_dy
         WHERE po.c_personid = ?
-        ORDER BY po.c_firstyear, po.c_sequence
+        ORDER BY (po.c_firstyear IS NULL OR po.c_firstyear = 0),
+                 po.c_firstyear, po.c_sequence
     """, (person_id,)).fetchall()
 
     return [{
@@ -580,9 +647,38 @@ def get_offices(conn: sqlite3.Connection, person_id: int) -> list[dict]:
     } for row in rows]
 
 
-def get_associations(conn: sqlite3.Connection, person_id: int) -> list[dict]:
-    """Get social associations for a person."""
-    rows = conn.execute("""
+# CBDB codes an unknown association year as NULL, 0, -1 or -9999.
+_ASSOC_UNDATED = "(a.c_assoc_first_year IS NULL OR a.c_assoc_first_year IN (0, -1, -9999))"
+ASSOC_DEFAULT_LIMIT = 100
+
+
+def _assoc_year(value: Any) -> Optional[int]:
+    return None if value in (None, 0, -1, -9999) else value
+
+
+def count_associations(conn: sqlite3.Connection, person_id: int) -> int:
+    """Count all social associations of a person (no limit)."""
+    return conn.execute("""
+        SELECT COUNT(*)
+        FROM ASSOC_DATA a
+        JOIN BIOG_MAIN b2 ON b2.c_personid = a.c_assoc_id
+        JOIN ASSOC_CODES ac ON ac.c_assoc_code = a.c_assoc_code
+        WHERE a.c_personid = ?
+    """, (person_id,)).fetchone()[0]
+
+
+def get_associations(
+    conn: sqlite3.Connection,
+    person_id: int,
+    limit: Optional[int] = ASSOC_DEFAULT_LIMIT,
+) -> list[dict]:
+    """Get social associations for a person.
+
+    Dated associations come first (by year), undated ones last. At most
+    `limit` rows are returned (None = all); use count_associations() to see
+    whether the list was cut.
+    """
+    sql = f"""
         SELECT a.c_assoc_id, b2.c_name_chn, b2.c_name,
                ac.c_assoc_desc_chn, ac.c_assoc_desc,
                a.c_assoc_first_year, a.c_assoc_last_year,
@@ -592,9 +688,13 @@ def get_associations(conn: sqlite3.Connection, person_id: int) -> list[dict]:
         JOIN ASSOC_CODES ac ON ac.c_assoc_code = a.c_assoc_code
         LEFT JOIN DYNASTIES d ON d.c_dy = b2.c_dy
         WHERE a.c_personid = ?
-        ORDER BY a.c_assoc_first_year
-        LIMIT 100
-    """, (person_id,)).fetchall()
+        ORDER BY {_ASSOC_UNDATED}, a.c_assoc_first_year, a.c_assoc_id
+    """
+    params: tuple = (person_id,)
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (person_id, int(limit))
+    rows = conn.execute(sql, params).fetchall()
 
     return [{
         "assoc_person_id": row["c_assoc_id"],
@@ -602,8 +702,8 @@ def get_associations(conn: sqlite3.Connection, person_id: int) -> list[dict]:
         "name_pinyin": row["c_name"],
         "association_chn": row["c_assoc_desc_chn"],
         "association": row["c_assoc_desc"],
-        "first_year": row["c_assoc_first_year"] if row["c_assoc_first_year"] != -9999 else None,
-        "last_year": row["c_assoc_last_year"],
+        "first_year": _assoc_year(row["c_assoc_first_year"]),
+        "last_year": _assoc_year(row["c_assoc_last_year"]),
         "dynasty_chn": row["c_dynasty_chn"],
     } for row in rows]
 
@@ -762,12 +862,15 @@ def get_full_profile(conn: sqlite3.Connection, person_id: int) -> Optional[dict]
     if not person:
         return None
 
-    return {
+    associations = get_associations(conn, person_id)
+    assoc_total = count_associations(conn, person_id)
+    profile = {
         "basic_info": person,
         "alt_names": get_altnames(conn, person_id),
         "kinship": get_kinship(conn, person_id),
         "offices": get_offices(conn, person_id),
-        "associations": get_associations(conn, person_id),
+        "associations": associations,
+        "associations_total": assoc_total,
         "addresses": get_addresses(conn, person_id),
         "entries": get_entries(conn, person_id),
         "status": get_status(conn, person_id),
@@ -775,6 +878,12 @@ def get_full_profile(conn: sqlite3.Connection, person_id: int) -> Optional[dict]
         "institutions": get_institutions(conn, person_id),
         "posted_addresses": get_posted_addresses(conn, person_id),
     }
+    if assoc_total > len(associations):
+        profile["truncated"] = [
+            f"associations: showing {len(associations)} of {assoc_total} "
+            f"(dated first). Run `associations {person_id} --all` for all."
+        ]
+    return profile
 
 
 # ---------------------------------------------------------------------------
@@ -1211,6 +1320,10 @@ def build_kinship_tree(
                         "relation_chn": row["c_kinrel_chn"],
                         "relation": row["c_kinrel"],
                         "edge_type": edge_type,
+                        # Generations between the two people (2 = grandparent/
+                        # grandchild). Renderers draw gap > 1 as a long dotted
+                        # line so a grandson is not shown as a son.
+                        "generation_gap": abs(dn - up) if edge_type == "parent-child" else 0,
                     })
 
                 if kin_id not in visited:
@@ -1301,7 +1414,12 @@ def render_tree_dot(tree: dict) -> str:
                 f'color="#CC0000", label="{rel}"];'
             )
         elif edge["edge_type"] == "parent-child":
-            lines.append(f'  {src} -> {tgt} [label="{rel}"];')
+            gap = edge.get("generation_gap", 1) or 1
+            if gap > 1:
+                # Skips generations: keep the rank distance, mark as indirect.
+                lines.append(f'  {src} -> {tgt} [label="{rel}", minlen={gap}, style=dashed];')
+            else:
+                lines.append(f'  {src} -> {tgt} [label="{rel}"];')
         elif edge["edge_type"] == "sibling":
             lines.append(
                 f'  {src} -> {tgt} [dir=none, style=dotted, label="{rel}"];'
@@ -1347,7 +1465,12 @@ def render_tree_mermaid(tree: dict) -> str:
         if edge["edge_type"] == "marriage":
             lines.append(f'  {src} -.-|"{rel}"| {tgt}')
         elif edge["edge_type"] == "parent-child":
-            lines.append(f'  {src} -->|"{rel}"| {tgt}')
+            gap = edge.get("generation_gap", 1) or 1
+            if gap > 1:
+                # Longer dotted link spans `gap` levels (e.g. 孫 two levels down).
+                lines.append(f'  {src} -{"." * gap}->|"{rel}"| {tgt}')
+            else:
+                lines.append(f'  {src} -->|"{rel}"| {tgt}')
         elif edge["edge_type"] == "sibling":
             lines.append(f'  {src} ---|"{rel}"| {tgt}')
         else:
@@ -1613,7 +1736,43 @@ def _usage() -> None:
     sys.exit(1)
 
 
+def _pop_db_option(argv: list[str]) -> Optional[Path]:
+    """Remove `--db PATH` / `--db=PATH` from argv and return the path."""
+    for i, arg in enumerate(argv):
+        if arg == "--db":
+            if i + 1 >= len(argv):
+                print("--db needs a path", file=sys.stderr)
+                sys.exit(1)
+            path = argv[i + 1]
+            del argv[i:i + 2]
+            return Path(path).expanduser()
+        if arg.startswith("--db="):
+            del argv[i]
+            return Path(arg[len("--db="):]).expanduser()
+    return None
+
+
+def _single_match_note(match: dict) -> dict:
+    """Explain a loose (non-primary-name) single match."""
+    return {
+        "matched_name": match.get("matched_name") or match.get("name_chn"),
+        "match_type": match.get("match_type"),
+        "warning": (
+            "Not an exact match on the primary name. CBDB matched "
+            f"{match.get('matched_name') or match.get('name_chn')!r} for person "
+            f"{match.get('person_id')} ({match.get('name_chn')}). Check that this is "
+            "the person you mean."
+        ),
+    }
+
+
 def main() -> None:
+    global DB_PATH, META_PATH
+    db_opt = _pop_db_option(sys.argv)
+    if db_opt is not None:
+        DB_PATH = db_opt
+        META_PATH = _meta_path_for(DB_PATH)
+
     if len(sys.argv) < 2:
         _usage()
 
@@ -1621,7 +1780,7 @@ def main() -> None:
 
     if cmd == "setup":
         rest = sys.argv[2:]
-        download_db(force="--force" in rest, zzz="--zzz" in rest)
+        download_db(DB_PATH, force="--force" in rest, zzz="--zzz" in rest)
         return
 
     if cmd == "check":
@@ -1653,10 +1812,20 @@ def main() -> None:
                 sys.exit(1)
             if len(results) == 1:
                 # Single result: show full profile
-                profile = get_full_profile(conn, results[0]["person_id"])
+                match = results[0]
+                profile = get_full_profile(conn, match["person_id"])
+                if match.get("match_type") not in EXACT_MATCH_TYPES:
+                    note = _single_match_note(match)
+                    profile = {"match": note, **profile}
+                    print(f"Note: {note['warning']}", file=sys.stderr)
                 _print_json(profile)
             else:
-                # Multiple results: show list
+                # Multiple results: show list. Pick one and use `person --id`.
+                if results[0].get("match_type") not in EXACT_MATCH_TYPES:
+                    print(f"Note: no exact primary-name match for {query!r}; "
+                          f"{len(results)} candidates matched by alternative or "
+                          "partial name (see match_type / matched_name). "
+                          "Use `person --id <ID>`.", file=sys.stderr)
                 _print_json(results)
 
     elif cmd == "kinship":
@@ -1669,7 +1838,18 @@ def main() -> None:
 
     elif cmd == "associations":
         pid = _person_id_arg()
-        _print_json(get_associations(conn, pid))
+        rest = sys.argv[3:]
+        limit: Optional[int] = ASSOC_DEFAULT_LIMIT
+        if "--all" in rest:
+            limit = None
+        elif "--limit" in rest:
+            limit = int(rest[rest.index("--limit") + 1])
+        rows = get_associations(conn, pid, limit=limit)
+        total = count_associations(conn, pid)
+        if total > len(rows):
+            print(f"Note: showing {len(rows)} of {total} associations (dated first). "
+                  "Use --all or --limit N for more.", file=sys.stderr)
+        _print_json(rows)
 
     elif cmd == "addresses":
         pid = _person_id_arg()

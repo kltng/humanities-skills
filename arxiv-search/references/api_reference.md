@@ -58,8 +58,12 @@ Operators must be **UPPERCASE**:
 
 ### Grouping and Phrases
 
-- **Grouping**: Use URL-encoded parentheses `%28` and `%29`
-- **Phrase search**: Use URL-encoded quotes `%22`
+- **Grouping**: parentheses `( )`
+- **Phrase search**: double quotes `" "`
+
+With the Python script, write them as plain text: `api.search('ti:"large language model"')`. The script URL-encodes the query, so do not encode it yourself (a hand-encoded query would be encoded twice; the script now decodes such input once to be safe).
+
+In a raw URL (curl, browser), encode them: parentheses `%28` `%29`, quotes `%22`, spaces `+`:
 
 ```
 # Papers by Bengio in AI or ML categories
@@ -79,7 +83,7 @@ submittedDate:[YYYYMMDDHHMM TO YYYYMMDDHHMM]
 
 - Format: Year-Month-Day-Hour-Minute (12 digits) in GMT, 24-hour clock
 - Do not insert a literal `T` between date and time (arXiv returns an error)
-- URL-encode spaces as `+`
+- In a raw URL, encode spaces as `+` (with the Python script, just write a space)
 
 ```
 # Papers submitted in 2024

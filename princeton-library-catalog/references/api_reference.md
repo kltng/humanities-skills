@@ -44,7 +44,7 @@ Subject indexes: drop the ` -- ` from LCSH strings and use the inverted LC form 
 
 Sortable indexes: `alma.title`, `alma.creator`, `alma.main_pub_date` (`/sort.ascending` or `/sort.descending`).
 
-Records with an unknown date (`uuuu`) sort first in ascending order. Add `alma.main_pub_date>=1000` to leave them out. (`alma.main_pub_date>0` returns nothing.)
+Records with an unknown date (`uuuu`) sort first in ascending order. Add `alma.main_pub_date>=1000` to leave them out. (`alma.main_pub_date>0` returns nothing.) Placeholder years such as `####` (a Project Gutenberg record at Princeton and U-M) still pass `>=1000` and sort first. The script's `known_dates=True` (CLI `--known-dates`) drops records whose MARC 008 year is not four digits, after the search.
 
 ## Useful Indexes
 
@@ -126,11 +126,11 @@ A romanized field carries `$6 880-01`. Its partner 880 field carries `$6 245-01/
 
 | Subfield | Meaning | Example |
 |----------|---------|---------|
-| `$b` | Library code | `BUHR` |
-| `$q` | Library name | `Buhr Shelving Facility` |
-| `$c` | Location name | `Main` |
-| `$j` | Location code | `MAIN` |
-| `$d` | Call number | `Z 3102 .P15` |
+| `$b` | Library code | `eastasian` |
+| `$q` | Library name | `East Asian Library` |
+| `$c` | Location name | `cjk: East Asian Library` |
+| `$j` | Location code | `cjk` |
+| `$d` | Call number | `DS753 .Z533 2002` |
 | `$e` | Availability | `available`, `unavailable`, `check_holdings` |
 | `$f` | Total items | `2` |
 | `$g` | Unavailable items | `0` |

@@ -50,5 +50,47 @@ class ExtractTest(unittest.TestCase):
         self.assertEqual((rec["title"], rec["publisher"], rec["physical_description"]), ("", "", ""))
 
 
+class OriginalScriptTitleTest(unittest.TestCase):
+    """Issue #19: show the original-script title next to the romanized one."""
+
+    def setUp(self):
+        self.api = HarvardLibraryAPI(min_interval=0)
+
+    def test_cjk_pair(self):
+        record = {"titleInfo": [
+            {"@altRepGroup": "02", "title": "Tian gong kai wu", "subTitle": "3 juan"},
+            {"@altRepGroup": "02", "title": "天工開物", "subTitle": "三卷"},
+            {"@type": "alternative", "@altRepGroup": "03", "title": "Kai wu"},
+        ]}
+        self.assertEqual(self.api.get_title(record), "天工開物 : 三卷 (Tian gong kai wu : 3 juan)")
+        self.assertEqual(self.api.get_title(record, original=False), "Tian gong kai wu : 3 juan")
+        self.assertEqual(self.api.get_original_title(record), "天工開物 : 三卷")
+        rec = self.api.summarize(record)
+        self.assertEqual((rec["title_romanized"], rec["title_original"]),
+                         ("Tian gong kai wu : 3 juan", "天工開物 : 三卷"))
+
+    def test_original_listed_first_and_alternative_first(self):
+        record = {"titleInfo": [
+            {"@type": "alternative", "title": "Challenge from civil society"},
+            {"@altRepGroup": "01", "title": "시민사회의도전 "},
+            {"@altRepGroup": "01", "title": "Simin sahoe ui tojŏn ", "subTitle": "Hanʾguk minjuhwa"},
+        ]}
+        self.assertEqual(self.api.get_title(record), "시민사회의도전 (Simin sahoe ui tojŏn : Hanʾguk minjuhwa)")
+
+    def test_script_attribute(self):
+        record = {"titleInfo": [
+            {"@altRepGroup": "01", "@script": "Latn", "title": "Tenkō kaibutsu"},
+            {"@altRepGroup": "01", "@script": "Hani", "title": "天工開物"},
+        ]}
+        self.assertEqual(self.api.get_original_title(record), "天工開物")
+
+    def test_no_original(self):
+        for record in ({"titleInfo": {"title": "Hamlet"}},
+                       {"titleInfo": [{"title": "Hamlet"}, {"@type": "uniform", "title": "Hamlet."}]},
+                       {"titleInfo": [{"@altRepGroup": "01", "title": "明史"}]}):
+            self.assertEqual(self.api.get_original_title(record), "")
+        self.assertEqual(self.api.get_title({"titleInfo": [{"@altRepGroup": "01", "title": "明史"}]}), "明史")
+
+
 if __name__ == "__main__":
     unittest.main()

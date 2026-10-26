@@ -1,7 +1,7 @@
 ---
 name: alma-sru-catalogs
 description: Search 21 research library catalogs at once through their public Alma SRU interfaces (no API key) — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, UC Berkeley, UCLA, Toronto, Oxford (Bodleian), Cambridge, Edinburgh, Sydney, and six Taiwan universities (National Taiwan University 臺大, NCCU 政大, NCKU 成大, NSYSU 中山, NCHU 中興, CCU 中正). Use this skill whenever the user wants to find which libraries hold a book, compare holdings across universities, search UK/Canadian/Australian/Taiwanese university catalogs, compare subject headings and classification across cataloging traditions (LCSH vs Taiwan's Chinese headings), look up items at any of these libraries by title/author/subject/ISBN/OCLC/call number, or read MARC records with vernacular (880) Chinese/Japanese/Korean script. Returns call numbers, locations, availability, and online access per library.
-version: 1.1.2
+version: 1.1.3
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -67,7 +67,7 @@ The script returns them as `holdings.physical` and `holdings.electronic`. Keys: 
 
 ### CJK script is in 880 fields
 
-Main fields are romanized (pinyin, Hepburn, McCune-Reischauer); the original script is in linked 880 fields. The script pairs them: `明史研究 (Ming shi yan jiu)`. Search both scripts for full coverage. Some records (e.g. some at Toronto and Oxford) have only the original script.
+Main fields are romanized (pinyin, Hepburn, McCune-Reischauer); the original script is in linked 880 fields. The script pairs them: `明史研究 (Ming shi yan jiu)`. Search both scripts for full coverage. Some records (e.g. some at Toronto and Oxford) have only the original script. Some Taiwan records (e.g. NTU) put the romanized name inside the 880 field itself, like `希爾 (Hill, A. V. (Archibald Vivian), 1886- )`; the script then shows it once, not twice.
 
 ### Title searches match words, not phrases
 
@@ -80,9 +80,10 @@ Main fields are romanized (pinyin, Hepburn, McCune-Reischauer); the original scr
 ### Limits and quirks
 
 - **50 records per request** per library. `search_all()` pages for you.
-- **Sort** goes inside the CQL (`sortBy alma.main_pub_date/sort.descending`); `sortKeys` is ignored. Unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"`.
+- **Sort** goes inside the CQL (`sortBy alma.main_pub_date/sort.descending`); `sortKeys` is ignored. Unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"`. But placeholder years such as `####` still pass that filter and sort first (seen at Princeton and U-M on 2026-10-26). Add `known_dates=True` (CLI `--known-dates`) to drop records whose year is not four digits. It filters each page after the search, like `phrase`.
 - **Default order is not relevance ranking.** Narrow the query instead of trusting the first hits.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
+- **Subject heading output:** name and title subjects (600/610/611/630) keep their dates and title in the heading, e.g. `Song, Yingxing, 1587-approximately 1666. Dian gong kai wu`. Only the subdivisions `$v $x $y $z` are joined with ` -- `, e.g. `Science -- China -- History`.
 - **Network errors are retried.** Dropped connections, read timeouts, and HTTP 429/5xx are retried up to 4 times (waiting 5, 10, 20 s, or `Retry-After`). If a later page of `search_all()` still fails, it raises `IncompleteResults`; the records fetched so far are in its `.records`.
 - **Unknown index names** give a vague "Catalog search has encountered an error".
 - **Searching all 21 takes about 45 seconds.** Each server gets at most one request per second; different servers are queried back to back without waiting, but the six Taiwan libraries share one server (`ap01`), so they go one per second.

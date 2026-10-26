@@ -1,7 +1,7 @@
 ---
 name: mit-timdex
 description: Search MIT Libraries through TIMDEX, MIT's official public GraphQL discovery API (no API key) — the MIT library catalog, DSpace@MIT theses and papers, MIT ArchivesSpace archival collections, MIT digital collections (images), GIS data, research databases, and LibGuides in one index. Use this skill whenever the user wants to find books or e-books at MIT, MIT theses or working papers, MIT archives, or MIT digital images; search by title, author, subject, or identifier; filter by source, language, or format; or run semantic (vector) search over MIT records.
-version: 1.0.2
+version: 1.0.3
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -32,9 +32,18 @@ POST https://timdex.mit.edu/graphql
 
 ## Critical: Things Claude Won't Know Without This Skill
 
-### Prefer TIMDEX over Alma SRU for MIT
+### TIMDEX or Alma SRU for MIT?
 
-MIT also has an Alma SRU endpoint (see **alma-sru-catalogs**), but it finds far fewer records: 2 for `明史`, against 591 in TIMDEX. TIMDEX also covers DSpace and ArchivesSpace.
+MIT also has an Alma SRU endpoint (see **alma-sru-catalogs**). For catalog books, both find the same records. Counts for `明史` on 26 October 2026:
+
+| Search | Results |
+|---|---|
+| TIMDEX, default (any word, OR) | 591, mostly noise |
+| TIMDEX, `--boolean AND` | 26 |
+| TIMDEX, `--boolean AND --phrase` (title contains 明史) | 2 (明史研究, 明史研究論叢) |
+| Alma SRU, title 明史 (with or without `--phrase`) | 2 (明史研究 first) |
+
+So TIMDEX does not find more books. Use TIMDEX for what SRU lacks: DSpace theses and papers, ArchivesSpace, digital collections, facet counts and semantic search. Use **alma-sru-catalogs** to compare MIT with other libraries.
 
 ### Field names are exact and case-sensitive
 
@@ -54,9 +63,13 @@ GraphQL rejects unknown fields with an error such as `Field 'callNumber' doesn't
 - `phrase=True` filters each page after the search, so `total` is the server's count and `returned` is the page size before filtering. Page through with `start` to scan more.
 - Pinyin syllables stay ambiguous (`Ming shi` also matches *jian ming shi*). Check the records.
 
+### MIT has few Chinese-language books
+
+MIT is a science and engineering library. Its holdings in Chinese, Japanese and Korean are small, so many Chinese titles are simply not there, or only in translation. Example (26 October 2026): `search 天工開物` gives 2,764 hits, all noise; `--boolean AND` gives 1 (a Springer book on ancient Chinese machines); `--boolean AND --phrase` gives 0. Only an author search found the book, as the 1966 English translation: `search --contributors "Song, Yingxing"`. For Chinese-language books, try Harvard (**harvard-library-catalog**) or the East Asian collections in **alma-sru-catalogs** first.
+
 ### Paging
 
-`start` is a 0-based offset (`from` in GraphQL); `limit` is `perPage` (default 20).
+`start` is a 0-based offset (`from` in GraphQL); `limit` is `perPage` (default 20 in both Python and the CLI; max 100).
 
 ## Quick Start
 
