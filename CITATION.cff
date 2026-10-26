@@ -5,6 +5,7 @@ message: >-
   CHGIS, or the library catalog you searched).
 title: "humanities-skills: Claude Code skills for East Asian and humanities research"
 type: software
+license: MIT
 authors:
   - family-names: Tang
     given-names: Kwok-leong
