@@ -1,7 +1,7 @@
 ---
 name: zotero-local
 description: Interact with a local Zotero 8 desktop application through its HTTP API at localhost:23119. Use this skill whenever the user wants to search, fetch, add, edit, or organize bibliographic items in their Zotero library, import citations (BibTeX, RIS, etc.), attach files, manage collections and tags, or retrieve full-text content from Zotero. Triggers on mentions of Zotero, citation management, reference libraries, bibliographic databases, or local library management. Also use when chaining with other catalog skills (Harvard, LOC, HathiTrust, etc.) to save found records into the user's Zotero library.
-version: 1.0.0
+version: 1.0.1
 ---
 
 # Zotero Local API Skill
@@ -324,3 +324,18 @@ else:
 
 - `references/api_reference.md` — Complete endpoint reference with all parameters
 - `scripts/zotero_api.py` — Python client for read and write operations
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "zotero-local"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[zotero-local] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: zotero-local* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

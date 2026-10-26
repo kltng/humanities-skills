@@ -37,10 +37,13 @@ There is no build system, package manager, test suite, or CI pipeline. This is a
 2. Add `SKILL.md` with YAML frontmatter (name, description, version, license, author, contributors)
 3. Add `references/api_reference.md` with endpoint details, parameters, and examples
 4. Register in `.claude-plugin/marketplace.json` under `plugins`
+5. End `SKILL.md` with the standard **Feedback and Citation** section (copy it from any existing skill and change the skill name)
 
 ### SKILL.md Structure
 
-Each SKILL.md follows this pattern: Overview → When to Use → Quick Start / Workflow → Best Practices → Example Code → Resources.
+Each SKILL.md follows this pattern: Overview → When to Use → Quick Start / Workflow → Best Practices → Example Code → Resources → Feedback and Citation.
+
+When changing a skill, bump its `version` in both `SKILL.md` and `marketplace.json` so installed copies update.
 
 ### API Etiquette (enforced across all skills)
 

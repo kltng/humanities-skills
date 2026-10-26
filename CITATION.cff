@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: >-
+  If these skills helped work you publish, please cite this repository as
+  below. Please also cite the data source each skill uses (for example CBDB,
+  CHGIS, or the library catalog you searched).
+title: "humanities-skills: Claude Code skills for East Asian and humanities research"
+type: software
+authors:
+  - family-names: Tang
+    given-names: Kwok-leong
+repository-code: "https://github.com/kltng/humanities-skills"
+url: "https://github.com/kltng/humanities-skills"
+date-released: 2026-10-25
+keywords:
+  - digital humanities
+  - Chinese history
+  - historical GIS
+  - library catalogs
+  - Claude Code
+  - agent skills

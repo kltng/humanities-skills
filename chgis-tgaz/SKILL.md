@@ -1,7 +1,7 @@
 ---
 name: chgis-tgaz
 description: Query the China Historical GIS (CHGIS) Temporal Gazetteer (TGAZ) API to search for historical Chinese placenames from 222 BCE to 1911 CE. Use this skill when searching for information about historical Chinese places, administrative units, or geographic locations during the dynastic period. Applicable for queries about historical place names, administrative hierarchies, or when users mention specific Chinese locations with historical context.
-version: 1.1.0
+version: 1.1.1
 license: MIT
 creator: AI
 author: Kwok-leong Tang
@@ -120,3 +120,18 @@ for sub in subordinates:
 
 - `references/api_reference.md` — Complete endpoint specs, all parameters, response field details
 - `scripts/tgaz_api.py` — Python client with correct URL handling and hierarchical query support
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "chgis-tgaz"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[chgis-tgaz] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: chgis-tgaz* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

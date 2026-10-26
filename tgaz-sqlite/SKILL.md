@@ -11,6 +11,7 @@ description: >
   or any spatial/temporal query about Chinese historical geography. This skill
   is relevant even for casual questions like "tell me about ancient Chang'an"
   or "Tang dynasty cities near the Yellow River".
+version: 1.0.1
 ---
 
 # TGAZ Historical Gazetteer Query Skill
@@ -259,3 +260,18 @@ resolution: name to id, id to record, era date to JDN. It reads the same
 database as this skill and returns the federation's `pack {corpus,
 pack_version, build_hash}` envelope. Use this skill for exploration:
 graphs, exports, bounding boxes, raw SQL.
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "tgaz-sqlite"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[tgaz-sqlite] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: tgaz-sqlite* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

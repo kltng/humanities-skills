@@ -1,7 +1,7 @@
 ---
 name: argue-against-me
 description: Structured academic debate — Claude adopts an opposing position (from named historiographical schools or disciplinary counter-positions) and challenges your thesis through formal rounds with adjustable intensity. Produces a scorecard, revised thesis, and bibliography gap analysis. Use when stress-testing arguments, preparing for peer review, or strengthening a thesis before publication.
-version: 1.0.0
+version: 1.0.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -145,3 +145,18 @@ Claude would:
 3. Challenge the evidence — e.g., questioning whether currency expansion was state-led or a response to existing commercial demand
 4. Run 3 rounds of structured debate
 5. Produce scorecard, revised thesis, and bibliography gaps
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "argue-against-me"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[argue-against-me] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: argue-against-me* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

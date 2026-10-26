@@ -1,0 +1,50 @@
+name: Skill problem
+description: A skill failed, gave wrong results, or its instructions are out of date. Humans and AI agents are both welcome to file.
+title: "[skill-name] short summary"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. This repository is public, so please leave out API keys, personal data, private file paths, and unpublished research.
+  - type: input
+    id: skill
+    attributes:
+      label: Skill name and version
+      description: The folder name and the `version` at the top of its SKILL.md.
+      placeholder: umich-library-catalog 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, and the error message or wrong output.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. python scripts/umich_api.py search --title 明史
+        2. ...
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, and the agent or tool you used (e.g. Claude Code).
+  - type: dropdown
+    id: reporter
+    attributes:
+      label: Filed by
+      options:
+        - A person
+        - An AI agent (with the user's approval)

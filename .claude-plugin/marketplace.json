@@ -22,7 +22,7 @@
       "name": "cbdb-api",
       "source": "./cbdb-api",
       "description": "Query the China Biographical Database API for comprehensive biographical data about historical Chinese figures from the 7th century BCE through the 19th century CE",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -32,7 +32,7 @@
       "name": "chgis-tgaz",
       "source": "./chgis-tgaz",
       "description": "Query the CHGIS Temporal Gazetteer API for historical Chinese placenames and administrative units from 222 BCE to 1911 CE",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -42,7 +42,7 @@
       "name": "wikidata-search",
       "source": "./wikidata-search",
       "description": "Search Wikidata for items, properties, and external identifiers using keyword search, semantic/hybrid search, SPARQL, and direct entity retrieval",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -52,7 +52,7 @@
       "name": "cbdb-local",
       "source": "./cbdb-local",
       "description": "Query the China Biographical Database locally via SQLite for 656K+ historical Chinese figures — biographical data, kinship networks, official postings, social associations, and examination records (7th c. BCE to 19th c. CE)",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -62,7 +62,7 @@
       "name": "jbdb-api",
       "source": "./jbdb-api",
       "description": "Query the Japan Biographical Database API for biographical data about historical Japanese figures — persons, kinship, events, occupations, and geographic data via LoopBack REST",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude and Z.ai"
@@ -72,7 +72,7 @@
       "name": "cjk-calendar",
       "source": "./cjk-calendar",
       "description": "Convert between Chinese, Japanese, Korean, and Vietnamese lunisolar calendar dates and Gregorian/Julian dates using a local SQLite database (~220 BCE to 1945 CE)",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -82,7 +82,7 @@
       "name": "tgaz-sqlite",
       "source": "./tgaz-sqlite",
       "description": "Query the TGAZ (Temporal Gazetteer) SQLite database locally for 82,000+ historical Chinese placenames spanning 763 BCE to 1911 CE — name search, spatial bounding box, temporal filtering, full-text search, administrative hierarchies, and raw SQL",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -92,7 +92,7 @@
       "name": "arxiv-search",
       "source": "./arxiv-search",
       "description": "Search arXiv for preprints and scholarly articles across physics, mathematics, computer science, and more — field-specific queries, boolean logic, date filtering, and bulk retrieval with pagination",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -102,7 +102,7 @@
       "name": "historical-timeline",
       "source": "./historical-timeline",
       "description": "Generate interactive historical timelines as standalone HTML files using TimelineJS3 — supports BCE/CE dates, eras, groups, media embedding, and rich text with zoom and navigation",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -112,7 +112,7 @@
       "name": "historical-map",
       "source": "./historical-map",
       "description": "Generate interactive historical maps as standalone HTML files using Leaflet.js — markers, GeoJSON boundary overlays, historical tile layers, image overlays, WMS, and layer controls",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -122,7 +122,7 @@
       "name": "columbia-clio",
       "source": "./columbia-clio",
       "description": "Search Columbia University Libraries' CLIO catalog for books, journals, manuscripts, and other holdings via its Blacklight JSON API — faceted filtering by format/language/location, detailed catalog records with call numbers and holdings data",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -132,7 +132,7 @@
       "name": "europeana-collections",
       "source": "./europeana-collections",
       "description": "Search Europeana's 50M+ cultural heritage items from 4,000+ European museums, galleries, libraries, and archives — art, manuscripts, photographs, maps, 3D objects, audio, and video",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -142,7 +142,7 @@
       "name": "harvard-library-catalog",
       "source": "./harvard-library-catalog",
       "description": "Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO — books, manuscripts, finding aids, and digital collections",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -152,7 +152,7 @@
       "name": "hathitrust-catalog",
       "source": "./hathitrust-catalog",
       "description": "Look up bibliographic records and digitized volumes in HathiTrust's 17M+ volume collection by ISBN, OCLC, LCCN, ISSN, or HathiTrust ID",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -162,7 +162,7 @@
       "name": "loc-catalog",
       "source": "./loc-catalog",
       "description": "Search the Library of Congress digital collections via the loc.gov JSON API — digitized books, photos, maps, manuscripts, newspapers, audio, and film/video with date range filters",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -172,7 +172,7 @@
       "name": "nlb-singapore",
       "source": "./nlb-singapore",
       "description": "Search the National Library Board Singapore catalog for books, audiovisual materials, and digital resources — availability across NLB branches, new arrivals, checkout trends, and detailed bibliographic records",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -192,7 +192,7 @@
       "name": "zotero-local",
       "source": "./zotero-local",
       "description": "Interact with a local Zotero 8 desktop application through its HTTP API — search, fetch, add, edit, and organize bibliographic items, import citations, attach files, manage collections and tags",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -202,7 +202,7 @@
       "name": "argue-against-me",
       "source": "./argue-against-me",
       "description": "Structured academic debate — Claude adopts an opposing position from named historiographical schools and challenges your thesis through formal rounds with adjustable intensity, producing a scorecard, revised thesis, and bibliography gap analysis",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -212,7 +212,7 @@
       "name": "human-eval-review",
       "source": "./human-eval-review",
       "description": "Generate a single self-contained HTML file for human-in-the-loop evaluation of model output — confirm candidate matches, pick one, rate on a scale, judge yes/no, or free-text correct, with progress tracking, keyboard nav, browser autosave, and JSON export/resume",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -222,7 +222,7 @@
       "name": "archival-entity-linking",
       "source": "./archival-entity-linking",
       "description": "Determinism-first agentic workflow for turning a corpus of historical archival documents into Wikidata-linked, TEI P5-encoded records — extract and disambiguate named entities, build a self-deterministizing dictionary, and encode authority-linked TEI with full tracing and review of the model-decided minority",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -232,7 +232,7 @@
       "name": "tei-validator",
       "source": "./tei-validator",
       "description": "Validate TEI P5 XML documents for archival materials — well-formedness, schema compliance, named entity markup, date normalization, authority file references, and archival best practices, with basic/standard/strict validation levels",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"

@@ -1,7 +1,7 @@
 ---
 name: wikidata-search
 description: Search for items and properties on Wikidata and retrieve entity details, claims, and external identifiers. Supports both keyword search (Wikidata Action API) and semantic/hybrid search (Wikidata Vector Database), plus direct entity retrieval (Special:EntityData) and structured querying (WDQS SPARQL).
-version: 1.1.0
+version: 1.1.1
 ---
 
 # Wikidata Search Skill
@@ -107,3 +107,18 @@ data = wd.get_entitydata("Q42", flavor="simple")
 
 - `references/api_reference.md` — Complete API specs for all four access methods
 - `scripts/wikidata_api.py` — Full-featured Python client with rate limiting, retries, and identifier extraction
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "wikidata-search"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[wikidata-search] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: wikidata-search* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

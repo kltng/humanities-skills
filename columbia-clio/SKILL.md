@@ -1,7 +1,7 @@
 ---
 name: columbia-clio
 description: Search Columbia University Libraries' CLIO catalog for books, journals, manuscripts, and other holdings via its Blacklight JSON API. Use this skill whenever the user wants to look up items in Columbia's library, check availability of books at Columbia, search by title/author/subject with faceted filtering by format/language/location, or retrieve detailed catalog records including call numbers and holdings data. Triggers when referencing Columbia University collections or Ivy League library holdings.
-version: 1.0.0
+version: 1.0.1
 ---
 
 # Columbia CLIO Catalog Skill
@@ -130,3 +130,18 @@ for r in results:
 
 - `references/api_reference.md` — Complete field and facet reference
 - `scripts/clio_api.py` — Python client with search, record lookup, and faceted filtering
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "columbia-clio"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[columbia-clio] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: columbia-clio* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.

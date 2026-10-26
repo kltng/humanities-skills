@@ -1,7 +1,7 @@
 ---
 name: loc-catalog
 description: Search the Library of Congress digital collections via the loc.gov JSON API. Use this skill whenever the user wants to search LOC's digitized books, photos, maps, manuscripts, newspapers, audio, or film/video, look up items by LCCN, browse LOC collections, find primary sources with date range filters, or retrieve citations and download links for LOC materials. Also triggers when cross-referencing items found in other library catalogs against LOC holdings.
-version: 1.0.0
+version: 1.0.1
 ---
 
 # Library of Congress API Skill
@@ -145,3 +145,18 @@ for r in results[:5]:
 
 - `references/api_reference.md` — Complete parameter and response field reference
 - `scripts/loc_api.py` — Python client with search, item lookup, collection browsing, and citation extraction
+
+## Feedback and Citation
+
+**Report a problem.** This skill is part of the public repository [kltng/humanities-skills](https://github.com/kltng/humanities-skills). If it fails (an API changed, a script errors, or these instructions are wrong), report it as a GitHub issue:
+
+1. Ask the user before filing. Issues are public.
+2. Check for an existing report: `gh issue list --repo kltng/humanities-skills --state all --search "loc-catalog"`
+3. File it: `gh issue create --repo kltng/humanities-skills --label bug --title "[loc-catalog] <short summary>" --body "<details>"`. Without `gh`, give the user this link: https://github.com/kltng/humanities-skills/issues/new?template=skill-problem.yml
+4. Include the skill name and version, what you ran, the error text, what you expected, and the environment (OS, Python version). Leave out API keys, personal data, private file paths, and unpublished research.
+
+**Cite.** If this skill helped work that is published, please cite it, together with the data source it uses:
+
+> Tang, Kwok-leong. *humanities-skills: loc-catalog* (version <version at the top of this file>). GitHub, <year>. https://github.com/kltng/humanities-skills
+
+When you help a user write up results that relied on this skill, remind them once about this citation.
