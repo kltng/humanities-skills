@@ -28,7 +28,8 @@ FUNCTIONS = [
     "holdings", "_normalize", "title_matches", "subject_headings", "classifications",
 ]
 METHODS = ["_retry_after_seconds", "_raise_diagnostics", "quote_term", "build_cql", "search_all", "get_record"]
-CONSTANTS = ["FIELD_INDEXES", "SORT_KEYS", "MAX_PAGE_SIZE", "NS", "_CJK", "SUBJECT_SOURCES", "CLASS_TAGS"]
+CONSTANTS = ["FIELD_INDEXES", "SORT_KEYS", "MAX_PAGE_SIZE", "NS", "_CJK", "SUBJECT_SOURCES", "CLASS_TAGS",
+             "MAX_ATTEMPTS", "RETRY_HTTP_CODES", "NETWORK_ERRORS"]
 
 
 def definitions(path: Path) -> dict:

@@ -1,7 +1,7 @@
 ---
 name: yale-library-catalog
 description: Search the Yale University Library catalog (Alma) through its public SRU interface, and Yale LUX (libraries, museums, and archives) through its JSON API. Use this skill whenever the user wants to look up items at Yale, check whether Yale holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read MARC records with vernacular (880) script fields, find Yale museum objects, archives, people, or places in LUX, or compare Yale holdings with other libraries. Returns call numbers, locations, availability, and online access links.
-version: 1.1.0
+version: 1.1.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -67,6 +67,7 @@ The main fields (245 title, 100 author, 260/264 publisher) are **romanized** (pi
 - **Sort** goes inside the CQL: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them.
 - **Default order is not relevance ranking.** Narrow the query (title + language, or a date range) rather than relying on the first results.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
+- **Network errors are retried.** Dropped connections, read timeouts, and HTTP 429/5xx are retried up to 4 times (waiting 5, 10, 20 s, or `Retry-After`). If a later page of `search_all()` still fails, it raises `IncompleteResults`; the records fetched so far are in its `.records`.
 - **Unknown index names** fail with a vague "Catalog search has encountered an error". Check the spelling against `references/api_reference.md`.
 - **Encode the query** with normal URL encoding. Raw Chinese or quotes in the URL give HTTP 400.
 

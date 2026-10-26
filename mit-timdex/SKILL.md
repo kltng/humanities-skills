@@ -1,7 +1,7 @@
 ---
 name: mit-timdex
 description: Search MIT Libraries through TIMDEX, MIT's official public GraphQL discovery API (no API key) — the MIT library catalog, DSpace@MIT theses and papers, MIT ArchivesSpace archival collections, MIT digital collections (images), GIS data, research databases, and LibGuides in one index. Use this skill whenever the user wants to find books or e-books at MIT, MIT theses or working papers, MIT archives, or MIT digital images; search by title, author, subject, or identifier; filter by source, language, or format; or run semantic (vector) search over MIT records.
-version: 1.0.1
+version: 1.0.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -45,7 +45,14 @@ GraphQL rejects unknown fields with an error such as `Field 'callNumber' doesn't
 - **Search** (relevance-ranked): `searchterm` (all fields), `title`, `contributors`, `subjects`, `identifiers`, `locations`, `citation`.
 - **Filters** (exact values from the facet counts): `source`, `content_type`, `language` (lowercase, e.g. `chinese`), `format`, `subject_filter`, `contributor_filter`, `place`, `literary_form`, `access`. Run with `--facets` to see the values.
 - **Modes**: `keyword` (default), `semantic` (vector search, good for concepts like "Ming dynasty painting"), `hybrid`.
-- **Words** are joined with OR by default; use `--boolean AND` to require all.
+- **Words** are joined with OR by default. `--boolean AND` requires all words, but **only for `searchterm`**: field searches (`--title`, `--subjects`, …) ignore it (`title="Ming shi"` gives 1369 hits with or without AND).
+
+### CJK and phrase searches
+
+- A **title** search for a CJK term matches any one of its characters: `title="文廟"` returns 1122 records (华文文学, 文化文本, …), and AND cannot narrow it.
+- Use `searchterm` with AND instead, then keep the titles that really contain the term with `phrase=True` (CLI `--phrase`). `明史` → 26 records with AND → 2 with the phrase filter (明史研究, 明史研究論叢). Even AND alone is not a phrase search: `searchterm="文廟"` with AND returns two titles without 文廟.
+- `phrase=True` filters each page after the search, so `total` is the server's count and `returned` is the page size before filtering. Page through with `start` to scan more.
+- Pinyin syllables stay ambiguous (`Ming shi` also matches *jian ming shi*). Check the records.
 
 ### Paging
 
@@ -57,6 +64,7 @@ GraphQL rejects unknown fields with an error such as `Field 'callNumber' doesn't
 
 ```bash
 python scripts/timdex_api.py search 明史 --limit 5 --facets
+python scripts/timdex_api.py search 明史 --boolean AND --phrase --limit 50     # titles containing 明史
 python scripts/timdex_api.py search --title "Ming shi" --source "MIT Alma" --language chinese
 python scripts/timdex_api.py search "Ming dynasty painting" --mode semantic
 python scripts/timdex_api.py search --subjects China --source "DSpace@MIT"
@@ -76,7 +84,8 @@ print(result["total"], result["facets"]["source"])
 for rec in result["records"]:
     print(rec["title"], rec["publishers"], rec["url"])
 
-mit.search(title="Ming shi", boolean="AND", start=20, limit=20)   # page 2
+mit.search("明史", boolean="AND", phrase=True, limit=50)   # titles containing 明史
+mit.search("Ming shi", boolean="AND", start=20, limit=20)  # page 2 (AND works on searchterm only)
 mit.get_record("alma:9936111333206761")
 mit.query("{ search(title: \"Ming\") { hits } }")                # raw GraphQL
 ```
@@ -88,7 +97,7 @@ Each summary has `id`, `title`, `alternate_titles`, `source`, `content_type`, `f
 1. **Filter by `source`** when you want only books (`MIT Alma`) or only theses (`DSpace@MIT`).
 2. **Use `--facets` first** on broad searches to see sources, languages, and formats.
 3. **Try semantic mode** for topical questions phrased in plain English.
-4. **Wait 1 second between requests** (the script does this) and back off on HTTP 429.
+4. **Wait 1 second between requests.** The script does this, and retries dropped connections, timeouts, and HTTP 429/5xx (waiting 5, 10, 20 s).
 
 ## Related Skills
 

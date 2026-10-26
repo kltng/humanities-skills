@@ -16,6 +16,7 @@ Usage as a CLI:
 
 import argparse
 import email.utils
+import http.client
 import json
 import sys
 import time
@@ -30,6 +31,11 @@ USER_AGENT = (
     "NorthwesternDCSkill/1.0 (Claude Code skill; research use; "
     "+https://github.com/kltng/humanities-skills)"
 )
+
+# Attempts per request; waits between them are 5, 10, 20 s (or Retry-After)
+MAX_ATTEMPTS = 4
+RETRY_HTTP_CODES = (429, 500, 502, 503, 504)
+NETWORK_ERRORS = (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException)
 
 # Large fields not needed for summaries (vector embeddings, ingest bookkeeping)
 EXCLUDE_FIELDS = "embedding,embedding_model,embedding_text_length,file_sets,csv_metadata_update_jobs,batch_ids,ingest_sheet,ingest_project"
@@ -75,15 +81,19 @@ class NorthwesternDC:
             data = json.dumps(body).encode()
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(url, data=data, headers=headers)
-        for attempt in range(3):
+        for attempt in range(MAX_ATTEMPTS):
             self._rate_limit()
             try:
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     return json.loads(resp.read())
             except urllib.error.HTTPError as e:
-                if e.code not in (429, 503) or attempt == 2:
+                if e.code not in RETRY_HTTP_CODES or attempt == MAX_ATTEMPTS - 1:
                     raise
-                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+                time.sleep(self._retry_after_seconds(e, 5.0 * 2 ** attempt))
+            except NETWORK_ERRORS:
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(5.0 * 2 ** attempt)
         raise RuntimeError("unreachable")
 
     # ── Search ──

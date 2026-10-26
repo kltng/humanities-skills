@@ -16,9 +16,12 @@ Usage as a CLI:
 
 import argparse
 import email.utils
+import http.client
 import json
+import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
@@ -28,6 +31,11 @@ USER_AGENT = (
     "MitTimdexSkill/1.0 (Claude Code skill; research use; "
     "+https://github.com/kltng/humanities-skills)"
 )
+
+# Attempts per request; waits between them are 5, 10, 20 s (or Retry-After)
+MAX_ATTEMPTS = 4
+RETRY_HTTP_CODES = (429, 500, 502, 503, 504)
+NETWORK_ERRORS = (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException)
 
 # Search arguments accepted by TIMDEX's `search` query (friendly name -> GraphQL arg)
 SEARCH_FIELDS = {
@@ -122,16 +130,20 @@ class TimdexAPI:
             "Content-Type": "application/json",
             "Accept": "application/json",
         })
-        for attempt in range(3):
+        for attempt in range(MAX_ATTEMPTS):
             self._rate_limit()
             try:
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     payload = json.loads(resp.read())
                 break
             except urllib.error.HTTPError as e:
-                if e.code not in (429, 503) or attempt == 2:
+                if e.code not in RETRY_HTTP_CODES or attempt == MAX_ATTEMPTS - 1:
                     raise
-                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+                time.sleep(self._retry_after_seconds(e, 5.0 * 2 ** attempt))
+            except NETWORK_ERRORS:
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(5.0 * 2 ** attempt)
         if payload.get("errors"):
             raise TimdexError("; ".join(err.get("message", "") for err in payload["errors"]))
         return payload.get("data") or {}
@@ -182,24 +194,33 @@ class TimdexAPI:
         limit: int = 20,
         facets: bool = False,
         raw: bool = False,
+        phrase: bool = False,
         **kwargs: Optional[str],
     ) -> Dict[str, Any]:
         """
-        Search TIMDEX. Returns {"total", "start", "records", "facets"?}.
+        Search TIMDEX. Returns {"total", "start", "returned", "records", "facets"?}.
 
         Args:
             searchterm: Words searched across all fields
             mode: keyword (default), semantic (vector), or hybrid
-            boolean: OR (default: any word) or AND (all words)
+            boolean: OR (default: any word) or AND (all words). Applies to
+                     `searchterm` only; field searches (title, subjects) ignore it.
             start: 0-based offset of the first record
             limit: Records per page (TIMDEX default 20)
             facets: Also return counts by source, content type, language, format, subject
             raw: Return TIMDEX records unchanged instead of summaries
+            phrase: Keep only records whose title or alternate titles contain
+                    the search text (`title`, else `searchterm`) as one connected
+                    phrase. `total` stays the server's count; `returned` is the
+                    page size before filtering.
             **kwargs: Search fields (title, contributors, subjects, identifiers,
                       locations, citation) and filters (source, content_type,
                       language, format, subject_filter, contributor_filter,
                       place, literary_form, access)
         """
+        phrase_text = kwargs.get("title") or searchterm
+        if phrase and (raw or not phrase_text):
+            raise ValueError("phrase=True needs title or searchterm, and summary records (raw=False)")
         fields = {"searchterm": searchterm}
         filters = {}
         for name, value in kwargs.items():
@@ -209,10 +230,14 @@ class TimdexAPI:
         graphql = f"{{ search({arg_text}) {{ hits {AGGREGATIONS if facets else ''} records {{ {RECORD_FIELDS} }} }} }}"
         data = self.query(graphql)["search"]
         records = data.get("records") or []
+        summaries = records if raw else [summarize(r) for r in records]
+        if phrase:
+            summaries = [r for r in summaries if title_matches(r, phrase_text)]
         result: Dict[str, Any] = {
             "total": data.get("hits", 0),
             "start": start,
-            "records": records if raw else [summarize(r) for r in records],
+            "returned": len(records),
+            "records": summaries,
         }
         if facets:
             result["facets"] = {
@@ -233,6 +258,34 @@ class TimdexAPI:
         if rec is None:
             return None
         return rec if raw else summarize(rec)
+
+
+# ── Phrase matching ──
+
+_CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]")
+
+
+def _normalize(text: str) -> str:
+    """Lowercase, strip accents and punctuation, collapse spaces (CJK kept)."""
+    text = unicodedata.normalize("NFKD", text.lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[^\w\s]", " ", text)
+    return " ".join(text.split())
+
+
+def title_matches(record: Dict[str, Any], term: str) -> bool:
+    """True if `term` is one connected phrase in the title or an alternate title."""
+    needle = _normalize(term)
+    if not needle:
+        return False
+    cjk = bool(_CJK.search(needle))
+    for text in [record.get("title") or ""] + list(record.get("alternate_titles") or []):
+        hay = _normalize(text)
+        if cjk and needle.replace(" ", "") in hay.replace(" ", ""):
+            return True
+        if not cjk and f" {needle} " in f" {hay} ":
+            return True
+    return False
 
 
 # ── Summarizing ──
@@ -321,6 +374,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--start", type=int, default=0)
     s.add_argument("--limit", type=int, default=10)
     s.add_argument("--facets", action="store_true", help="Show counts by source, type, language, format, subject")
+    s.add_argument("--phrase", action="store_true", help="Keep only titles containing the search text as one phrase")
     s.add_argument("--json", action="store_true")
 
     r = sub.add_parser("record", help="Fetch one record by TIMDEX ID")
@@ -333,11 +387,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "search":
         extra = {n: getattr(args, n) for n in list(SEARCH_FIELDS)[1:] + list(FILTERS)}
         result = api.search(args.searchterm, mode=args.mode, boolean=args.boolean, start=args.start,
-                            limit=args.limit, facets=args.facets, **extra)
+                            limit=args.limit, facets=args.facets, phrase=args.phrase, **extra)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         print(f"{result['total']} results\n")
+        if args.phrase:
+            print(f"{len(result['records'])} of {result['returned']} records on this page contain the phrase\n")
         for name, buckets in result.get("facets", {}).items():
             print(f"  {name}: " + ", ".join(f"{k} ({n})" for k, n in buckets[:8]))
         if result.get("facets"):

@@ -1,7 +1,7 @@
 ---
 name: northwestern-digital-collections
 description: Search Northwestern University Libraries' Digital Collections (digitized photographs, art, architecture slides, manuscripts, maps, posters, audio, and video) through its official public API or its official hosted MCP server, with IIIF manifests for every item. Use this skill whenever the user wants digitized images or primary sources from Northwestern, Asian art and architecture photographs (e.g. the Rob Linrothe collection of Chinese, Tibetan, and Indian monuments), African studies materials, or IIIF images for teaching or research.
-version: 1.0.0
+version: 1.0.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -68,13 +68,17 @@ Each work summary has `id`, `title`, `alternate_titles`, `work_type`, `dates`, `
 
 `query` takes OpenSearch query-string syntax:
 
-- Words: `Yungang` · phrase: `"Juyong Guan"`
+- Words: `Yungang` · phrase: `"Juyong Guan"` · CJK: always quoted, `"雲岡"`
 - Fields: `title:Beijing`, `work_type:Image` (Image, Audio, Video), `subject.label:"China"`, `collection.title:"..."`
 - Label fields (`subject.label`, `contributor.label`, `collection.title`) match the **whole** label: use the exact form (`contributor.label:"Linrothe, Robert N., 1951-"`) or a wildcard (`contributor.label:Linrothe*`)
 - Boolean: `Shanghai AND work_type:Image`, `China NOT Japan`
 - Sort: `date_created:asc`, `create_date:desc`, `title.keyword:asc`
 
 For anything more complex, send a full OpenSearch body with `--dsl`.
+
+### Quote CJK terms
+
+The search splits CJK text into single characters and ORs them, so an **unquoted** CJK query matches any one character: `孔廟` returns 1,794 unrelated items (a Sgt. Pepper insert, a blimp cutout, a gurdwara). Always quote CJK terms: a quoted term matches only the whole term (`"孔廟"` returns 0). The same applies to fields: `title:"北京"`.
 
 ### Chinese text is sparse
 
@@ -89,7 +93,7 @@ Full records include vector embeddings and file lists. The script leaves those o
 1. **Prefer the MCP** for interactive browsing (it can show IIIF images); use the script for scripted searches and exports.
 2. **Search by collection** once you find a relevant one; collection titles are exact-match.
 3. **Cite the item URL and rights statement.** Check `rights` before reusing images.
-4. **Wait between requests** (the script waits 0.5 s) and back off on HTTP 429.
+4. **Wait between requests.** The script waits 0.5 s, and retries dropped connections, timeouts, and HTTP 429/5xx.
 
 ## Not Included: Minnesota UMedia
 

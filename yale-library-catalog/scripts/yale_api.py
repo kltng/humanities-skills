@@ -14,6 +14,7 @@ Usage as a CLI:
 
 import argparse
 import email.utils
+import http.client
 import json
 import re
 import sys
@@ -33,6 +34,12 @@ USER_AGENT = (
 )
 
 MAX_PAGE_SIZE = 50  # Alma SRU caps maximumRecords at 50
+
+# Attempts per request; waits between them are 5, 10, 20 s (or Retry-After)
+MAX_ATTEMPTS = 4
+RETRY_HTTP_CODES = (429, 500, 502, 503, 504)
+# Dropped connections and read timeouts (Sydney's SRU does this often)
+NETWORK_ERRORS = (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException)
 
 NS = {
     "srw": "http://www.loc.gov/zing/srw/",
@@ -69,6 +76,14 @@ class SRUError(RuntimeError):
     """The SRU server returned a diagnostic instead of results."""
 
 
+class IncompleteResults(RuntimeError):
+    """A multi-page search failed after some pages; `records` holds what was fetched."""
+
+    def __init__(self, message: str, records: List[Dict[str, Any]]):
+        super().__init__(message)
+        self.records = records
+
+
 class YaleCatalogAPI:
     """Client for the Yale University Library catalog (Alma SRU)."""
 
@@ -100,8 +115,9 @@ class YaleCatalogAPI:
     def _get_xml(self, params: Dict[str, str]) -> ET.Element:
         url = f"{BASE_URL}?{urllib.parse.urlencode(params, quote_via=urllib.parse.quote)}"
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        for attempt in range(3):
+        for attempt in range(MAX_ATTEMPTS):
             self._rate_limit()
+            backoff = 5.0 * 2 ** attempt
             try:
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     root = ET.fromstring(resp.read())
@@ -115,9 +131,13 @@ class YaleCatalogAPI:
                     except ET.ParseError:
                         pass
                     raise
-                if e.code not in (429, 503) or attempt == 2:
+                if e.code not in RETRY_HTTP_CODES or attempt == MAX_ATTEMPTS - 1:
                     raise
-                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+                time.sleep(self._retry_after_seconds(e, backoff))
+            except NETWORK_ERRORS:
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(backoff)
         raise RuntimeError("unreachable")
 
     @staticmethod
@@ -223,13 +243,24 @@ class YaleCatalogAPI:
         return {"total": total, "start": start, "query": query, "returned": returned, "records": records}
 
     def search_all(self, max_results: int = 100, **kwargs: Any) -> List[Dict[str, Any]]:
-        """Page through results (50 per request) up to max_results."""
+        """
+        Page through results (50 per request) up to max_results.
+
+        If a later page still fails after retries, raises IncompleteResults
+        with the records fetched so far in `.records`.
+        """
         records: List[Dict[str, Any]] = []
         start = 1
         while len(records) < max_results:
             # with phrase filtering, fetch full pages because some records are dropped
             size = MAX_PAGE_SIZE if kwargs.get("phrase") else min(MAX_PAGE_SIZE, max_results - len(records))
-            page = self.search(limit=size, start=start, **kwargs)
+            try:
+                page = self.search(limit=size, start=start, **kwargs)
+            except (SRUError, ET.ParseError) + NETWORK_ERRORS as e:
+                if start == 1:
+                    raise
+                raise IncompleteResults(
+                    f"Stopped at record {start} of {max_results}: {e}", records[:max_results]) from e
             records.extend(page["records"])
             start += page["returned"]
             if not page["returned"] or start > page["total"]:

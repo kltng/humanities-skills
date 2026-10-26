@@ -53,8 +53,9 @@ Multiple values: sources are ORed; most other filters are ANDed.
 | Argument | Meaning |
 |----------|---------|
 | `from` | 0-based offset (string) |
+| (note) | CJK text in `title` is matched character by character (`title: "文廟"` ≈ 文 OR 廟). Use `searchterm` with `booleanType: AND` and check titles |
 | `perPage` | Results per page (default 20) |
-| `booleanType` | `OR` (default, any word) or `AND` |
+| `booleanType` | `OR` (default, any word) or `AND`. **Applies to `searchterm` only**; `title`, `subjects`, etc. ignore it |
 | `queryMode` | `keyword` (default), `semantic` (vector), `hybrid` |
 | `fulltext` | Include full text in search (default false) |
 

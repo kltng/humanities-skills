@@ -281,5 +281,70 @@ class CatalogingFieldsTest(unittest.TestCase):
         ])
 
 
+class RetryTest(unittest.TestCase):
+    """Issue #2: dropped connections and timeouts are retried; later-page failures keep fetched records."""
+
+    def setUp(self):
+        import urllib.request
+        from scripts import alma_sru as module
+        self.module = module
+        self.urllib_request = urllib.request
+        self._urlopen = urllib.request.urlopen
+        self._sleep = module.time.sleep
+        module.time.sleep = lambda seconds: None
+        self.calls = 0
+
+    def tearDown(self):
+        self.urllib_request.urlopen = self._urlopen
+        self.module.time.sleep = self._sleep
+
+    def _serve(self, outcomes):
+        import io
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake(req, timeout=None):
+            outcome = outcomes[min(self.calls, len(outcomes) - 1)]
+            self.calls += 1
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return Response(outcome.encode())
+        self.urllib_request.urlopen = fake
+
+    def page(self, total, n):
+        record = SAMPLE_RESPONSE.split("<records>")[1].split("</records>")[0]
+        head = SAMPLE_RESPONSE.split("<records>")[0].replace("<numberOfRecords>1<", f"<numberOfRecords>{total}<")
+        return head + "<records>" + record * n + "</records></searchRetrieveResponse>"
+
+    def test_network_errors_are_retried(self):
+        self._serve([ConnectionResetError(54, "Connection reset by peer"), TimeoutError("timed out"), self.page(1, 1)])
+        result = AlmaSRU("sydney", min_interval=0).search(title="x")
+        self.assertEqual(self.calls, 3)
+        self.assertEqual(result["total"], 1)
+
+    def test_gives_up_after_max_attempts(self):
+        self._serve([TimeoutError("timed out")])
+        with self.assertRaises(TimeoutError):
+            AlmaSRU("sydney", min_interval=0).search(title="x")
+        self.assertEqual(self.calls, self.module.MAX_ATTEMPTS)
+
+    def test_later_page_failure_keeps_records(self):
+        self._serve([self.page(120, 50)] + [TimeoutError("timed out")] * 10)
+        with self.assertRaises(self.module.IncompleteResults) as ctx:
+            AlmaSRU("sydney", min_interval=0).search_all(max_results=120, title="x")
+        self.assertEqual(len(ctx.exception.records), 50)
+        self.assertIn("Stopped at record 51", str(ctx.exception))
+
+    def test_first_page_failure_raises_original_error(self):
+        self._serve([ConnectionResetError(54, "reset")])
+        with self.assertRaises(ConnectionResetError):
+            AlmaSRU("sydney", min_interval=0).search_all(max_results=10, title="x")
+
+
 if __name__ == "__main__":
     unittest.main()

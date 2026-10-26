@@ -115,5 +115,84 @@ class QueryTest(unittest.TestCase):
         self.assertIsNone(TimdexAPI(min_interval=0).get_record("alma:0"))
 
 
+class PhraseTest(unittest.TestCase):
+    """Issue #3: booleanType does not narrow field searches; phrase=True filters titles."""
+
+    def test_title_matches(self):
+        from scripts.timdex_api import title_matches
+        self.assertTrue(title_matches({"title": "明史研究論叢"}, "明史"))
+        self.assertFalse(title_matches({"title": "香港廟宇碑刻志"}, "文廟"))
+        self.assertTrue(title_matches({"title": "x", "alternate_titles": ["Ming shi yan jiu"]}, "ming shi"))
+        self.assertFalse(title_matches({"title": "Mingshi"}, "ming shi"))
+        self.assertFalse(title_matches({}, "x"))
+
+    def test_phrase_filters_page_and_reports_returned(self):
+        payload = {"data": {"search": {"hits": 2, "records": [
+            SAMPLE_RECORD, dict(SAMPLE_RECORD, title="香港廟宇碑刻志", alternateTitles=None),
+        ]}}}
+        urllib.request.urlopen = lambda req, timeout=None: FakeResponse(json.dumps(payload).encode())
+        try:
+            result = TimdexAPI(min_interval=0).search("明史", boolean="AND", phrase=True)
+        finally:
+            urllib.request.urlopen = self._urlopen
+        self.assertEqual(result["returned"], 2)
+        self.assertEqual([r["title"] for r in result["records"]], ["明史研究"])
+
+    def test_phrase_needs_text_and_summaries(self):
+        with self.assertRaises(ValueError):
+            TimdexAPI(min_interval=0).search(subjects="China", phrase=True)
+        with self.assertRaises(ValueError):
+            TimdexAPI(min_interval=0).search("x", raw=True, phrase=True)
+
+    def setUp(self):
+        self._urlopen = urllib.request.urlopen
+
+
+class NetworkRetryTest(unittest.TestCase):
+    """Dropped connections and timeouts are retried (same fix as issue #2)."""
+
+    def setUp(self):
+        import urllib.request
+        from scripts import timdex_api as module
+        self.module, self.urllib_request = module, urllib.request
+        self._urlopen, self._sleep = urllib.request.urlopen, module.time.sleep
+        module.time.sleep = lambda seconds: None
+
+    def tearDown(self):
+        self.urllib_request.urlopen = self._urlopen
+        self.module.time.sleep = self._sleep
+
+    def _serve(self, outcomes):
+        import io
+        calls = []
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake(req, timeout=None):
+            outcome = outcomes[min(len(calls), len(outcomes) - 1)]
+            calls.append(1)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return Response(outcome.encode())
+        self.urllib_request.urlopen = fake
+        return calls
+
+    def test_retries_then_succeeds(self):
+        calls = self._serve([ConnectionResetError(54, "reset"), TimeoutError("timed out"), '{"data": {"ping": "pong"}}'])
+        TimdexAPI(min_interval=0).query("{ ping }")
+        self.assertEqual(len(calls), 3)
+
+    def test_gives_up(self):
+        calls = self._serve([TimeoutError("timed out")])
+        with self.assertRaises(TimeoutError):
+            TimdexAPI(min_interval=0).query("{ ping }")
+        self.assertEqual(len(calls), self.module.MAX_ATTEMPTS)
+
+
 if __name__ == "__main__":
     unittest.main()

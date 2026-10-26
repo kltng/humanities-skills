@@ -56,6 +56,8 @@ China NOT Japan
 
 Label fields (`subject.label`, `contributor.label`, `collection.title`) are exact-match; use the full label or `*`.
 
+**Quote CJK terms.** Unquoted CJK text is split into single characters joined with OR: `孔廟` matches 1,794 unrelated items; `"孔廟"` matches only the whole term (0 hits).
+
 ## DSL Search (POST)
 
 ```json

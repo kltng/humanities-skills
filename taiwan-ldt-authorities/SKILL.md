@@ -1,7 +1,7 @@
 ---
 name: taiwan-ldt-authorities
 description: Look up Taiwan's library authority data in LDT@Library (臺灣鏈結資源系統, National Central Library + National Taiwan University) — Chinese personal name authorities with variant names and sources, Taiwan's Chinese Subject Headings (中文主題詞), and the Chinese classification (中文圖書分類法) — through its public reconciliation API and SPARQL endpoint (no API key). Use this skill when the user wants the authorized Chinese form of a person's name, all name variants (字, 號, romanizations), the sources a name was established from, Taiwan subject headings to compare with LCSH, or class numbers from the Chinese classification; or when reconciling names in a dataset (OpenRefine).
-version: 1.0.0
+version: 1.0.1
 license: MIT
 author: Kwok-leong Tang
 contributors:

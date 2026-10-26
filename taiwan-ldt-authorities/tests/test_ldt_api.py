@@ -116,5 +116,51 @@ class RequestTest(unittest.TestCase):
             LDTAPI(min_interval=0).sparql("SELECT * WHERE { ?s ?p ?o } LIMIT 1")
 
 
+class NetworkRetryTest(unittest.TestCase):
+    """Dropped connections and timeouts are retried (same fix as issue #2)."""
+
+    def setUp(self):
+        import urllib.request
+        from scripts import ldt_api as module
+        self.module, self.urllib_request = module, urllib.request
+        self._urlopen, self._sleep = urllib.request.urlopen, module.time.sleep
+        module.time.sleep = lambda seconds: None
+
+    def tearDown(self):
+        self.urllib_request.urlopen = self._urlopen
+        self.module.time.sleep = self._sleep
+
+    def _serve(self, outcomes):
+        import io
+        calls = []
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake(req, timeout=None):
+            outcome = outcomes[min(len(calls), len(outcomes) - 1)]
+            calls.append(1)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return Response(outcome.encode())
+        self.urllib_request.urlopen = fake
+        return calls
+
+    def test_retries_then_succeeds(self):
+        calls = self._serve([ConnectionResetError(54, "reset"), TimeoutError("timed out"), '{"results": {"bindings": []}}'])
+        LDTAPI(min_interval=0).sparql("SELECT * WHERE { ?s ?p ?o } LIMIT 1")
+        self.assertEqual(len(calls), 3)
+
+    def test_gives_up(self):
+        calls = self._serve([TimeoutError("timed out")])
+        with self.assertRaises(TimeoutError):
+            LDTAPI(min_interval=0).sparql("SELECT * WHERE { ?s ?p ?o } LIMIT 1")
+        self.assertEqual(len(calls), self.module.MAX_ATTEMPTS)
+
+
 if __name__ == "__main__":
     unittest.main()

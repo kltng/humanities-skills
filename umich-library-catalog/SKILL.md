@@ -1,7 +1,7 @@
 ---
 name: umich-library-catalog
 description: Search the University of Michigan Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including its strong Asia Library holdings in Chinese, Japanese, and Korean. Use this skill whenever the user wants to look up items at U-M or "Michigan" libraries, check whether U-M holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read full MARC records with vernacular (880) script fields, or compare U-M holdings with Harvard, Columbia, or LOC. Returns call numbers, locations, availability, and online access.
-version: 1.1.0
+version: 1.1.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -56,6 +56,7 @@ You can search in either script. `alma.title="明史"` and `alma.title="Ming shi
 - **50 records per request** at most (`maximumRecords`). Page with `startRecord` (1-based).
 - **Sort** goes inside the CQL, not in a separate parameter: `... sortBy alma.main_pub_date/sort.descending`. The `sortKeys` parameter is ignored. Sortable: `title`, `creator`, `main_pub_date`. Records with unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"` to drop them.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
+- **Network errors are retried.** Dropped connections, read timeouts, and HTTP 429/5xx are retried up to 4 times (waiting 5, 10, 20 s, or `Retry-After`). If a later page of `search_all()` still fails, it raises `IncompleteResults`; the records fetched so far are in its `.records`.
 - **Unknown index names** fail with a vague "Catalog search has encountered an error". Check the spelling against `references/api_reference.md`.
 - **Encode the query** with normal URL encoding (`urllib.parse.quote`). Raw Chinese or quotes in the URL give HTTP 400.
 - **Truncation**: `alma.lc_class_number=DS753*` (no quotes around the term).

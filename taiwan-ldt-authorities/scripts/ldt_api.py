@@ -20,6 +20,7 @@ Usage as a CLI:
 
 import argparse
 import email.utils
+import http.client
 import json
 import sys
 import time
@@ -35,6 +36,11 @@ USER_AGENT = (
     "TaiwanLDTSkill/1.0 (Claude Code skill; research use; "
     "+https://github.com/kltng/humanities-skills)"
 )
+
+# Attempts per request; waits between them are 5, 10, 20 s (or Retry-After)
+MAX_ATTEMPTS = 4
+RETRY_HTTP_CODES = (429, 500, 502, 503, 504)
+NETWORK_ERRORS = (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException)
 
 PREFIXES = """PREFIX madsrdf: <http://www.loc.gov/mads/rdf/v1#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -94,16 +100,20 @@ class LDTAPI:
             "Accept": accept,
             "Content-Type": "application/x-www-form-urlencoded",
         })
-        for attempt in range(3):
+        for attempt in range(MAX_ATTEMPTS):
             self._rate_limit()
             try:
                 with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                     raw = resp.read()
                 break
             except urllib.error.HTTPError as e:
-                if e.code not in (429, 503) or attempt == 2:
+                if e.code not in RETRY_HTTP_CODES or attempt == MAX_ATTEMPTS - 1:
                     raise
-                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+                time.sleep(self._retry_after_seconds(e, 5.0 * 2 ** attempt))
+            except NETWORK_ERRORS:
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(5.0 * 2 ** attempt)
         try:
             return json.loads(raw)
         except json.JSONDecodeError as e:

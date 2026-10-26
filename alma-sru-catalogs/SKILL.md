@@ -1,7 +1,7 @@
 ---
 name: alma-sru-catalogs
 description: Search 21 research library catalogs at once through their public Alma SRU interfaces (no API key) — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, UC Berkeley, UCLA, Toronto, Oxford (Bodleian), Cambridge, Edinburgh, Sydney, and six Taiwan universities (National Taiwan University 臺大, NCCU 政大, NCKU 成大, NSYSU 中山, NCHU 中興, CCU 中正). Use this skill whenever the user wants to find which libraries hold a book, compare holdings across universities, search UK/Canadian/Australian/Taiwanese university catalogs, compare subject headings and classification across cataloging traditions (LCSH vs Taiwan's Chinese headings), look up items at any of these libraries by title/author/subject/ISBN/OCLC/call number, or read MARC records with vernacular (880) Chinese/Japanese/Korean script. Returns call numbers, locations, availability, and online access per library.
-version: 1.1.0
+version: 1.1.1
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -32,7 +32,7 @@ Many research libraries run Ex Libris **Alma**, and many leave its **SRU** inter
 | `oxford` | Bodleian Libraries, Oxford | |
 | `cambridge` | Cambridge University Libraries | |
 | `edinburgh` | University of Edinburgh | |
-| `sydney` | University of Sydney | No AVA/AVE holdings in SRU records |
+| `sydney` | University of Sydney | No AVA/AVE holdings in SRU records; slow and drops connections (one request took 143 s, the next 1.5 s) |
 | `ntu` | National Taiwan University 國立臺灣大學 | Taiwan records (see below) |
 | `nccu` | National Chengchi University 國立政治大學 | Taiwan records |
 | `ncku` | National Cheng Kung University 國立成功大學 | Taiwan records |
@@ -83,6 +83,7 @@ Main fields are romanized (pinyin, Hepburn, McCune-Reischauer); the original scr
 - **Sort** goes inside the CQL (`sortBy alma.main_pub_date/sort.descending`); `sortKeys` is ignored. Unknown dates (`uuuu`) sort first in ascending order; add `cql="alma.main_pub_date>=1000"`.
 - **Default order is not relevance ranking.** Narrow the query instead of trusting the first hits.
 - **Subject headings:** write LCSH as plain words, without ` -- `, in LC's inverted form. `alma.subjects="Confucius Cult"` works; `"Confucius -- Cult"` gives 0. `"Temples, Confucian"` works; `"Confucian temples"` gives 0.
+- **Network errors are retried.** Dropped connections, read timeouts, and HTTP 429/5xx are retried up to 4 times (waiting 5, 10, 20 s, or `Retry-After`). If a later page of `search_all()` still fails, it raises `IncompleteResults`; the records fetched so far are in its `.records`.
 - **Unknown index names** give a vague "Catalog search has encountered an error".
 - **Searching all 21 takes about 45 seconds.** Each server gets at most one request per second; different servers are queried back to back without waiting, but the six Taiwan libraries share one server (`ap01`), so they go one per second.
 
@@ -125,6 +126,11 @@ for rec in result["records"]:
 results = search_many(resolve_libraries("all"), oclc="424023", limit=1)
 holders = [k for k, r in results.items() if r.get("total")]
 
+from scripts.alma_sru import IncompleteResults
+try:
+    records = AlmaSRU("sydney").search_all(title="kong miao", max_results=500)
+except IncompleteResults as e:          # a later page failed after retries
+    records = e.records                 # keep what was fetched; say the list is partial
 oxford.search_all(subject="China History Ming dynasty", max_results=200)
 oxford.get_record("991027744457507026")
 ```
