@@ -51,8 +51,28 @@ EXACT_FIELDS = {
 }
 
 
+def mods_text(value: Any, sep: str = "; ") -> str:
+    """
+    Flatten a MODS JSON value into one string.
+
+    LibraryCloud turns XML into JSON, so one field can be a string, a number,
+    a dict with "#text", or a list of these (e.g. titleInfo.subTitle can be
+    ["8 juan"], originInfo.publisher a list of two names).
+    """
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return mods_text(value.get("#text", ""), sep)
+    if isinstance(value, list):
+        parts = [mods_text(v, sep) for v in value]
+        return sep.join(dict.fromkeys(p for p in parts if p))
+    return str(value).strip()
+
+
 class HarvardLibraryAPI:
     """Client for Harvard Library APIs (LibraryCloud + PRESTO)."""
+
+    text = staticmethod(mods_text)
 
     def __init__(self, min_interval: float = 1.0):
         self._min_interval = min_interval
@@ -233,16 +253,16 @@ class HarvardLibraryAPI:
         ti = record.get("titleInfo", {})
         if isinstance(ti, list):
             ti = ti[0]
+        if not isinstance(ti, dict):
+            return mods_text(ti)
         parts = []
-        non_sort = ti.get("nonSort", "")
-        if isinstance(non_sort, dict):
-            non_sort = non_sort.get("#text", "")
-        if isinstance(non_sort, str) and non_sort:
-            parts.append(non_sort.strip())
-        title = ti.get("title", "")
+        non_sort = mods_text(ti.get("nonSort"))
+        if non_sort:
+            parts.append(non_sort)
+        title = mods_text(ti.get("title"))
         if title:
             parts.append(title)
-        subtitle = ti.get("subTitle", "")
+        subtitle = mods_text(ti.get("subTitle"))
         if subtitle:
             parts.append(f": {subtitle}")
         return " ".join(parts).strip()
@@ -302,10 +322,9 @@ class HarvardLibraryAPI:
         origin = record.get("originInfo", {})
         if isinstance(origin, list):
             origin = origin[0]
-        pub = origin.get("publisher", "")
-        if isinstance(pub, list):
-            return pub[0] if pub else ""
-        return str(pub)
+        if not isinstance(origin, dict):
+            return ""
+        return mods_text(origin.get("publisher"))
 
     @staticmethod
     def get_subjects(record: Dict) -> List[str]:
@@ -388,13 +407,7 @@ class HarvardLibraryAPI:
         phys = record.get("physicalDescription", {})
         if isinstance(phys, list):
             phys = phys[0]
-        extent = phys.get("extent", "")
-        if isinstance(extent, list):
-            extent = "; ".join(
-                e.get("#text", "") if isinstance(e, dict) else str(e) for e in extent
-            )
-        if isinstance(extent, dict):
-            extent = extent.get("#text", "")
+        extent = mods_text(phys.get("extent")) if isinstance(phys, dict) else ""
 
         return {
             "title": self.get_title(record),

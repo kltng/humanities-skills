@@ -1,7 +1,7 @@
 ---
 name: loc-catalog
 description: Search the Library of Congress digital collections via the loc.gov JSON API. Use this skill whenever the user wants to search LOC's digitized books, photos, maps, manuscripts, newspapers, audio, or film/video, look up items by LCCN, browse LOC collections, find primary sources with date range filters, or retrieve citations and download links for LOC materials. Also triggers when cross-referencing items found in other library catalogs against LOC holdings.
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Library of Congress API Skill
@@ -13,6 +13,18 @@ Search and retrieve items from LOC's digitized collections — books, photos, ma
 ### This API covers digitized collections, NOT the full library catalog
 
 The loc.gov JSON API searches LOC's **digitized and online collections** — not the full OPAC. By default, only digitized items are returned. Add `all=true` to include non-digitized catalog records.
+
+### Search romanized forms, not Chinese script
+
+LOC catalog records for East Asian books are mostly romanized (pinyin for newer records, Wade-Giles in many older ones; Korean in McCune-Reischauer). Searching in Chinese script finds only the few records that carry the vernacular, and it was slow in one report (timeouts). For example, `books` with `all=true` (October 2026):
+
+| Query | Results |
+|---|---|
+| `文廟` | 10 (half of them Korean *Munmyo* books) |
+| `"wen miao"` (also `"wen-miao"`) | 46 |
+| `"Confucian temples"` | 163 |
+
+Search the pinyin in quotes, then the Wade-Giles form, then the English subject. Accents are ignored (`"Wên miao"` = `"wen miao"`), but Wade-Giles spellings find other records: `"Kong miao"` → 40, `"K'ung miao"` → 5. Quote multi-word forms. Pinyin without spaces (`"wenmiao"`) finds far fewer (4).
 
 ### JSON requires `fo=json` parameter, NOT a URL extension
 
@@ -134,6 +146,7 @@ for r in results[:5]:
 - No authentication required
 - Rate limiting is enforced (exact limits unpublished) — add 0.5-1s between requests
 - Include a User-Agent header
+- loc.gov sometimes stalls on a search. The script waits up to `timeout` seconds (default 60; `LocAPI(timeout=90)`) and retries timeouts, dropped connections, HTTP 429 and 5xx up to 4 times (waiting 5, 10, 20 s)
 
 ## Related Skills
 
@@ -145,6 +158,7 @@ for r in results[:5]:
 
 - `references/api_reference.md` — Complete parameter and response field reference
 - `scripts/loc_api.py` — Python client with search, item lookup, collection browsing, and citation extraction
+- `tests/test_loc_api.py` — offline tests
 
 ## Feedback and Citation
 

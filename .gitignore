@@ -35,3 +35,7 @@ tgaz.db
 ## Temporarily ignored skills (pending publish)
 archival-entity-linking/
 tei-validator/
+
+## Retired skills (kept locally only)
+# columbia-clio: clio.columbia.edu robots.txt disallows all automated access (issue #7)
+columbia-clio/

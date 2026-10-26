@@ -1,7 +1,7 @@
 ---
 name: princeton-library-catalog
 description: Search the Princeton University Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including the East Asian Library and its rare Chinese books. Use this skill whenever the user wants to look up items at Princeton, check whether Princeton holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read MARC records with vernacular (880) script fields, or compare Princeton holdings with other libraries. Returns call numbers, locations, availability, and online access.
-version: 1.1.1
+version: 1.1.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -116,7 +116,7 @@ Each summary has `mms_id`, `title`, `titles` (romanized + vernacular), `author`,
 
 - **alma-sru-catalogs**: search this library and 14 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
 - **umich-library-catalog**, **princeton-library-catalog**, **yale-library-catalog**, **pitt-library-catalog**: the same Alma SRU method at other libraries
-- **harvard-library-catalog**, **columbia-clio**, **loc-catalog**: other catalogs to compare holdings
+- **harvard-library-catalog**, **loc-catalog**: other catalogs to compare holdings
 - **hathitrust-catalog**: use OCLC numbers from here to find digitized copies
 - **zotero-local**: save found records into Zotero
 

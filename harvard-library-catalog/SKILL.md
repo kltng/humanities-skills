@@ -1,7 +1,7 @@
 ---
 name: harvard-library-catalog
 description: Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO. Use this skill whenever the user wants to look up books, manuscripts, finding aids, or other items in Harvard's library catalog, verify bibliographic information (title, author, ISBN, publication date), find digital collections, or retrieve detailed catalog records. Also triggers when a user extracts a book title from a document and wants to find its full bibliographic metadata.
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Harvard Library API Skill
@@ -20,6 +20,33 @@ WRONG:     https://api.lib.harvard.edu/v2/items?q=title:hamlet
 ```
 
 The `q=` parameter is for **keyword search across all fields**. Field-specific search uses dedicated parameters like `title=`, `name=`, `subject=`, `identifier=`, etc.
+
+### Quote phrases: unquoted words are ORed
+
+Field searches match **any** word, and CJK text is split into single characters. Put multi-word and CJK terms in double quotes (October 2026 counts):
+
+| Query | Results |
+|---|---|
+| `title=文廟` | 168,900 (top hit is a book on 聖母廟) |
+| `title="文廟"` | 47 |
+| `title=wen miao` | 478 |
+| `title="wen miao"` | 19 |
+
+For subject headings, use `subject_exact` with the heading as written, without quotes: `subject_exact=Temples, Confucian` → 65 (`subject=Temples, Confucian` → 176 loose matches; `subject="Temples, Confucian"` → 0).
+
+```python
+api.search(title='"文廟"')                       # the quotes are part of the value
+api.search(subject_exact="Temples, Confucian")
+```
+
+### MODS fields can be a string, a dict, or a list
+
+LibraryCloud converts MODS XML to JSON, so the same field takes different shapes: `"text"`, `{"#text": "text", "@type": ...}`, or a list of either. `titleInfo.subTitle` can be `["8 juan"]`, `originInfo.publisher` a list of two publishers, `relatedItem.titleInfo.partNumber` `[1]`. Do not call `.strip()` on a raw field. Use `mods_text()` (also `api.text()`), which turns any of these into one string, or the `get_*`/`summarize()` helpers, which use it:
+
+```python
+from scripts.harvard_api import mods_text
+mods_text(record["titleInfo"][0].get("subTitle"))   # '8 juan'
+```
 
 ### JSON requires `.json` in the URL path
 
@@ -168,6 +195,7 @@ for r in results[:5]:
 
 - `references/api_reference.md` — Complete field reference with all searchable fields, facets, and query examples
 - `scripts/harvard_api.py` — Full-featured Python client with rate limiting, pagination, and record summarization
+- `tests/test_harvard_api.py` — offline tests
 
 ## Feedback and Citation
 

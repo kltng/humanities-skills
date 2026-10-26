@@ -31,7 +31,6 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 
 | Skill | Description |
 |-------|-------------|
-| [columbia-clio](columbia-clio/) | Search Columbia University Libraries' CLIO catalog via Blacklight JSON API |
 | [harvard-library-catalog](harvard-library-catalog/) | Search Harvard Library's 13M+ records via LibraryCloud and PRESTO |
 | [hathitrust-catalog](hathitrust-catalog/) | Look up HathiTrust's 17M+ digitized volumes by ISBN, OCLC, LCCN, or ISSN |
 | [loc-catalog](loc-catalog/) | Search Library of Congress digital collections — books, photos, maps, manuscripts, newspapers |

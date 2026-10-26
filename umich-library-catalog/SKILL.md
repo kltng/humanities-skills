@@ -1,7 +1,7 @@
 ---
 name: umich-library-catalog
 description: Search the University of Michigan Library catalog (Alma) through its public SRU interface for books, journals, manuscripts, microfilm, and e-resources, including its strong Asia Library holdings in Chinese, Japanese, and Korean. Use this skill whenever the user wants to look up items at U-M or "Michigan" libraries, check whether U-M holds a book and where it is shelved, search by title/author/subject/ISBN/OCLC/call number, read full MARC records with vernacular (880) script fields, or compare U-M holdings with Harvard, Columbia, or LOC. Returns call numbers, locations, availability, and online access.
-version: 1.1.1
+version: 1.1.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -164,7 +164,7 @@ Search field names: `keyword`, `title`, `author`, `subject`, `isbn`, `issn`, `oc
 - **alma-sru-catalogs**: search this library and 14 others (Oxford, Cambridge, Toronto, Berkeley, …) in one call
 - **princeton-library-catalog**, **yale-library-catalog**, **pitt-library-catalog**: the same Alma SRU method at other libraries
 - **hathitrust-catalog**: U-M is HathiTrust's founding partner. Use OCLC numbers from here to find digitized copies.
-- **harvard-library-catalog**, **columbia-clio**, **loc-catalog**: compare holdings across libraries
+- **harvard-library-catalog**, **loc-catalog**: compare holdings across libraries
 - **zotero-local**: save found records into Zotero
 - **cbdb-local**: identify authors of Chinese works
 

@@ -6,6 +6,7 @@ newspapers, audio, film/video) and retrieves item details by LCCN/ID.
 """
 
 import email.utils
+import http.client
 import json
 import time
 import urllib.request
@@ -14,6 +15,15 @@ import urllib.error
 from typing import Any, Dict, List, Optional
 
 BASE_URL = "https://www.loc.gov"
+USER_AGENT = (
+    "LocCatalogSkill/1.0 (Claude Code skill; research use; "
+    "+https://github.com/kltng/humanities-skills)"
+)
+
+# Attempts per request; waits between them are 5, 10, 20 s (or Retry-After)
+MAX_ATTEMPTS = 4
+RETRY_HTTP_CODES = (429, 500, 502, 503, 504)
+NETWORK_ERRORS = (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException)
 
 VALID_FORMATS = {
     "books", "photos", "maps", "audio", "newspapers",
@@ -43,8 +53,9 @@ def _path_segment(value: str) -> str:
 class LocAPI:
     """Client for the Library of Congress loc.gov JSON API."""
 
-    def __init__(self, min_interval: float = 1.0):
+    def __init__(self, min_interval: float = 1.0, timeout: float = 60.0):
         self._min_interval = min_interval
+        self.timeout = timeout
         self._last_request = 0.0
 
     def _rate_limit(self):
@@ -69,18 +80,21 @@ class LocAPI:
         return default
 
     def _get_json(self, url: str) -> Dict[str, Any]:
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "LocCatalogSkill/1.0 (Claude Code skill; research use)",
-        })
-        for attempt in range(3):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        for attempt in range(MAX_ATTEMPTS):
             self._rate_limit()
             try:
-                with urllib.request.urlopen(req, timeout=30) as resp:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     return json.loads(resp.read())
             except urllib.error.HTTPError as e:
-                if e.code != 429 or attempt == 2:
+                if e.code not in RETRY_HTTP_CODES or attempt == MAX_ATTEMPTS - 1:
                     raise
-                time.sleep(self._retry_after_seconds(e, 5.0 * (attempt + 1)))
+                time.sleep(self._retry_after_seconds(e, 5.0 * 2 ** attempt))
+            except NETWORK_ERRORS:
+                # loc.gov sometimes stalls on a search; a retry usually succeeds
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(5.0 * 2 ** attempt)
         raise RuntimeError("unreachable")
 
     # ── Search ──

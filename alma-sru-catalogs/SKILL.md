@@ -1,7 +1,7 @@
 ---
 name: alma-sru-catalogs
 description: Search 21 research library catalogs at once through their public Alma SRU interfaces (no API key) — Michigan, Princeton, Yale, Penn, MIT, Duke, Pittsburgh, Illinois, UC Berkeley, UCLA, Toronto, Oxford (Bodleian), Cambridge, Edinburgh, Sydney, and six Taiwan universities (National Taiwan University 臺大, NCCU 政大, NCKU 成大, NSYSU 中山, NCHU 中興, CCU 中正). Use this skill whenever the user wants to find which libraries hold a book, compare holdings across universities, search UK/Canadian/Australian/Taiwanese university catalogs, compare subject headings and classification across cataloging traditions (LCSH vs Taiwan's Chinese headings), look up items at any of these libraries by title/author/subject/ISBN/OCLC/call number, or read MARC records with vernacular (880) Chinese/Japanese/Korean script. Returns call numbers, locations, availability, and online access per library.
-version: 1.1.1
+version: 1.1.2
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -153,7 +153,7 @@ Each summary has `mms_id`, `title`, `titles`, `author`, `authors`, `contributors
 
 - **mit-timdex**: MIT's official API, better than SRU for MIT
 - **taiwan-ldt-authorities**: look up Taiwan's name authorities, Chinese subject headings, and classification behind these records
-- **harvard-library-catalog**, **columbia-clio**, **loc-catalog**: catalogs that do not use Alma SRU
+- **harvard-library-catalog**, **loc-catalog**: catalogs that do not use Alma SRU
 - **hathitrust-catalog**: digitized copies by OCLC number
 - **zotero-local**: save found records
 
