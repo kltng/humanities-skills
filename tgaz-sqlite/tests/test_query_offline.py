@@ -1,11 +1,15 @@
 """Offline tests: a tiny fixture database, no real tgaz.db needed."""
 
+import contextlib
+import hashlib
+import io
 import json
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 
@@ -161,12 +165,89 @@ class DbFileCheckTest(unittest.TestCase):
         cp = self.run_with(pointer)
         self.assertNotEqual(cp.returncode, 0)
         self.assertIn("Git LFS pointer", cp.stderr)
-        self.assertIn("git lfs pull", cp.stderr)
+        self.assertIn("query_tgaz.py setup", cp.stderr)
 
     def test_other_non_database_file(self):
         cp = self.run_with(b"hello")
         self.assertNotEqual(cp.returncode, 0)
         self.assertIn("not a SQLite database", cp.stderr)
+
+
+class FakeResponse(io.BytesIO):
+    def __init__(self, data):
+        super().__init__(data)
+        self.headers = {"Content-Length": str(len(data))}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class SetupTest(unittest.TestCase):
+    """`setup` downloads the zip named in latest.json and checks both checksums."""
+
+    def setUp(self):
+        self.db_bytes = b"SQLite format 3\x00" + b"x" * 100
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("tgaz.db", self.db_bytes)
+        self.zip_bytes = buf.getvalue()
+        self.meta = {
+            "release": "20260325", "sqlite_filename": "tgaz.db",
+            "sha256": hashlib.sha256(self.db_bytes).hexdigest(),
+            "size_bytes": len(self.db_bytes), "archive_filename": "tgaz_20260325.zip",
+            "archive_sha256": hashlib.sha256(self.zip_bytes).hexdigest(),
+            "download_url": "https://example.org/tgaz_20260325.zip",
+        }
+        self.urls = []
+        self._urlopen = query_tgaz.urllib.request.urlopen
+
+        def fake(req, timeout=None):
+            self.urls.append(req.full_url)
+            if req.full_url == query_tgaz.RELEASE_URL:
+                return FakeResponse(json.dumps(self.meta).encode())
+            return FakeResponse(self.zip_bytes)
+        query_tgaz.urllib.request.urlopen = fake
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dest = Path(self.tmp.name) / "sub" / "tgaz.db"
+
+    def tearDown(self):
+        query_tgaz.urllib.request.urlopen = self._urlopen
+        self.tmp.cleanup()
+
+    def quiet(self, fn, *args):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return fn(*args)
+
+    def test_download_unzip_and_sidecar(self):
+        self.quiet(query_tgaz.download_db, self.dest)
+        self.assertEqual(self.dest.read_bytes(), self.db_bytes)
+        sidecar = json.loads(query_tgaz.release_file(self.dest).read_text())
+        self.assertEqual(sidecar["release"], "20260325")
+        self.assertEqual(sorted(p.name for p in self.dest.parent.iterdir()),
+                         ["tgaz.db", "tgaz.db.release.json"])
+        self.assertTrue(self.quiet(query_tgaz.check_release, self.dest))
+
+    def test_existing_file_is_kept_without_force(self):
+        self.dest.parent.mkdir(parents=True)
+        self.dest.write_bytes(b"old")
+        self.quiet(query_tgaz.download_db, self.dest)
+        self.assertEqual(self.dest.read_bytes(), b"old")
+        self.quiet(query_tgaz.download_db, self.dest, True)
+        self.assertEqual(self.dest.read_bytes(), self.db_bytes)
+
+    def test_bad_checksum_leaves_nothing(self):
+        self.meta["archive_sha256"] = "0" * 64
+        with self.assertRaises(SystemExit):
+            self.quiet(query_tgaz.download_db, self.dest)
+        self.assertEqual(list(self.dest.parent.iterdir()), [])
+
+    def test_check_reports_old_release(self):
+        self.quiet(query_tgaz.download_db, self.dest)
+        self.meta.update(release="20270101", sha256="1" * 64)
+        self.assertFalse(self.quiet(query_tgaz.check_release, self.dest))
 
 
 if __name__ == "__main__":

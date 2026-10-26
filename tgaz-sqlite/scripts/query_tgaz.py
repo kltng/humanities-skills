@@ -13,13 +13,20 @@ Usage:
   python query_tgaz.py --history hvd_70626                 # Full history of a place
   python query_tgaz.py --stats                             # Database statistics
   python query_tgaz.py --sql "SELECT ..."                  # Raw SQL
+  python query_tgaz.py setup [--force] [--db PATH]         # Download the database (Hugging Face)
+  python query_tgaz.py check                               # Is a newer release out?
 """
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import sqlite3
 import sys
+import urllib.request
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 # tgaz.db is 228 MB and is not stored in the repo. Keep one copy in the shared
@@ -27,13 +34,16 @@ from pathlib import Path
 # download it.
 CACHE_DB = Path.home() / ".local" / "share" / "sino-authorities" / "tgaz.db"
 
-DOWNLOAD_HINT = f"""Download it once (requires git-lfs):
+# The database is hosted on Hugging Face. latest.json names the current
+# release, its download URL, and the checksums.
+RELEASE_URL = "https://huggingface.co/datasets/kltng/tgaz-sqlite/resolve/main/latest.json"
+USER_AGENT = "tgaz-sqlite-skill/1.1 (https://github.com/kltng/humanities-skills)"
 
-  mkdir -p {CACHE_DB.parent}
-  git lfs install
-  git clone https://github.com/kltng/tgaz-sqlite.git /tmp/tgaz-sqlite
-  mv /tmp/tgaz-sqlite/tgaz.db {CACHE_DB}
-  rm -rf /tmp/tgaz-sqlite"""
+DOWNLOAD_HINT = f"""Download it once (62 MB, unzips to 228 MB):
+
+  python3 {Path(__file__).name} setup
+
+This puts it at {CACHE_DB}."""
 
 
 def db_candidates():
@@ -85,12 +95,99 @@ def check_db_file(db_path):
     if head.startswith(LFS_POINTER_PREFIX):
         sys.exit(
             f"Error: {db_path} is a Git LFS pointer file, not the database.\n"
-            "The real file was not downloaded (git-lfs was missing, or the LFS\n"
-            "quota was used up). Install git-lfs and run `git lfs pull` in that\n"
-            f"clone, or download it again.\n\n{DOWNLOAD_HINT}"
+            "It comes from an old git clone made without git-lfs. Delete it and\n"
+            f"download the database instead.\n\n{DOWNLOAD_HINT}"
         )
     if not head.startswith(SQLITE_HEADER):
         sys.exit(f"Error: {db_path} is not a SQLite database.\n\n{DOWNLOAD_HINT}")
+
+
+def release_file(db_path):
+    """Sidecar that records which release produced the database."""
+    return Path(db_path).with_name(Path(db_path).name + ".release.json")
+
+
+def fetch_release():
+    """Read latest.json from Hugging Face."""
+    req = urllib.request.Request(RELEASE_URL, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _download(url, dest):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as out:
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
+        for chunk in iter(lambda: resp.read(1 << 20), b""):
+            out.write(chunk)
+            done += len(chunk)
+            if total:
+                print(f"\r  {done >> 20} / {total >> 20} MB", end="", file=sys.stderr, flush=True)
+    if total:
+        print(file=sys.stderr)
+    if total and done != total:
+        raise OSError(f"download stopped at {done} of {total} bytes")
+
+
+def download_db(dest=CACHE_DB, force=False):
+    """Download, check, and unzip the current release to `dest`."""
+    dest = Path(dest).expanduser()
+    if dest.exists() and not force:
+        print(f"{dest} already exists. Use `setup --force` to download it again.")
+        return dest
+    meta = fetch_release()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    archive = dest.with_name(meta["archive_filename"] + ".part")
+    tmp_db = dest.with_name(dest.name + ".part")
+    try:
+        print(f"Downloading release {meta['release']} from Hugging Face ...", file=sys.stderr)
+        _download(meta["download_url"], archive)
+        if _sha256(archive) != meta["archive_sha256"]:
+            sys.exit("Error: the download is damaged (checksum mismatch). Try again.")
+        with zipfile.ZipFile(archive) as z, z.open(meta["sqlite_filename"]) as src, \
+                open(tmp_db, "wb") as out:
+            shutil.copyfileobj(src, out, 1 << 20)
+        if _sha256(tmp_db) != meta["sha256"]:
+            sys.exit("Error: the unzipped database has the wrong checksum. Try again.")
+        os.replace(tmp_db, dest)
+    finally:
+        for p in (archive, tmp_db):
+            if p.exists():
+                p.unlink()
+    sidecar = {k: meta[k] for k in ("sqlite_filename", "sha256", "size_bytes", "release")}
+    sidecar.update(format="sqlite3",
+                   stamped_at_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    release_file(dest).write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
+    print(f"Saved {dest} (release {meta['release']}).")
+    return dest
+
+
+def check_release(db_path=CACHE_DB):
+    """Compare the installed release with latest.json. Returns True when current."""
+    db_path = Path(db_path).expanduser()
+    try:
+        local = json.loads(release_file(db_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        local = {}
+    meta = fetch_release()
+    if not db_path.exists():
+        print(f"No database at {db_path}. Latest release: {meta['release']}. Run `setup`.")
+        return False
+    if local.get("sha256") == meta["sha256"] or local.get("release") == meta["release"]:
+        print(f"Up to date: release {meta['release']}.")
+        return True
+    print(f"Installed: {local.get('release', 'unknown')}. Latest: {meta['release']}. "
+          "Run `setup --force` to update.")
+    return False
 
 
 def get_conn(db_path):
@@ -538,7 +635,27 @@ def format_rows(rows, fmt="table"):
     print(f"\n({len(rows)} results)")
 
 
+def setup_main(argv):
+    """`setup [--force] [--db PATH]` and `check [--db PATH]`."""
+    parser = argparse.ArgumentParser(prog="query_tgaz.py " + argv[0],
+                                     description="Download or check the TGAZ database")
+    parser.add_argument("--db", default=str(CACHE_DB), help=f"Where to put tgaz.db (default: {CACHE_DB})")
+    if argv[0] == "setup":
+        parser.add_argument("--force", action="store_true", help="Download again even if present")
+    args = parser.parse_args(argv[1:])
+    try:
+        if argv[0] == "setup":
+            download_db(args.db, args.force)
+        else:
+            sys.exit(0 if check_release(args.db) else 1)
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as e:
+        sys.exit(f"Error: {e}")
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("setup", "check"):
+        setup_main(sys.argv[1:])
+        return
     parser = argparse.ArgumentParser(description="Query the TGAZ SQLite database")
     parser.add_argument("search", nargs="?", help="Quick search (name or FTS)")
     parser.add_argument("--db", help="Path to tgaz.db (default: auto-detect)")

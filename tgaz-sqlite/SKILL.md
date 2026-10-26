@@ -11,7 +11,7 @@ description: >
   or any spatial/temporal query about Chinese historical geography. This skill
   is relevant even for casual questions like "tell me about ancient Chang'an"
   or "Tang dynasty cities near the Yellow River".
-version: 1.0.2
+version: 1.1.0
 ---
 
 # TGAZ Historical Gazetteer Query Skill
@@ -36,23 +36,25 @@ Check whether the shared copy is already there:
 ls -lh ~/.local/share/sino-authorities/tgaz.db 2>/dev/null
 ```
 
-If it is missing, download it once (requires git-lfs):
+If it is missing, download it once from Hugging Face
+(https://huggingface.co/datasets/kltng/tgaz-sqlite). No git-lfs needed:
 
 ```bash
-mkdir -p ~/.local/share/sino-authorities
-git lfs install
-git clone https://github.com/kltng/tgaz-sqlite.git /tmp/tgaz-sqlite
-mv /tmp/tgaz-sqlite/tgaz.db ~/.local/share/sino-authorities/tgaz.db
-rm -rf /tmp/tgaz-sqlite
+python3 scripts/query_tgaz.py setup            # 62 MB download, unzips to 228 MB
+python3 scripts/query_tgaz.py check            # is a newer release out?
+python3 scripts/query_tgaz.py setup --force    # download again (e.g. to update)
+python3 scripts/query_tgaz.py setup --db PATH  # put it somewhere else
 ```
 
-Download it only once. The file is 228 MB and GitHub gives 1 GB of free LFS
-traffic per month, so about four downloads use up the whole monthly quota.
-After that, LFS clones fail until the quota resets.
+`setup` checks both SHA-256 checksums (the zip and the database) and writes
+`tgaz.db.release.json` next to the database, so `check` knows which release you
+have. It uses only the Python standard library.
 
-If git-lfs is missing (or the quota is used up), the clone gives you a small
-text "pointer" file instead of the database. `query_tgaz.py` checks for this
-and says so. Install git-lfs and run `git lfs pull` inside the clone.
+By hand: download `latest.json` from the dataset, then the zip it names, and unzip it.
+
+Older copies came from the GitHub repo `kltng/tgaz-sqlite` through Git LFS. A clone
+made without git-lfs holds a small text "pointer" file instead of the database.
+`query_tgaz.py` checks for this and tells you to run `setup`.
 
 ---
 
