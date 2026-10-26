@@ -99,6 +99,26 @@
       }
     },
     {
+      "name": "crossref-search",
+      "source": "./crossref-search",
+      "description": "Search Crossref's 188M+ DOI records — articles, books, chapters, JSTOR DOIs — with field queries and filters; look up DOIs, match free-text references, format citations (CSL, BibTeX, RIS), list references, and check DOI registration agencies",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
+      "name": "openaire-search",
+      "source": "./openaire-search",
+      "description": "Search the OpenAIRE Graph — publications, theses, datasets, and repository copies from Crossref, DataCite, and thousands of repositories — with phrase search, open-access filters, and every known copy of a DOI",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
+    },
+    {
       "name": "historical-timeline",
       "source": "./historical-timeline",
       "description": "Generate interactive historical timelines as standalone HTML files using TimelineJS3 — supports BCE/CE dates, eras, groups, media embedding, and rich text with zoom and navigation",

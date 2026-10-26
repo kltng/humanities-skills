@@ -50,6 +50,8 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | Skill | Description |
 |-------|-------------|
 | [arxiv-search](arxiv-search/) | Search arXiv preprints — field-specific queries, boolean logic, date filtering, bulk retrieval |
+| [crossref-search](crossref-search/) | Search Crossref DOI metadata — articles, books, JSTOR chapters; DOI lookup, reference matching, citation formatting |
+| [openaire-search](openaire-search/) | Search the OpenAIRE Graph — theses, repository copies, datasets, open-access versions of a DOI |
 | [europeana-collections](europeana-collections/) | Search Europeana's 50M+ cultural heritage items from 4,000+ European institutions |
 | [wikidata-search](wikidata-search/) | Search Wikidata via keyword, semantic/hybrid search, SPARQL, and direct entity retrieval |
 | [zotero-local](zotero-local/) | Interact with local Zotero 8 desktop via HTTP API — search, fetch, add, organize references |

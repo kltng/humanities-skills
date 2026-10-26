@@ -1,0 +1,50 @@
+{
+  "skill_name": "crossref-search",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Find the DOI for this reference and give me a Chicago author-date citation: Elman, 'Political, social and cultural reproduction via civil service examinations', Journal of Asian Studies 1991.",
+      "expected_output": "match or search with title and author, check the top hit, then cite 10.2307/2057472",
+      "files": [],
+      "expectations": [
+        "The Crossref API (api.crossref.org) was queried",
+        "The DOI 10.2307/2057472 is given",
+        "Title, author, and year were compared before the DOI was accepted",
+        "A Chicago author-date citation is given"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "List journal articles by Kwok-leong Tang that have DOIs.",
+      "expected_output": "search --author 'Kwok-leong Tang' --author-match with enough rows",
+      "files": [],
+      "expectations": [
+        "query.author was used",
+        "Results by other people with similar names (Leong Kwok Onn, Kwok Peng Leong) are excluded",
+        "Reporting to the Sage: Military Monuments in the Imperial Academy in Qing China is listed"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What has been published since 2000 on Wang Yangming that is available through JSTOR?",
+      "expected_output": "search 'Wang Yangming' with prefix:10.2307 and from-pub-date:2000",
+      "files": [],
+      "expectations": [
+        "The prefix:10.2307 filter (or --jstor) was used",
+        "A date filter from 2000 was used",
+        "JSTOR stable links (www.jstor.org/stable/...) are given"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I have the DOI 10.13471/j.cnki.jsysusse.2020.01.001 from a Chinese journal. Get its metadata.",
+      "expected_output": "work returns nothing; agency shows CNKI; explain that Crossref does not hold CNKI DOIs",
+      "files": [],
+      "expectations": [
+        "The registration agency was checked",
+        "The answer says the DOI is registered with CNKI, not Crossref, so Crossref has no metadata for it",
+        "The DOI is not called invalid only because Crossref lacks it"
+      ]
+    }
+  ]
+}

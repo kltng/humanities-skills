@@ -1,0 +1,36 @@
+{
+  "skill_name": "openaire-search",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Find open-access doctoral theses about the Ming dynasty.",
+      "expected_output": "search '\"Ming dynasty\"' with instanceType \"Doctoral thesis\" and accessRightLabel \"Open Access\"",
+      "files": [],
+      "expectations": [
+        "The OpenAIRE Graph API (api.openaire.eu/graph) was queried",
+        "The instance type filter \"Doctoral thesis\" was used, with quotes",
+        "Open-access links (repository URLs) are given for each thesis"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Is there a free copy of the article with DOI 10.5353/th_b3123394, and where?",
+      "expected_output": "find_doi / pid lookup, then list copies with access OPEN",
+      "files": [],
+      "expectations": [
+        "The DOI was looked up with the pid parameter",
+        "The HKU Scholars Hub copy is named as open access"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Search OpenAIRE for research on 明代科舉.",
+      "expected_output": "phrase search \"明代科舉\" (4 results) rather than the loose character match (100+)",
+      "files": [],
+      "expectations": [
+        "The CJK term was searched as a quoted phrase",
+        "The 明代科舉《春秋》義題目資料庫 dataset or the 明代研究 article is listed"
+      ]
+    }
+  ]
+}
