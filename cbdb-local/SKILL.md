@@ -332,3 +332,12 @@ export_network(network, "su_shi_kin.gexf", "gexf")
 - `references/database_schema.md` — Full SQLite schema and query guide
 - Source: [cbdb-project/cbdb_sqlite](https://github.com/cbdb-project/cbdb_sqlite)
 - CBDB Project: https://projects.iq.harvard.edu/cbdb
+
+## Inside the Ming research suite
+
+When working in `ming-qing-research-suite`, the `sino-authorities` MCP
+server (`sino_authorities/` in that repo) is the preferred route for
+resolution: name to id, id to record, era date to JDN. It reads the same
+database as this skill and returns the federation's `pack {corpus,
+pack_version, build_hash}` envelope. Use this skill for exploration:
+graphs, exports, bounding boxes, raw SQL.

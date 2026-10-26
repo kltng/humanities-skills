@@ -180,3 +180,12 @@ See `references/database_schema.md` for the full schema and query guide.
 - `scripts/calendar_converter.py` — Standalone converter (Python 3.10+, zero dependencies)
 - `references/database_schema.md` — SQLite schema and query patterns
 - Source data: [DILA Authority Database](http://authority.dila.edu.tw/time/)
+
+## Inside the Ming research suite
+
+When working in `ming-qing-research-suite`, the `sino-authorities` MCP
+server (`sino_authorities/` in that repo) is the preferred route for
+resolution: name to id, id to record, era date to JDN. It reads the same
+database as this skill and returns the federation's `pack {corpus,
+pack_version, build_hash}` envelope. Use this skill for exploration:
+graphs, exports, bounding boxes, raw SQL.

@@ -250,3 +250,12 @@ When answering user questions about historical places:
 4. **Use both Chinese and romanized names** — e.g., "长安县 (Chang'an Xian)."
 5. **Mention modern location** when relevant — use `--history` or `present_loc` table.
 6. **For JSON output to feed into other tools**, use `--format json` or `--format jsonl`.
+
+## Inside the Ming research suite
+
+When working in `ming-qing-research-suite`, the `sino-authorities` MCP
+server (`sino_authorities/` in that repo) is the preferred route for
+resolution: name to id, id to record, era date to JDN. It reads the same
+database as this skill and returns the federation's `pack {corpus,
+pack_version, build_hash}` envelope. Use this skill for exploration:
+graphs, exports, bounding boxes, raw SQL.
