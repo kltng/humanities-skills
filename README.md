@@ -36,6 +36,7 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [hathitrust-catalog](hathitrust-catalog/) | Look up HathiTrust's 17M+ digitized volumes by ISBN, OCLC, LCCN, or ISSN |
 | [loc-catalog](loc-catalog/) | Search Library of Congress digital collections — books, photos, maps, manuscripts, newspapers |
 | [nlb-singapore](nlb-singapore/) | Search National Library Board Singapore catalog — availability, new arrivals, checkout trends |
+| [umich-library-catalog](umich-library-catalog/) | Search University of Michigan Library via Alma SRU — CJK script fields, call numbers, availability |
 
 ### Scholarly Resources
 

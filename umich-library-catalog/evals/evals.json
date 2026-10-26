@@ -1,0 +1,42 @@
+{
+  "skill_name": "umich-library-catalog",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Does the University of Michigan library have Ming-dynasty printed books with 明史 in the title? List the oldest ones and where they are shelved.",
+      "expected_output": "Alma SRU title search for 明史, sorted oldest first, with vernacular titles and AVA call numbers/locations",
+      "files": [],
+      "expectations": [
+        "The Alma SRU endpoint was queried (umich.alma.exlibrisgroup.com/view/sru)",
+        "The query searched the title index for 明史",
+        "Results were sorted by publication date ascending or filtered to early dates",
+        "Titles are shown in Chinese characters (from 880 fields)",
+        "Call numbers and locations from AVA fields are given",
+        "search.lib.umich.edu was not scraped"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Find books by Timothy Brook at Michigan and tell me which ones I can read online.",
+      "expected_output": "Author search for Brook, Timothy with AVE electronic holdings identified",
+      "files": [],
+      "expectations": [
+        "The author/creator index was used",
+        "Results distinguish print (AVA) from online (AVE) holdings",
+        "Online platform or collection names are given for online items",
+        "Record links to search.lib.umich.edu are provided"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I found OCLC number 424023 in WorldCat. Does U-M hold it, and is there a digitized copy?",
+      "expected_output": "OCLC lookup in U-M Alma, then HathiTrust check for a digitized copy",
+      "files": [],
+      "expectations": [
+        "The OCLC index (alma.oclc_control_number_035_a) was used",
+        "The U-M record title and holdings are reported",
+        "The hathitrust-catalog skill or HathiTrust API was used for the digitized-copy question"
+      ]
+    }
+  ]
+}
