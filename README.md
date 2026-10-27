@@ -64,17 +64,55 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 
 ## Setup
 
-Install as a Claude Code skill marketplace:
+There are two ways to install. Use A for all your projects, or B for one project.
 
-```json
-{
-  "skills": [
-    "$HOME/skill-hub/humanities-skills/cbdb-api/SKILL.md"
-  ]
-}
+### A. Add the marketplace (Claude Code)
+
+In Claude Code, run:
+
+```
+/plugin marketplace add kltng/humanities-skills
+/plugin install cbdb-api@humanities-skills
 ```
 
-Or use the [skill-router](https://github.com/kltng/application-skills) to auto-discover and install skills as needed.
+Or from the shell:
+
+```bash
+claude plugin marketplace add kltng/humanities-skills
+claude plugin install cbdb-api@humanities-skills
+```
+
+Change `cbdb-api` to the skill you want. The skill names are the folder names in the tables above. New plugins load when you start Claude Code again, or after `/reload-plugins`.
+
+To update later, run `/plugin marketplace update humanities-skills`.
+
+**Pin a version.** Add `#` and a release tag to get a fixed version that will not change:
+
+```
+/plugin marketplace add kltng/humanities-skills#v2026-tutorials
+```
+
+`v2026-tutorials` is the version used in the 2026 tutorials. See the [releases page](https://github.com/kltng/humanities-skills/releases) for all tags. A commit hash does not work here; use a tag or a branch name.
+
+### B. Copy skill folders into one project
+
+```bash
+git clone https://github.com/kltng/humanities-skills.git
+mkdir -p .claude/skills
+cp -R humanities-skills/cbdb-api .claude/skills/
+```
+
+Other agents look in other folders. For example, Codex reads skills from `.agents/skills/` (one project) or `~/.agents/skills/` (all projects).
+
+### One-time setup for some skills
+
+Most skills work right after install. A few need one more step. Each skill's `SKILL.md` explains it.
+
+- **Download a database:** [cbdb-local](cbdb-local/), [tgaz-sqlite](tgaz-sqlite/), [cjk-calendar](cjk-calendar/)
+- **Get an API key:** [nlb-singapore](nlb-singapore/) (required), [europeana-collections](europeana-collections/) (a demo key works for testing)
+- **Run a desktop app:** [zotero-local](zotero-local/) needs Zotero 8 open on the same computer
+
+You can also use the [skill-router](https://github.com/kltng/application-skills) to find and install skills as you need them.
 
 ## Conventions
 

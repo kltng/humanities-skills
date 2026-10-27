@@ -17,17 +17,21 @@ Each skill follows a consistent layout:
     └── api_reference.md      # Technical API spec (endpoints, params, responses)
 ```
 
-Optional: a `scripts/` directory for utility code (see `wikidata-search/scripts/wikidata_api.py`).
+Optional: `scripts/` for utility code (Python 3, standard library only, unless the skill says otherwise) and `tests/` for offline tests.
 
 ### Current Skills
 
-- **cbdb-api** — China Biographical Database (500K+ historical figures, 7th c. BCE–19th c. CE)
-- **chgis-tgaz** — China Historical GIS Temporal Gazetteer (placenames, 222 BCE–1911 CE)
-- **wikidata-search** — Wikidata integration (keyword, vector, SPARQL, entity retrieval)
+`.claude-plugin/marketplace.json` is the list of published skills (28 as of 2026-10-27). The README tables group them by topic. Keep both in step when adding or removing a skill. Folders that are not in `marketplace.json` (for example `columbia-clio`, which is retired and gitignored) are not published.
 
 ## Build & Development
 
-There is no build system, package manager, test suite, or CI pipeline. This is a documentation-first project. The only code is `wikidata-search/scripts/wikidata_api.py` (Python 3, zero external dependencies).
+There is no build system, package manager, or CI pipeline. Many skills have Python code in `scripts/`. Skills with code have offline tests in `tests/` (unittest, with a fake `urlopen`). Run them per skill:
+
+```bash
+cd <skill> && python3 -m unittest discover -s tests
+```
+
+`tools/check_alma_sync.py` checks that the five Alma SRU client copies match (see below).
 
 ## Conventions
 
