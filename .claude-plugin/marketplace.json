@@ -297,6 +297,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "local-ocr",
+      "source": "./local-ocr",
+      "description": "OCR PDFs, scans, or a whole corpus on your own computer with Datalab's open models (Chandra OCR 2, Surya OCR 2.5, Indra OCR): interview, hardware check, one-time model download, resumable runs, and export to JSON, text, Markdown, HTML, ALTO, PAGE XML, TEI, or hOCR, with a run report and a GitHub field report",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }

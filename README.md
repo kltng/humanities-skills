@@ -61,6 +61,7 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 |-------|-------------|
 | [human-eval-review](human-eval-review/) | Generate a single self-contained HTML file for human-in-the-loop evaluation — confirm candidate matches, pick, rate, judge, or correct model output, then export decisions as JSON |
 | [argue-against-me](argue-against-me/) | Structured academic debate — Claude challenges your thesis from a chosen historiographical school, producing a scorecard, revised thesis, and bibliography gaps |
+| [local-ocr](local-ocr/) | OCR PDFs and scans locally with Datalab's Chandra, Surya, or Indra — checks the hardware, picks the model, resumable runs, exports to JSON, text, ALTO, PAGE XML, TEI |
 
 ## Setup
 
@@ -111,6 +112,7 @@ Most skills work right after install. A few need one more step. Each skill's `SK
 - **Download a database:** [cbdb-local](cbdb-local/), [tgaz-sqlite](tgaz-sqlite/), [cjk-calendar](cjk-calendar/)
 - **Get an API key:** [nlb-singapore](nlb-singapore/) (required), [europeana-collections](europeana-collections/) (a demo key works for testing)
 - **Run a desktop app:** [zotero-local](zotero-local/) needs Zotero 8 open on the same computer
+- **Download a model:** [local-ocr](local-ocr/) downloads an OCR model (0.1–10.6 GB) the first time; its doctor script says which models your computer can run
 
 You can also use the [skill-router](https://github.com/kltng/application-skills) to find and install skills as you need them.
 

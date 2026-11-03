@@ -21,7 +21,7 @@ Optional: `scripts/` for utility code (Python 3, standard library only, unless t
 
 ### Current Skills
 
-`.claude-plugin/marketplace.json` is the list of published skills (28 as of 2026-10-27). The README tables group them by topic. Keep both in step when adding or removing a skill. Folders that are not in `marketplace.json` (for example `columbia-clio`, which is retired and gitignored) are not published.
+`.claude-plugin/marketplace.json` is the list of published skills (29 as of 2026-11-02). The README tables group them by topic. Keep both in step when adding or removing a skill. Folders that are not in `marketplace.json` (for example `columbia-clio`, which is retired and gitignored) are not published.
 
 ## Build & Development
 
