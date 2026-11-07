@@ -307,6 +307,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "tei-validator",
+      "source": "./tei-validator",
+      "description": "Validate TEI P5 XML files, folders or teiCorpus files: well-formedness and structure, the official TEI schema (tei_all, via xmllint), and checks the schema cannot make (broken #id links, duplicate xml:id, impossible dates, date ranges in the wrong order, undeclared cbdb:/tgaz: prefixes, name markup, archival best practice), with line numbers, as text or JSON",
+      "version": "1.1.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
