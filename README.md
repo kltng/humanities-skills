@@ -62,6 +62,7 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [human-eval-review](human-eval-review/) | Generate a single self-contained HTML file for human-in-the-loop evaluation — confirm candidate matches, pick, rate, judge, or correct model output, then export decisions as JSON |
 | [argue-against-me](argue-against-me/) | Structured academic debate — Claude challenges your thesis from a chosen historiographical school, producing a scorecard, revised thesis, and bibliography gaps |
 | [local-ocr](local-ocr/) | OCR PDFs and scans locally with Datalab's Chandra, Surya, or Indra — checks the hardware, picks the model, resumable runs, exports to JSON, text, ALTO, PAGE XML, TEI |
+| [local-audio-transcription](local-audio-transcription/) | Transcribe recordings locally with Whisper, Qwen3-ASR (Cantonese, Chinese dialects), SenseVoice or Parakeet, with speaker labels — asks first whether the material must stay completely offline, proves it on a sample clip, then hands over an offline script; exports text, SRT, VTT, JSON, CSV, TEI |
 | [tei-validator](tei-validator/) | Check TEI P5 files against the official TEI schema, plus broken links, duplicate ids, impossible dates, and undeclared prefixes; works on whole folders |
 
 ## Setup
@@ -114,6 +115,7 @@ Most skills work right after install. A few need one more step. Each skill's `SK
 - **Get an API key:** [nlb-singapore](nlb-singapore/) (required), [europeana-collections](europeana-collections/) (a demo key works for testing)
 - **Run a desktop app:** [zotero-local](zotero-local/) needs Zotero 8 open on the same computer
 - **Download a model:** [local-ocr](local-ocr/) downloads an OCR model (0.1–10.6 GB) the first time; its doctor script says which models your computer can run
+- **Download a model:** [local-audio-transcription](local-audio-transcription/) downloads a speech model (0.25–4.7 GB) the first time and needs `ffmpeg`; its doctor script says which models your computer can run
 - **Download a schema:** [tei-validator](tei-validator/) downloads the TEI schema (1 MB) the first time and uses `xmllint` (built into macOS)
 
 You can also use the [skill-router](https://github.com/kltng/application-skills) to find and install skills as you need them.

@@ -317,6 +317,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "local-audio-transcription",
+      "source": "./local-audio-transcription",
+      "description": "Transcribe recordings on your own computer with Whisper, Qwen3-ASR (Cantonese and Chinese dialects), SenseVoice or Parakeet, with optional speaker labels; asks first whether the material must stay completely offline, proves the pipeline runs with the network blocked on a sample clip the user provides, then hands over a script to run after disconnecting; exports txt, Markdown, SRT, VTT, JSON, CSV and TEI",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }
