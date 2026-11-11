@@ -8,7 +8,7 @@ Zero external dependencies — stdlib only (except 7z for initial setup).
 Usage:
     python3 cbdb_query.py setup                        # Download & extract database
     python3 cbdb_query.py setup --force                # Re-download (e.g. to update)
-    python3 cbdb_query.py setup --zzz                  # Denormalized ZZZ_* variant (needs 7z)
+    python3 cbdb_query.py setup --zzz                  # ZZZ_* variant, saved as cbdb_zzz.db (needs 7z)
     python3 cbdb_query.py check                        # Check for a newer release
     python3 cbdb_query.py person "蘇軾"                # Search by Chinese name
     python3 cbdb_query.py person "Su Shi"              # Search by pinyin name
@@ -56,6 +56,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import urllib.request
 import urllib.error
 import zipfile
@@ -104,6 +105,29 @@ ZZZ_DOWNLOAD_URL = (
 )
 
 
+INDEXES = [
+    ("idx_biog_name_chn", "BIOG_MAIN", "c_name_chn"),
+    ("idx_biog_name", "BIOG_MAIN", "c_name"),
+    ("idx_biog_dy", "BIOG_MAIN", "c_dy"),
+    ("idx_altname_personid", "ALTNAME_DATA", "c_personid"),
+    ("idx_altname_chn", "ALTNAME_DATA", "c_alt_name_chn"),
+    ("idx_kin_personid", "KIN_DATA", "c_personid"),
+    ("idx_kin_id", "KIN_DATA", "c_kin_id"),
+    ("idx_posting_personid", "POSTING_DATA", "c_personid"),
+    ("idx_posted_office_personid", "POSTED_TO_OFFICE_DATA", "c_personid"),
+    ("idx_assoc_personid", "ASSOC_DATA", "c_personid"),
+    ("idx_assoc_id", "ASSOC_DATA", "c_assoc_id"),
+    ("idx_entry_personid", "ENTRY_DATA", "c_personid"),
+    ("idx_biog_addr_personid", "BIOG_ADDR_DATA", "c_personid"),
+    ("idx_status_personid", "STATUS_DATA", "c_personid"),
+    ("idx_biog_text_personid", "BIOG_TEXT_DATA", "c_personid"),
+    ("idx_biog_inst_personid", "BIOG_INST_DATA", "c_personid"),
+    ("idx_posted_addr_personid", "POSTED_TO_ADDR_DATA", "c_personid"),
+]
+
+ZZZ_DB_NAME = "cbdb_zzz.db"
+
+
 def _find_7z() -> Optional[str]:
     """Find 7z executable on macOS, Windows, or Linux."""
     candidates = ["7z", "7zz"]
@@ -114,6 +138,10 @@ def _find_7z() -> Optional[str]:
             r"C:\Program Files\7-Zip\7z.exe",
             r"C:\Program Files (x86)\7-Zip\7z.exe",
         ])
+    else:
+        # Common places when 7-Zip is installed but not on PATH
+        candidates.extend(["/opt/homebrew/bin/7zz", "/usr/local/bin/7zz", "/usr/local/bin/7z",
+                           str(Path.home() / "bin" / "7zz")])
 
     for cmd in candidates:
         if shutil.which(cmd):
@@ -157,6 +185,9 @@ def _print_7z_install_help() -> None:
     print("", file=sys.stderr)
     if platform.system() == "Darwin":
         print("  macOS:   brew install 7zip", file=sys.stderr)
+        print("       or: download 7zz from https://www.7-zip.org/ and put it on your PATH",
+              file=sys.stderr)
+        print("           (for example in /usr/local/bin)", file=sys.stderr)
     elif platform.system() == "Windows":
         print("  Windows: winget install 7zip.7zip", file=sys.stderr)
         print("       or: choco install 7zip", file=sys.stderr)
@@ -203,22 +234,26 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _locate_db_file(directory: Path, dest: Path, inner_name: Optional[str]) -> Optional[Path]:
-    """Find the extracted SQLite file in `directory`, excluding the final dest."""
+def _locate_db_file(directory: Path, inner_name: Optional[str]) -> Optional[Path]:
+    """Find the extracted SQLite file in `directory`.
+
+    `directory` must be the fresh folder the archive was extracted into, so that
+    no other database can be picked by mistake (issue #29).
+    """
     if inner_name:
-        candidate = directory / inner_name
-        if candidate.exists():
-            return candidate
-    for pattern in ("*.sqlite3", "*.sqlite", "latest.db", "*.db"):
-        matches = [m for m in sorted(directory.glob(pattern)) if m.resolve() != dest.resolve()]
+        matches = sorted(directory.rglob(Path(inner_name).name))
         if matches:
             return matches[0]
+    for pattern in ("*.sqlite3", "*.sqlite", "*.db"):
+        matches = sorted(m for m in directory.rglob(pattern) if m.is_file())
+        if matches:
+            # The database is by far the largest file in the archive.
+            return max(matches, key=lambda m: m.stat().st_size)
     return None
 
 
-def _extract_archive(archive_path: Path, dest: Path, inner_name: Optional[str]) -> None:
-    """Extract a .zip (stdlib) or .7z (requires 7z) archive into dest's directory."""
-    out_dir = dest.parent
+def _extract_archive(archive_path: Path, out_dir: Path, inner_name: Optional[str]) -> None:
+    """Extract a .zip (stdlib) or .7z (requires 7z) archive into out_dir."""
     if archive_path.suffix.lower() == ".zip":
         with zipfile.ZipFile(archive_path) as zf:
             members = [n for n in zf.namelist() if not n.endswith("/")]
@@ -246,6 +281,33 @@ def _extract_archive(archive_path: Path, dest: Path, inner_name: Optional[str]) 
         except subprocess.CalledProcessError as e:
             print(f"Extraction failed: {e.stderr.decode()}", file=sys.stderr)
             sys.exit(1)
+
+
+def _finish_download(extracted: Path, dest: Path, expected_sha: Optional[str]) -> None:
+    """Check the extracted file and move it to `dest`."""
+    # Verify checksum against latest.json (warn but don't abort on mismatch,
+    # since the published hash may cover a different artifact in future releases).
+    if expected_sha:
+        print("Verifying SHA-256 ...")
+        actual_sha = _sha256(extracted)
+        if actual_sha.lower() == expected_sha.lower():
+            print("  checksum OK")
+        else:
+            print(f"  WARNING: checksum mismatch\n    expected {expected_sha}\n    actual   {actual_sha}",
+                  file=sys.stderr)
+    extracted.replace(dest)
+
+
+def _create_indexes(dest: Path) -> None:
+    """Create the lookup indexes, skipping tables this database does not have
+    (the ZZZ variant has only ZZZ_* tables)."""
+    conn = sqlite3.connect(str(dest))
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for name, table, column in INDEXES:
+        if table in tables:
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table}({column})")
+    conn.commit()
+    conn.close()
 
 
 def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = False) -> Path:
@@ -291,27 +353,19 @@ def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = Fa
     print("Downloading CBDB database ...")
     _download_file(url, archive_path)
 
+    # Extract into a fresh folder, so that only the file from this archive can
+    # be picked up. Other databases next to `dest` are never touched.
     print("Extracting ...")
-    _extract_archive(archive_path, dest, inner_name)
-
-    extracted = _locate_db_file(dest.parent, dest, inner_name)
-    if not extracted:
-        print("Extraction failed: no SQLite file found in archive.", file=sys.stderr)
-        sys.exit(1)
-
-    # Verify checksum against latest.json (warn but don't abort on mismatch,
-    # since the published hash may cover a different artifact in future releases).
-    if expected_sha:
-        print("Verifying SHA-256 ...")
-        actual_sha = _sha256(extracted)
-        if actual_sha.lower() == expected_sha.lower():
-            print("  checksum OK")
-        else:
-            print(f"  WARNING: checksum mismatch\n    expected {expected_sha}\n    actual   {actual_sha}",
-                  file=sys.stderr)
-
-    if extracted.resolve() != dest.resolve():
-        extracted.replace(dest)
+    work_dir = Path(tempfile.mkdtemp(prefix="cbdb_extract_", dir=str(dest.parent)))
+    try:
+        _extract_archive(archive_path, work_dir, inner_name)
+        extracted = _locate_db_file(work_dir, inner_name)
+        if not extracted:
+            print("Extraction failed: no SQLite file found in archive.", file=sys.stderr)
+            sys.exit(1)
+        _finish_download(extracted, dest, expected_sha)
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
     archive_path.unlink(missing_ok=True)
 
@@ -327,26 +381,7 @@ def download_db(dest: Optional[Path] = None, force: bool = False, zzz: bool = Fa
 
     # Create indexes for fast name lookups
     print("Creating indexes for fast queries ...")
-    conn = sqlite3.connect(str(dest))
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_biog_name_chn ON BIOG_MAIN(c_name_chn)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_biog_name ON BIOG_MAIN(c_name)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_biog_dy ON BIOG_MAIN(c_dy)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_altname_personid ON ALTNAME_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_altname_chn ON ALTNAME_DATA(c_alt_name_chn)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_kin_personid ON KIN_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_kin_id ON KIN_DATA(c_kin_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_posting_personid ON POSTING_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_posted_office_personid ON POSTED_TO_OFFICE_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_assoc_personid ON ASSOC_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_assoc_id ON ASSOC_DATA(c_assoc_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_personid ON ENTRY_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_biog_addr_personid ON BIOG_ADDR_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_status_personid ON STATUS_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_biog_text_personid ON BIOG_TEXT_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_biog_inst_personid ON BIOG_INST_DATA(c_personid)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_posted_addr_personid ON POSTED_TO_ADDR_DATA(c_personid)")
-    conn.commit()
-    conn.close()
+    _create_indexes(dest)
 
     print(f"Ready: {dest}")
     return dest
@@ -1780,7 +1815,16 @@ def main() -> None:
 
     if cmd == "setup":
         rest = sys.argv[2:]
-        download_db(DB_PATH, force="--force" in rest, zzz="--zzz" in rest)
+        zzz = "--zzz" in rest
+        dest = DB_PATH
+        if zzz and db_opt is None:
+            # The ZZZ archive has only ZZZ_* tables. Keep it apart from the main
+            # database, which the query commands need.
+            dest = DB_PATH.parent / ZZZ_DB_NAME
+        download_db(dest, force="--force" in rest, zzz=zzz)
+        if zzz:
+            print("The ZZZ tables are in their own file. Query them with:\n"
+                  f'  python3 cbdb_query.py --db "{dest}" sql "SELECT ... FROM ZZZ_..."')
         return
 
     if cmd == "check":

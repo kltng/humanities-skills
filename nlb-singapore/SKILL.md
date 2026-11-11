@@ -1,7 +1,11 @@
 ---
 name: nlb-singapore
 description: Search the National Library Board (NLB) Singapore catalog for books, audiovisual materials, and digital resources via the official Catalogue API. Use this skill whenever the user wants to search Singapore's national library holdings, check book availability across NLB branches, look up titles by ISBN/BRN, find new arrivals, browse checkout trends, or retrieve detailed bibliographic records from NLB. Triggers when referencing Singapore library collections, Southeast Asian library holdings, or NLB resources.
-version: 1.0.1
+version: 1.0.2
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # NLB Singapore Catalogue API Skill

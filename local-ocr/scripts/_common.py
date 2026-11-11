@@ -24,7 +24,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable
 
-SKILL_VERSION = "1.0.0"
+SKILL_VERSION = "1.1.0"
 HOME = Path(os.environ.get("LOCAL_OCR_HOME", Path.home() / ".cache" / "local-ocr")).expanduser()
 REGISTRY = HOME / "registry.json"
 MODELS_DIR = HOME / "models"
@@ -75,8 +75,12 @@ def append_row(job: Path, row: dict[str, Any]) -> None:
 
 def todo_pages(job: Path, data: dict[str, Any], limit: int | None = None, redo: set[str] | None = None,
                skip_blank: bool = False) -> list[dict[str, Any]]:
-    """Pages still to read. Pages with an error row are read again; redo forces pages."""
+    """Pages still to read. Pages with an error row are read again.
+
+    redo (--pages): read only these pages, also when they were read before.
+    """
     rows = read_rows(job, repair=True)
+    only = redo is not None
     redo = redo or set()
     out = []
     for p in data["pages"]:
@@ -85,6 +89,8 @@ def todo_pages(job: Path, data: dict[str, Any], limit: int | None = None, redo: 
             if r is None:
                 append_row(job, {"page": p["id"], "status": "error", "blocks": [], "seconds": 0,
                                  "model": data.get("model"), "error": p.get("error", "no page image")})
+            continue
+        if only and p["id"] not in redo:
             continue
         if p["id"] in redo or r is None or r.get("status") == "error":
             if skip_blank and p.get("blank") and p["id"] not in redo:
@@ -144,10 +150,34 @@ def runner_args(description: str, backends: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("job", type=Path)
     ap.add_argument("--backend", choices=["auto", *backends], default="auto")
-    ap.add_argument("--limit", type=int, help="read at most N pages (smoke test)")
-    ap.add_argument("--pages", help="page ids to read again, e.g. 00012,00040")
+    ap.add_argument("--limit", type=int, help="read at most N of the unread pages, then stop (smoke test)")
+    ap.add_argument("--pages", help="read ONLY these page ids, also if they were read before, e.g. 12,40 or "
+                                    "00012,00040 or 12-15")
     ap.add_argument("--setup", action="store_true", help="install, download and load the model, then stop")
     return ap.parse_args()
+
+
+def page_ids(spec: str | None, data: dict[str, Any] | None = None) -> set[str] | None:
+    """--pages value to a set of page ids: '12,40', '00012', '12-15'. None when not given."""
+    if not spec:
+        return None
+    out: set[str] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        lo, _, hi = part.partition("-")
+        if hi and lo.isdigit() and hi.isdigit():
+            out.update(f"{n:05d}" for n in range(int(lo), int(hi) + 1))
+        else:
+            out.add(part.zfill(5) if part.isdigit() else part)
+    if data is not None:
+        known = {p["id"] for p in data["pages"]}
+        unknown = sorted(out - known)
+        if unknown:
+            print(f"--pages: not in this job: {', '.join(unknown[:10])}. Page ids are the 5-digit numbers in "
+                  "pages/ and in the report.", file=sys.stderr)
+    return out
 
 
 def now() -> str:

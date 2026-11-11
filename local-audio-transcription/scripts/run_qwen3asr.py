@@ -65,7 +65,7 @@ def main() -> None:
         from mlx_audio.stt.utils import load_model
         repo = extra.model_repo or MLX_REPO
         versions = {"mlx-audio": version("mlx-audio"), "weights": repo}
-        print(f"Loading {repo} (first use downloads about 2.5 GB) …", flush=True)
+        print(f"Loading {repo} (downloads about 2.5 GB if it is not on this machine yet) …", flush=True)
         model = load_model(repo)
 
         def run_piece(samples: np.ndarray) -> tuple[str, str | None]:
@@ -81,7 +81,7 @@ def main() -> None:
         else:
             device, dtype = "cpu", torch.float32
         versions = {"qwen-asr": version("qwen-asr"), "torch": version("torch"), "weights": repo, "device": device}
-        print(f"Loading {repo} on {device} (first use downloads about 4.7 GB) …", flush=True)
+        print(f"Loading {repo} on {device} (downloads about 4.7 GB if it is not on this machine yet) …", flush=True)
         model = Qwen3ASRModel.from_pretrained(repo, dtype=dtype, device_map=device, max_inference_batch_size=4,
                                               max_new_tokens=1024)
 

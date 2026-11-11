@@ -211,7 +211,7 @@ class TestExportAndReport(unittest.TestCase):
         data, docs, missing = export.collect(self.job)
         self.assertEqual(missing, ["00003"])
         self.assertEqual([s.get("speaker") for s in docs["a"]["segments"]], [0, 0, 1, 1])
-        opt = mock.Mock(no_timestamps=False, max_gap=1.0)
+        opt = mock.Mock(no_timestamps=False, max_gap=1.0, max_paragraph_seconds=60.0, max_cue_seconds=8.0)
         for name, writer in export.WRITERS.items():
             out = self.job / "export" / name
             out.mkdir(parents=True)
@@ -270,6 +270,50 @@ class TestOfflineScript(unittest.TestCase):
                 self.assertIn("LOCAL_ASR_OFFLINE", text)
             self.assertIn("uv run --offline", sh)
             self.assertTrue(os.access(real / "transcribe-offline.sh", os.X_OK))
+
+
+class TestIssue31(unittest.TestCase):
+    def test_long_segment_without_word_times_becomes_short_cues(self):
+        text = "第一章序。我要給阿Q做正傳，已經不止一兩年了。但一面要做，一面又往回想，這足見我不是一個立言的人。因為從來不朽之筆，須傳不朽之人。"
+        cues = export._cues({"segments": [{"start": 10.0, "end": 38.0, "text": text}]}, 8.0)
+        self.assertGreaterEqual(len(cues), 4)
+        self.assertEqual(cues[0]["start"], 10.0)
+        self.assertEqual(cues[-1]["end"], 38.0)
+        self.assertEqual("".join(c["text"] for c in cues), text)
+        for a, b in zip(cues, cues[1:]):
+            self.assertEqual(a["end"], b["start"])
+        self.assertTrue(all(c["end"] - c["start"] <= 12 for c in cues))
+        self.assertTrue(all(c["text"][-1] in "。，" for c in cues))      # cut at punctuation
+
+    def test_short_segment_and_word_times_are_kept(self):
+        d = {"segments": [{"start": 0.0, "end": 3.0, "text": "Hello there."},
+                          {"start": 3.0, "end": 15.0, "text": "one two three four",
+                           "words": [{"start": 3.0, "end": 5.0, "text": "one"}, {"start": 5.0, "end": 9.5, "text": "two"},
+                                     {"start": 9.5, "end": 12.0, "text": "three"}, {"start": 12.0, "end": 15.0, "text": "four"}]}]}
+        cues = export._cues(d, 8.0)
+        self.assertEqual(cues[0], {"start": 0.0, "end": 3.0, "text": "Hello there.", "speaker": None})
+        self.assertEqual([c["text"] for c in cues[1:]], ["one two", "three four"])
+        self.assertNotIn("estimated", cues[1])
+
+    def test_split_text(self):
+        self.assertEqual(export.split_text("short", 1), ["short"])
+        parts = export.split_text("The price was 3.5 dollars. It rose again, and nobody knew why. Then it fell.", 3)
+        self.assertEqual(len(parts), 3)
+        self.assertTrue(parts[0].endswith("dollars."))
+        self.assertEqual(len(export.split_text("天" * 90, 3)), 3)            # no punctuation at all
+
+    def test_paragraphs_get_a_time_mark_at_least_every_minute(self):
+        segs = [{"start": i * 10.0, "end": i * 10.0 + 9.8, "text": f"句子{i}。"} for i in range(18)]   # 3 minutes, no pauses
+        self.assertEqual(len(export.paragraphs(segs, 1.0, 0)), 1)
+        paras = export.paragraphs(segs, 1.0, 60.0)
+        self.assertEqual([p["start"] for p in paras], [0.0, 60.0, 120.0])
+
+    def test_doctor_sizes_match_the_documentation(self):
+        sizes = {e.get("repo"): e["gb"] for entries in doctor.MODEL_FILES.values() for e in entries}
+        self.assertEqual(sizes["mlx-community/Qwen3-ASR-1.7B-8bit"], 2.5)
+        skill = (HERE.parent / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("2.5 GB (8-bit MLX)", skill)
+        self.assertFalse("$S/" in skill, "SKILL.md must not use a shell variable for the scripts path")
 
 
 if __name__ == "__main__":

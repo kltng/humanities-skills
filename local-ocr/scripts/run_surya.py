@@ -28,7 +28,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import MODELS_DIR, load_job, norm_label, html_to_text, run_pages, runner_args, todo_pages  # noqa: E402
+from _common import MODELS_DIR, load_job, norm_label, html_to_text, run_pages, runner_args, page_ids, todo_pages  # noqa: E402
 
 SOURCE = "datalab-to/surya-ocr-2.5"
 MLX_BUILD = MODELS_DIR / "surya-2.5-mlx-q8"
@@ -69,7 +69,7 @@ def main() -> None:
     a = runner_args(__doc__, ["llamacpp", "mlx", "vllm"])
     backend = pick_backend(a.backend)
     data = load_job(a.job)
-    redo = set(a.pages.split(",")) if a.pages else None
+    redo = page_ids(a.pages, data)
     todo = todo_pages(a.job, data, a.limit, redo)
     if not todo and not a.setup:
         print("Nothing to read: every page has a row. Use --pages to read pages again.")
@@ -83,7 +83,7 @@ def main() -> None:
     from surya.inference import SuryaInferenceManager
     from surya.recognition import RecognitionPredictor
 
-    print(f"Starting Surya 2.5 with {backend} (first use downloads the model) …", flush=True)
+    print(f"Starting Surya 2.5 with {backend} (downloads the model if it is not on this machine yet) …", flush=True)
     rec = RecognitionPredictor(SuryaInferenceManager())
     versions = {"surya-ocr": version("surya-ocr")}
     if backend == "mlx":

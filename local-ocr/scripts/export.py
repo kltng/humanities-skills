@@ -51,6 +51,45 @@ def collect(job: Path, drop_furniture: bool) -> tuple[dict[str, Any], dict[str, 
     return data, docs, missing
 
 
+def to_original(docs: dict[str, list[dict[str, Any]]]) -> list[str]:
+    """Scale every box from the working copy (pages/<id>.png) to the size of the original image.
+
+    Returns the ids of pages whose original size is not known (jobs made before version 1.1.0).
+    """
+    unknown = []
+    for pages in docs.values():
+        for p in pages:
+            ow, oh, w, h = p.get("orig_width"), p.get("orig_height"), p.get("width"), p.get("height")
+            if not (ow and oh and w and h):
+                unknown.append(p["id"])
+                continue
+            if (ow, oh) == (w, h):
+                continue
+            sx, sy = ow / w, oh / h
+
+            def scale(bbox: list[float]) -> list[float]:
+                return [round(bbox[0] * sx, 1), round(bbox[1] * sy, 1), round(bbox[2] * sx, 1), round(bbox[3] * sy, 1)]
+
+            p["blocks"] = [{**b, "bbox": scale(b["bbox"]),
+                            **({"lines": [{**ln, "bbox": scale(ln["bbox"])} for ln in b["lines"]]} if b.get("lines") else {})}
+                           for b in p["blocks"]]
+            p["width"], p["height"] = ow, oh
+    return unknown
+
+
+def coords_note(p: dict[str, Any]) -> str:
+    """Say in the file which image the coordinates belong to."""
+    ow, oh = p.get("orig_width"), p.get("orig_height")
+    if p.get("coords") == "original":
+        return (f"Coordinates are in pixels of the original image ({p.get('width')} x {p.get('height')}). For a PDF "
+                "this is the page as rendered by prepare.py at its dpi setting.")
+    note = f"Coordinates are in pixels of the working copy {p.get('file') or ''} ({p.get('width')} x {p.get('height')})"
+    if ow and oh and (ow, oh) != (p.get("width"), p.get("height")):
+        note += (f", which was shrunk from the original ({ow} x {oh}). Export again with the option "
+                 "'coords original' for coordinates that fit the original image")
+    return note + "."  # no double hyphen in these notes: they go into an XML comment
+
+
 def page_text(page: dict[str, Any]) -> str:
     return "\n\n".join(b["text"] for b in page["blocks"] if b.get("text"))
 
@@ -73,7 +112,8 @@ def w_json(out: Path, data: dict, docs: dict) -> None:
     for doc, pages in docs.items():
         (out / f"{doc}.json").write_text(json.dumps(
             {"document": doc, "job": data["name"], "model": data.get("model"),
-             "pages": [{k: p.get(k) for k in ("id", "doc_page", "file", "width", "height", "status", "warning", "blocks")}
+             "pages": [{k: p.get(k) for k in ("id", "doc_page", "file", "width", "height", "orig_width", "orig_height",
+                                              "coords", "status", "warning", "blocks")}
                        for p in pages]}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
@@ -156,6 +196,7 @@ def w_alto(out: Path, data: dict, docs: dict) -> None:
             tags = "".join(f'<OtherTag ID="{esc(lab)}" LABEL="{esc(lab)}" TYPE="block"/>' for lab in labels)
             xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <alto xmlns="http://www.loc.gov/standards/alto/ns-v4#" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.loc.gov/standards/alto/ns-v4# http://www.loc.gov/standards/alto/v4/alto-4-4.xsd">
+<!-- {esc(coords_note(p))} -->
 <Description><MeasurementUnit>pixel</MeasurementUnit><sourceImageInformation><fileName>{esc(p['file'] or '')}</fileName></sourceImageInformation>
 <OCRProcessing ID="ocr"><ocrProcessingStep><processingSoftware><softwareName>{esc(p.get('model') or '')} via local-ocr</softwareName></processingSoftware></ocrProcessingStep></OCRProcessing></Description>
 <Tags>{tags}</Tags>
@@ -198,7 +239,7 @@ def w_pagexml(out: Path, data: dict, docs: dict) -> None:
             ro = f'<ReadingOrder><OrderedGroup id="ro">{order}</OrderedGroup></ReadingOrder>' if order else ""
             xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">
-<Metadata><Creator>{esc(p.get('model') or '')} via local-ocr</Creator><Created>{esc(data.get('created') or '')}T00:00:00</Created><LastChange>{esc(data.get('created') or '')}T00:00:00</LastChange></Metadata>
+<Metadata><Creator>{esc(p.get('model') or '')} via local-ocr</Creator><Created>{esc(data.get('created') or '')}T00:00:00</Created><LastChange>{esc(data.get('created') or '')}T00:00:00</LastChange><Comments>{esc(coords_note(p))}</Comments></Metadata>
 <Page imageFilename="{esc(p['file'] or '')}" imageWidth="{p.get('width') or 0}" imageHeight="{p.get('height') or 0}">{ro}{''.join(regions)}</Page>
 </PcGts>
 """
@@ -272,9 +313,23 @@ def main() -> None:
     ap.add_argument("--formats", help="comma list; default: job.json formats")
     ap.add_argument("--drop-furniture", action="store_true", help="leave out running heads and page numbers")
     ap.add_argument("--no-page-marks", action="store_true", help="txt/md without page marks")
+    ap.add_argument("--coords", choices=["working", "original"], default="working",
+                    help="boxes in pixels of the working copies in pages/ (default), or scaled to the original images")
     a = ap.parse_args()
 
     data, docs, missing = collect(a.job, a.drop_furniture)
+    for pages in docs.values():
+        for p in pages:
+            p["coords"] = "working"
+    if a.coords == "original":
+        unknown = to_original(docs)
+        for pages in docs.values():
+            for p in pages:
+                if p["id"] not in unknown:
+                    p["coords"] = "original"
+        if unknown:
+            print(f"--coords original: the original size of {len(unknown)} page(s) is not recorded (job made by an "
+                  "older version). Their boxes stay in working-copy pixels. Run prepare.py again in a new job to fix this.")
     formats = [f.strip() for f in (a.formats or ",".join(data.get("formats") or ["json", "txt"])).split(",") if f.strip()]
     for f in formats:
         if f not in WRITERS:

@@ -26,7 +26,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import chandra_blocks, load_job, run_pages, runner_args, todo_pages  # noqa: E402
+from _common import chandra_blocks, load_job, run_pages, runner_args, page_ids, todo_pages  # noqa: E402
 
 MLX_MODEL = "jwindle47/chandra-ocr-2-8bit-mlx"
 
@@ -47,7 +47,7 @@ def main() -> None:
     a = runner_args(__doc__, ["mlx", "hf"])
     backend = pick_backend(a.backend)
     data = load_job(a.job)
-    redo = set(a.pages.split(",")) if a.pages else None
+    redo = page_ids(a.pages, data)
     todo = todo_pages(a.job, data, a.limit, redo, skip_blank=not extra.read_blank)
     if not todo and not a.setup:
         print("Nothing to read: every page has a row. Use --pages to read pages again.")
@@ -65,7 +65,7 @@ def main() -> None:
         from mlx_vlm import generate, load
         from mlx_vlm.prompt_utils import apply_chat_template
 
-        print(f"Loading {MLX_MODEL} (first use downloads about 5.2 GB) …", flush=True)
+        print(f"Loading {MLX_MODEL} (downloads about 5.2 GB if it is not on this machine yet) …", flush=True)
         model, processor = load(MLX_MODEL)
         prompt = apply_chat_template(processor, model.config, PROMPT_MAPPING["ocr_layout"], num_images=1)
         versions["mlx-vlm"] = version("mlx-vlm")
@@ -79,7 +79,7 @@ def main() -> None:
         from chandra.model import InferenceManager
         from chandra.model.schema import BatchInputItem
 
-        print(f"Loading {settings.MODEL_CHECKPOINT} with PyTorch (first use downloads about 10.6 GB) …", flush=True)
+        print(f"Loading {settings.MODEL_CHECKPOINT} with PyTorch (downloads about 10.6 GB if it is not on this machine yet) …", flush=True)
         manager = InferenceManager(method="hf")
         versions["torch"] = version("torch")
         versions["weights"] = settings.MODEL_CHECKPOINT

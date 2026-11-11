@@ -29,15 +29,15 @@ MODEL_FILES: dict[str, list[dict[str, Any]]] = {
         {"repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo", "need": "model.bin", "gb": 1.6, "backends": ["ct2"]},
     ],
     "qwen3-asr": [
-        {"repo": "mlx-community/Qwen3-ASR-1.7B-8bit", "need": ".safetensors", "gb": 2.1, "backends": ["mlx"]},
-        {"repo": "Qwen/Qwen3-ASR-1.7B", "need": ".safetensors", "gb": 4.0, "backends": ["hf"]},
+        {"repo": "mlx-community/Qwen3-ASR-1.7B-8bit", "need": ".safetensors", "gb": 2.5, "backends": ["mlx"]},
+        {"repo": "Qwen/Qwen3-ASR-1.7B", "need": ".safetensors", "gb": 4.7, "backends": ["hf"]},
     ],
     "sensevoice": [
         {"local": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09", "need": "model.int8.onnx", "gb": 0.25,
          "backends": ["onnx"]},
     ],
     "parakeet": [
-        {"repo": "mlx-community/parakeet-tdt-0.6b-v3", "need": ".safetensors", "gb": 2.4, "backends": ["mlx"]},
+        {"repo": "mlx-community/parakeet-tdt-0.6b-v3", "need": ".safetensors", "gb": 2.5, "backends": ["mlx"]},
         {"local": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8", "need": "encoder.int8.onnx", "gb": 0.65,
          "backends": ["onnx"]},
     ],

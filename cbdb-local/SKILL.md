@@ -1,7 +1,7 @@
 ---
 name: cbdb-local
 description: Query the China Biographical Database (CBDB) locally via SQLite for biographical data on 656K+ historical Chinese figures from the 7th century BCE through the 19th century CE. Use when searching for Chinese historical figures, scholars, officials, or literary figures — their biographical details, family/kinship networks, official postings, social associations, examination records, or addresses. Runs entirely locally after initial database download (~556 MB). Faster and more flexible than the API version.
-version: 1.0.2
+version: 1.0.3
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -56,8 +56,18 @@ tables (see raw-SQL examples below) ship in a separate archive:
 python3 scripts/cbdb_query.py setup --zzz
 ```
 
+- The download is about 215 MB and becomes about 2.5 GB on disk.
+- It is saved as its own file, `scripts/cbdb_zzz.db`. The main `cbdb.db` is not changed.
+  The ZZZ file holds only the `ZZZ_*` tables, so the normal commands (`person`, `kinship`, ...)
+  keep using `cbdb.db`.
+- Query the ZZZ tables with `--db`:
+
+```bash
+python3 scripts/cbdb_query.py --db scripts/cbdb_zzz.db sql "SELECT * FROM ZZZ_ENTRY_DATA LIMIT 5"
+```
+
 This variant is a `.7z` archive and **requires 7z**:
-- macOS: `brew install 7zip`
+- macOS: `brew install 7zip`, or download `7zz` from https://www.7-zip.org/ and put it on your `PATH` (for example in `/usr/local/bin`)
 - Windows: `winget install 7zip.7zip` or download from https://www.7-zip.org/
 - Linux: `sudo apt install p7zip-full`
 
@@ -123,7 +133,7 @@ python3 scripts/cbdb_query.py postaddr 3767       # Places of official service
 python3 scripts/cbdb_query.py sql "SELECT c_personid, c_name_chn, c_birthyear FROM BIOG_MAIN WHERE c_dy = 15 AND c_birthyear > 1000 LIMIT 10"
 ```
 
-Only SELECT queries are allowed. For complex queries, the `ZZZ_` denormalized tables (e.g., `ZZZ_ENTRY_DATA`, `ZZZ_KIN_BIOG_ADDR`) pre-join names and descriptions — much simpler than multi-table joins. These tables are **only present if you ran `setup --zzz`** (they are deprecated upstream in favor of SQL views). See `references/database_schema.md` for the full list.
+Only SELECT queries are allowed. For complex queries, the `ZZZ_` denormalized tables (e.g., `ZZZ_ENTRY_DATA`, `ZZZ_KIN_BIOG_ADDR`) pre-join names and descriptions — much simpler than multi-table joins. These tables are **only present if you ran `setup --zzz`**, and they are in the separate file `scripts/cbdb_zzz.db` (add `--db scripts/cbdb_zzz.db`) (they are deprecated upstream in favor of SQL views). See `references/database_schema.md` for the full list.
 
 ## Output Format
 

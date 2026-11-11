@@ -67,3 +67,9 @@ were not part of this test. Field reports from NVIDIA machines are especially we
   line, and `export.py --drop-furniture` removes headers and footers in any format.
 - Google-digitized scans carry a sideways watermark ("Generated at …", "Digitized by Google"). All models
   read it as a page header or footer. Use `--drop-furniture`, or remove it later.
+- **Models also invent watermark text.** In a test on a 1637 print (*Tian gong kai wu*, Library of Congress
+  scans, Surya with llama.cpp), one whole line of 15 characters was replaced by eight lines of
+  "CamScanner". The page was not slow and looked fine in every number: 2 wrong characters out of 185
+  without that line, 17 out of 200 with it. `report.py` now lists pages whose text names a scanner app or
+  repeats one line four times or more. A model can still drop or replace a line with no such sign, so
+  compare a few pages line by line with the image, not only character by character.

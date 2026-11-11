@@ -1,7 +1,11 @@
 ---
 name: europeana-collections
 description: Search Europeana's 50M+ cultural heritage items from 4,000+ European museums, galleries, libraries, and archives. Use this skill whenever the user wants to find European art, manuscripts, photographs, maps, 3D objects, audio, or video from institutions like the Rijksmuseum, British Library, Louvre, or Gallica. Also triggers when searching for open-access European cultural heritage, IIIF resources, or cross-referencing European collections with other library catalogs.
-version: 1.0.2
+version: 1.0.3
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # Europeana Collections API Skill

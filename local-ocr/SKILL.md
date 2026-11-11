@@ -10,7 +10,7 @@ description: >-
   hOCR. Ends with a run report and a field report that can be posted as a GitHub issue. Use when the user
   wants to OCR, transcribe or "make searchable" a PDF, scans or a book locally, asks which OCR model their
   machine can handle, mentions Chandra, Surya, Indra or Datalab, or wants ALTO/PAGE XML from scans.
-version: 1.0.0
+version: 1.1.0
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -36,11 +36,15 @@ the XML formats keep the page layout. The numbers come from a 150-page test on C
 **Indra cannot read vertical (top-to-bottom) Chinese or Japanese**.
 
 Every script is in `scripts/` and runs with `uv run`. The runners carry their own dependencies (PEP 723),
-so `uv` installs them the first time. Define this in each Bash call:
+so `uv` installs them the first time.
 
-```bash
-S=~/.claude/skills/local-ocr/scripts      # or wherever this skill is installed
-```
+In the commands below, `SCRIPTS` stands for the full path of this skill's `scripts/` folder (for example
+`~/.claude/skills/local-ocr/scripts`). **Write the real path out in every command. Do not put it in a shell
+variable** (`S=...; uv run SCRIPTS/doctor.py`): Claude Code cannot check a command that sets a variable against
+the user's permission rules, so it is refused.
+
+If `uv` prints a warning that a `.python-version` file does not match the script's Python, ignore it. `uv`
+picks a fitting Python by itself. Tell the user it is not an error.
 
 ## When to Use
 
@@ -60,7 +64,7 @@ Follow the steps in order. Use plain words with the user and explain any technic
 ### 1. Check the machine and what is already there
 
 ```bash
-uv run $S/doctor.py
+uv run SCRIPTS/doctor.py
 ```
 
 This prints the machine (chip, memory, GPU, free disk), the tools found (`llama-server`, `docker`,
@@ -74,8 +78,9 @@ This prints the machine (chip, memory, GPU, free disk), the tools found (`llama-
 
 ### 2. Interview
 
-Ask with `AskUserQuestion` (up to 4 questions in one call). Skip any question the request has already
-answered. Ask:
+Ask with `AskUserQuestion` (up to 4 questions in one call). If that tool is not there (for example in a
+headless run), write the questions as plain text and wait for the answer. Skip any question the request has
+already answered. Ask:
 
 1. **The documents.** Path to the PDF, images or folder. Roughly how many pages?
 2. **The material.** Script and language (Chinese, Japanese, Korean, English, mixed …). Writing direction
@@ -88,8 +93,13 @@ answered. Ask:
    (`alto`), PAGE XML (`pagexml`), TEI (`tei`), hOCR (`hocr`). Say what each is for in a few words: ALTO and
    PAGE are what library systems, Transkribus and eScriptorium import; TEI is for text editions.
 
+5. **Confidential?** Ask this when the material may be unpublished, restricted, or about living people:
+   "May I look at the pages and the text myself? What I open is sent to the cloud model I run on." The OCR
+   itself always stays on this computer. See "Confidential material" below for what to do on a no.
+
 Then look at 2–3 pages yourself (render a page or open an image and Read it). Check the writing direction
-and the layout. Users are sometimes wrong about these.
+and the layout. Users are sometimes wrong about these. (Not for confidential material: ask the user to
+describe the pages instead.)
 
 Save the answers to a small JSON file, for example `brief.json`, with the keys `material`, `script`,
 `direction`, `languages`, `condition`, `goal`, `formats`. `prepare.py --brief` stores it in the job, and the
@@ -114,8 +124,8 @@ download over 1 GB or a run over an hour.
 ### 4. Make the job, then download the model
 
 ```bash
-uv run $S/prepare.py BOOK.pdf --job ~/ocr-jobs/NAME --model chandra --formats json,txt,alto --brief brief.json
-uv run $S/run_chandra.py ~/ocr-jobs/NAME --setup     # installs, downloads and loads the model, then stops
+uv run SCRIPTS/prepare.py BOOK.pdf --job ~/ocr-jobs/NAME --model chandra --formats json,txt,alto --brief brief.json
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/NAME --setup     # installs, downloads and loads the model, then stops
 ```
 
 - `prepare.py` takes PDFs, images and folders, as many as you like. Each file becomes one document, and a
@@ -139,12 +149,17 @@ Backends are picked automatically (`--backend` overrides):
 ### 5. Smoke test
 
 ```bash
-uv run $S/run_chandra.py ~/ocr-jobs/NAME --limit 5
-uv run $S/export.py ~/ocr-jobs/NAME --formats txt
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/NAME --limit 5
+uv run SCRIPTS/export.py ~/ocr-jobs/NAME --formats txt
 ```
 
-Pick pages from different parts of the document if you can. Read 2–3 page images next to their text and
-count clear errors. Show the user one page of output. Tell them the real speed and the new time estimate.
+`--limit N` reads the next N unread pages and stops. `--pages 12,40` reads only those pages, also if they
+were read before. For a one-page test use `--limit 1`. For pages from different parts of the document use
+`--pages`, for example `--pages 3,150,290`.
+
+Read 2–3 page images next to their text and count clear errors. Look for whole lines that are missing or
+replaced, not only for wrong characters: Surya once wrote eight lines of "CamScanner" in place of a real
+line of a 1637 print, and nothing in its output marked it. Show the user one page of output. Tell them the real speed and the new time estimate.
 If the quality is poor, change the model now (`prepare.py ... --model surya` switches the job), not after
 500 pages.
 
@@ -154,12 +169,12 @@ Run it in the background, because it can take hours. The runner is resumable: st
 running the same command again goes on from the next unread page. Pages with an error are tried again.
 
 ```bash
-uv run $S/run_chandra.py ~/ocr-jobs/NAME > ~/ocr-jobs/NAME/run.log 2>&1     # with run_in_background
-uv run $S/jobs.py status ~/ocr-jobs/NAME                                     # pages done, speed, time left
-uv run $S/run_chandra.py ~/ocr-jobs/NAME --pages 00012,00040                 # read some pages again
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/NAME > ~/ocr-jobs/NAME/run.log 2>&1     # with run_in_background
+uv run SCRIPTS/jobs.py status ~/ocr-jobs/NAME                                     # pages done, speed, time left
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/NAME --pages 12,40                       # read only these pages, again
 ```
 
-While it runs, log anything unusual with `uv run $S/jobs.py note JOB "..."`: a crash, a page that stalled,
+While it runs, log anything unusual with `uv run SCRIPTS/jobs.py note JOB "..."`: a crash, a page that stalled,
 a layout the model gets wrong, a surprise in speed or memory. These notes go into the report.
 
 What the runners flag:
@@ -169,11 +184,15 @@ What the runners flag:
 - **skipped_blank**: the page looked blank and was not sent to the model.
 - **error**: the image could not be opened or read.
 
+The report (step 8) adds checks on the text itself: pages with **no text**, with **little text for the
+ink**, with **text on a blank-looking page**, with **scanner or watermark text** (CamScanner, "Digitized by
+Google" …, which models also invent), and with **the same line many times**.
+
 ### 7. Export
 
 ```bash
-uv run $S/export.py ~/ocr-jobs/NAME                        # the formats chosen in the interview
-uv run $S/export.py ~/ocr-jobs/NAME --formats tei,pagexml  # any others
+uv run SCRIPTS/export.py ~/ocr-jobs/NAME                        # the formats chosen in the interview
+uv run SCRIPTS/export.py ~/ocr-jobs/NAME --formats tei,pagexml  # any others
 ```
 
 Files go to `JOB/export/<format>/`. Options: `--drop-furniture` leaves out running heads and page
@@ -181,10 +200,16 @@ numbers; `--no-page-marks` writes txt/md without `[[page N]]` marks. Loop, error
 exported as empty pages and listed. Pages not read yet are left out. Format details are in
 `references/api_reference.md`.
 
+**Coordinates.** Boxes in ALTO, PAGE XML, hOCR and JSON are in pixels of the working copies in `JOB/pages/`
+(`prepare.py` shrinks pages whose long side is over 2400 px). Each ALTO and PAGE file says so. If the user
+will load the XML next to their own, larger images (Transkribus, eScriptorium), export with
+`--coords original`: the boxes are then scaled to the original image size. For a PDF, "original" is the
+page as rendered at `--dpi`.
+
 ### 8. Report, and the field report for GitHub
 
 ```bash
-uv run $S/report.py ~/ocr-jobs/NAME --describe "Qing woodblock print, vertical, good scan"
+uv run SCRIPTS/report.py ~/ocr-jobs/NAME --describe "Qing woodblock print, vertical, good scan"
 ```
 
 This writes two files:
@@ -207,6 +232,24 @@ gh issue create --repo kltng/humanities-skills \
 
 Without `gh`, give the user the link https://github.com/kltng/humanities-skills/issues/new and the file to paste.
 
+## Confidential material
+
+The models run on this computer, so the scans are never uploaded by the OCR. But **anything you open or
+print in the chat goes to the cloud model you run on**: a page image you Read, a page of output you show, a
+line you quote. For unpublished, restricted or personal sources, ask first (interview question 5). If the
+user says no:
+
+- Do not Read page images, `rows.jsonl` or anything in `export/`. Do not print page text.
+- Let the user do the checks that need eyes: give them the page ids and the paths (`JOB/pages/00012.png`
+  next to `JOB/export/txt/...`) and ask what they see.
+- Work from numbers only: `jobs.py status`, the runner's log lines (page, seconds, characters, status) and
+  `report.md`. The report lists page ids and counts, never page text. `field-report.md` is safe to read.
+- Do not post a field report unless the user has read it.
+
+This skill has no mode that proves the network is off. If the sources must stay on a machine with no
+network at all, say so plainly, and see `local-audio-transcription` for how that skill builds and tests
+everything first and then hands over a script to run after disconnecting.
+
 ## Best Practices
 
 - Always run the doctor first. It is fast, it finds earlier jobs, and it stops you from starting a
@@ -225,25 +268,25 @@ Without `gh`, give the user the link https://github.com/kltng/humanities-skills/
 A 300-page Qing woodblock print on a 32 GB MacBook, ALTO and text wanted:
 
 ```bash
-S=~/.claude/skills/local-ocr/scripts
-uv run $S/doctor.py                                   # chandra GOOD mlx, download about 5.2 GB
-uv run $S/prepare.py ~/Downloads/wenmiao.pdf --job ~/ocr-jobs/wenmiao --model chandra \
+# SCRIPTS = the full path of this skill's scripts/ folder, written out in every command
+uv run SCRIPTS/doctor.py                                   # chandra GOOD mlx, download about 5.2 GB
+uv run SCRIPTS/prepare.py ~/Downloads/wenmiao.pdf --job ~/ocr-jobs/wenmiao --model chandra \
     --formats alto,txt --brief /tmp/brief.json
-uv run $S/run_chandra.py ~/ocr-jobs/wenmiao --setup   # one-time download
-uv run $S/run_chandra.py ~/ocr-jobs/wenmiao --limit 5 # smoke test, then look at the pages
-uv run $S/run_chandra.py ~/ocr-jobs/wenmiao > ~/ocr-jobs/wenmiao/run.log 2>&1   # background, ~4–5 h
-uv run $S/jobs.py status ~/ocr-jobs/wenmiao
-uv run $S/export.py ~/ocr-jobs/wenmiao
-uv run $S/report.py ~/ocr-jobs/wenmiao --describe "Qing woodblock print, vertical"
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/wenmiao --setup   # one-time download
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/wenmiao --limit 5 # smoke test, then look at the pages
+uv run SCRIPTS/run_chandra.py ~/ocr-jobs/wenmiao > ~/ocr-jobs/wenmiao/run.log 2>&1   # background, ~4–5 h
+uv run SCRIPTS/jobs.py status ~/ocr-jobs/wenmiao
+uv run SCRIPTS/export.py ~/ocr-jobs/wenmiao
+uv run SCRIPTS/report.py ~/ocr-jobs/wenmiao --describe "Qing woodblock print, vertical"
 ```
 
 A folder of 2,000 modern English typescript scans on an older Windows laptop:
 
 ```bash
-uv run $S/doctor.py                                   # chandra NO, surya SLOW, indra GOOD
-uv run $S/prepare.py D:/scans --job D:/ocr-jobs/letters --model indra --formats txt,pagexml
-uv run $S/run_indra.py D:/ocr-jobs/letters --limit 10
-uv run $S/run_indra.py D:/ocr-jobs/letters            # about 0.5 s per page
+uv run SCRIPTS/doctor.py                                   # chandra NO, surya SLOW, indra GOOD
+uv run SCRIPTS/prepare.py D:/scans --job D:/ocr-jobs/letters --model indra --formats txt,pagexml
+uv run SCRIPTS/run_indra.py D:/ocr-jobs/letters --limit 10
+uv run SCRIPTS/run_indra.py D:/ocr-jobs/letters            # about 0.5 s per page
 ```
 
 ## Resources

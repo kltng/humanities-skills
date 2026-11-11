@@ -55,6 +55,7 @@ files, or folders of them (searched recursively). Each file is one recording. ff
 | `--setup` | install, download and load the model, then stop (network allowed, also in offline jobs) |
 | `--language` | force the language; default: the job's language, else detect |
 | `--words` | (whisper) word timestamps |
+| `--prompt "..."` | (whisper) a short text in the style wanted, passed as `initial_prompt`; for example a sentence in traditional characters. Not stored in the report |
 | `--model-repo` | (whisper, qwen3-asr) another Hugging Face repo, e.g. `mlx-community/Qwen3-ASR-0.6B-8bit` |
 | `--piece-seconds 30` | (qwen3-asr, sensevoice, parakeet-onnx) longest piece between silences = one segment |
 | `--threads N` | (sensevoice, parakeet-onnx) CPU threads (default: cores − 1, at most 8) |
@@ -76,7 +77,7 @@ Speakers are numbered from 0 per recording; exports show them as "Speaker 1", "S
 
 ### export.py
 
-`uv run export.py JOB [--formats txt,srt] [--no-timestamps] [--max-gap 1.0]`
+`uv run export.py JOB [--formats txt,srt] [--no-timestamps] [--max-gap 1.0] [--max-paragraph-seconds 60] [--max-cue-seconds 8]`
 
 ### jobs.py
 
@@ -138,9 +139,9 @@ JOB/
 
 | Format | Files | Notes |
 |---|---|---|
-| `txt` | `export/txt/<rec>.txt` | paragraphs (new one at a speaker change, a pause over `--max-gap`, or 1,200 chars); `[m:ss]` at the start of each, `Speaker N:` when known |
+| `txt` | `export/txt/<rec>.txt` | paragraphs (new one at a speaker change, a pause over `--max-gap`, 1,200 chars, or `--max-paragraph-seconds`, default 60; 0 = no time limit); `[m:ss]` at the start of each, `Speaker N:` when known |
 | `md` | `export/md/<rec>.md` | the same with a heading and bold times/speakers |
-| `srt` | `export/srt/<rec>.srt` | one cue per segment; long segments with word times are split at about 6 s / 70 chars; `Speaker N:` prefix |
+| `srt` | `export/srt/<rec>.srt` | one cue per segment; segments over `--max-cue-seconds` (default 8) or 80 characters (CJK count double) are cut: at word times when the rows have them, else at punctuation with the time shared out by characters (estimated times); `Speaker N:` prefix |
 | `vtt` | `export/vtt/<rec>.vtt` | WebVTT with `<v Speaker N>` voice tags |
 | `json` | `export/json/<rec>.json` | `{recording, source, duration, job, model, language, speakers, flags, segments[]}` |
 | `jsonl` | `export/jsonl/<job>.jsonl` | one line per segment: `{recording, start, end, text, speaker?, …}` |

@@ -241,5 +241,66 @@ class InstalledDatabaseTest(unittest.TestCase):
         self.assertIn("no such table", result[0]["error"])
 
 
+
+class SetupDownloadTest(unittest.TestCase):
+    """Issue #29: setup must never pick up another database in the folder."""
+
+    def _fake_download(self, inner):
+        import zipfile
+
+        def fake(url, archive_path):
+            with zipfile.ZipFile(archive_path, "w") as zf:
+                src = Path(archive_path).parent / "_src.db"
+                conn = sqlite3.connect(str(src))
+                conn.execute("CREATE TABLE ZZZ_ENTRY_DATA (c_personid INTEGER)")
+                conn.commit()
+                conn.close()
+                zf.write(src, inner)
+                src.unlink()
+        return fake
+
+    def test_zzz_setup_leaves_main_database_alone(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            main = tmp / "cbdb.db"
+            conn = sqlite3.connect(str(main))
+            conn.execute("CREATE TABLE BIOG_MAIN (c_personid INTEGER, c_name TEXT, c_name_chn TEXT, c_dy INTEGER)")
+            conn.commit()
+            conn.close()
+            dest = tmp / "cbdb_zzz.db"
+            old_dl, old_url = cbdb_query._download_file, cbdb_query.ZZZ_DOWNLOAD_URL
+            cbdb_query._download_file = self._fake_download("latest_ZZZ_tables.db")
+            cbdb_query.ZZZ_DOWNLOAD_URL = "https://example.org/latest_ZZZ_tables.zip"
+            try:
+                cbdb_query.download_db(dest, zzz=True)
+            finally:
+                cbdb_query._download_file, cbdb_query.ZZZ_DOWNLOAD_URL = old_dl, old_url
+
+            def tables(path):
+                c = sqlite3.connect(str(path))
+                try:
+                    return {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                finally:
+                    c.close()
+
+            self.assertTrue(main.exists())
+            self.assertEqual(tables(main), {"BIOG_MAIN"})
+            self.assertEqual(tables(dest), {"ZZZ_ENTRY_DATA"})
+            left = sorted(p.name for p in tmp.iterdir())
+            self.assertFalse([n for n in left if n.startswith("cbdb_extract_") or n.startswith("cbdb_download")])
+
+    def test_locate_db_file_only_looks_in_given_folder(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "cbdb.db").write_bytes(b"x")
+            work = tmp / "work"
+            work.mkdir()
+            self.assertIsNone(cbdb_query._locate_db_file(work, None))
+            (work / "latest_ZZZ_tables.db").write_bytes(b"xx")
+            self.assertEqual(cbdb_query._locate_db_file(work, None).name, "latest_ZZZ_tables.db")
+
+
 if __name__ == "__main__":
     unittest.main()

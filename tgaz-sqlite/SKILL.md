@@ -11,7 +11,11 @@ description: >
   or any spatial/temporal query about Chinese historical geography. This skill
   is relevant even for casual questions like "tell me about ancient Chang'an"
   or "Tang dynasty cities near the Yellow River".
-version: 1.1.0
+version: 1.1.1
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # TGAZ Historical Gazetteer Query Skill

@@ -11,6 +11,7 @@
 
     uv run run_whisper.py JOB [--backend mlx|ct2] [--limit N] [--chunks 00012,00040] [--setup]
                           [--language zh] [--words] [--model-repo REPO]
+                          [--prompt "text in the style wanted"]
 
 Backends: mlx = mlx-whisper on Apple Silicon (mlx-community/whisper-large-v3-turbo, 1.6 GB);
 ct2 = faster-whisper (CTranslate2) on an NVIDIA GPU (float16) or on CPU (int8, slow).
@@ -52,16 +53,19 @@ def main() -> None:
         print("Nothing to do: every chunk has a row. Use --chunks to do chunks again.")
         return
 
+    # A short text in the style wanted. Whisper tends to go on in the same script and punctuation,
+    # for example traditional characters: --prompt "以下是普通話的句子，使用繁體字。"
+    prompt = {"initial_prompt": extra.prompt} if extra.prompt else {}
     if backend == "mlx":
         import mlx_whisper
         repo = extra.model_repo or MLX_REPO
         versions = {"mlx-whisper": version("mlx-whisper"), "weights": repo}
-        print(f"Loading {repo} (first use downloads about 1.6 GB) …", flush=True)
+        print(f"Loading {repo} (downloads about 1.6 GB if it is not on this machine yet) …", flush=True)
         mlx_whisper.transcribe(_silence_path(), path_or_hf_repo=repo, verbose=None)  # loads (and downloads) the model
 
         def transcribe(path: Path, chunk: dict) -> dict:
             r = mlx_whisper.transcribe(str(path), path_or_hf_repo=repo, language=lang, word_timestamps=extra.words,
-                                       verbose=None)
+                                       verbose=None, **prompt)
             return {"language": r.get("language"), "segments": [_seg(s, extra.words) for s in r["segments"]]}
     else:
         from faster_whisper import WhisperModel
@@ -71,14 +75,14 @@ def main() -> None:
         else:
             device, compute = "cpu", "int8"
         versions = {"faster-whisper": version("faster-whisper"), "weights": repo, "device": device, "compute": compute}
-        print(f"Loading {repo} on {device} ({compute}; first use downloads about 1.6 GB) …", flush=True)
+        print(f"Loading {repo} on {device} ({compute}; downloads about 1.6 GB if it is not on this machine yet) …", flush=True)
         model = WhisperModel(repo, device=device, compute_type=compute)
 
         from _wav import read_piece
 
         def transcribe(path: Path, chunk: dict) -> dict:
             segments, info = model.transcribe(read_piece(path), language=lang, vad_filter=True,
-                                              word_timestamps=extra.words)
+                                              word_timestamps=extra.words, **prompt)
             segs = [_seg({"start": s.start, "end": s.end, "text": s.text, "avg_logprob": s.avg_logprob,
                           "no_speech_prob": s.no_speech_prob, "compression_ratio": s.compression_ratio,
                           "words": [{"start": w.start, "end": w.end, "text": w.word} for w in (s.words or [])]},
@@ -116,6 +120,7 @@ def _split_extra(argv: list[str]) -> tuple[list[str], argparse.Namespace]:
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("--words", action="store_true")
     ap.add_argument("--model-repo")
+    ap.add_argument("--prompt")
     extra, rest = ap.parse_known_args(argv[1:])
     return [argv[0], *rest], extra
 

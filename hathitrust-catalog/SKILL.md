@@ -1,7 +1,11 @@
 ---
 name: hathitrust-catalog
 description: Look up bibliographic records and digitized volumes in HathiTrust's 17M+ volume collection by ISBN, OCLC, LCCN, ISSN, or HathiTrust ID. Use this skill whenever the user wants to check if a book has been digitized, find which libraries hold a copy, get MARC metadata for a known identifier, or link a bibliographic reference to its HathiTrust digital version. Also triggers when cross-referencing identifiers from other library catalogs (Harvard, Library of Congress) against HathiTrust holdings.
-version: 1.0.2
+version: 1.0.3
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # HathiTrust Bibliographic API Skill

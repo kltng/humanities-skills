@@ -137,3 +137,5 @@ Lunar months typically have 29 or 30 days. The number of days in a month is:
 
 Day numbering within a month starts at `start_from` (usually 1). To compute day N:
 `jdn = first_jdn + (N - start_from)`
+
+> The converter corrects two known errors in this data when it opens the file (the era name 建始, and the regnal years of the Korean kings 中宗 and 仁祖). See "Corrections to the database" in SKILL.md. Raw SQL on the file shows the uncorrected rows.

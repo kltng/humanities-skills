@@ -51,10 +51,21 @@ speakers itself.
   The runner flags chunks with very low confidence (`uncertain`), chunks that sound silent but got text
   (`no_speech`), and repeated text (`repeat`). Always listen to flagged chunks.
 - **Qwen3-ASR and SenseVoice write simplified characters**, also for Cantonese and Taiwan Mandarin. Convert
-  with OpenCC afterwards if traditional characters are wanted. Whisper follows the characters it detects
-  (it wrote traditional characters for the Hong Kong voice).
+  with OpenCC afterwards if traditional characters are wanted. Whisper is not steady: it wrote
+  traditional characters for a Hong Kong voice, and simplified ones for a Mandarin reading of a
+  traditional-character text. See "Traditional characters with Whisper" below.
 - **Qwen3-ASR timestamps.** Each silence-cut piece is one segment (`--piece-seconds 30`). For word-level
-  times, Qwen's forced aligner (Qwen3-ForcedAligner-0.6B) exists but is not wired in here.
+  times, Qwen's forced aligner (Qwen3-ForcedAligner-0.6B) exists but is not wired in here. `export.py`
+  cuts these long segments into subtitle cues of about 8 s at punctuation; the times inside a segment
+  are then estimates (shared out by the number of characters).
+- **A real recording** (issue #31): LibriVox, 阿Q正傳 chapter 1, two minutes of literary Mandarin, checked
+  against the Project Gutenberg text, on Apple Silicon. Whisper: 8.7% of characters wrong, about 31x real
+  time. Qwen3-ASR: 5.9% wrong, about 23x. Most errors were words that sound the same (博徒 → 博图 / 伯图,
+  滿臉濺朱 → 满脸见猪 / 满脸见珠). Both wrote simplified characters, and neither restored quotation marks
+  or book-title marks.
+- **Traditional characters with Whisper.** `run_whisper.py --prompt "以下是普通話的句子，使用繁體字。"`
+  passes the sentence as Whisper's `initial_prompt`, and Whisper usually goes on in that script. It is a
+  hint, not a switch: check the sample. OpenCC afterwards is the sure way.
 - **SenseVoice** gives no punctuation in this build and adds emotion and event tags (laughter, applause,
   music) to each segment (`emotion`, `event` in the rows).
 - **Parakeet** reads only European languages. Anything else comes out as romanized nonsense without

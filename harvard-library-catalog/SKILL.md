@@ -1,7 +1,11 @@
 ---
 name: harvard-library-catalog
 description: Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO. Use this skill whenever the user wants to look up books, manuscripts, finding aids, or other items in Harvard's library catalog, verify bibliographic information (title, author, ISBN, publication date), find digital collections, or retrieve detailed catalog records. Also triggers when a user extracts a book title from a document and wants to find its full bibliographic metadata.
-version: 1.0.3
+version: 1.0.4
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # Harvard Library API Skill

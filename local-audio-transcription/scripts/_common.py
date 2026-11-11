@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-SKILL_VERSION = "1.0.0"
+SKILL_VERSION = "1.1.0"
 HOME = Path(os.environ.get("LOCAL_ASR_HOME", Path.home() / ".cache" / "local-audio-transcription")).expanduser()
 REGISTRY = HOME / "registry.json"
 MODELS_DIR = HOME / "models"

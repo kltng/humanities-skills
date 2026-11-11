@@ -165,5 +165,73 @@ class TestExportAndReport(unittest.TestCase):
         self.assertIn("loop", (self.job / "report.md").read_text())
 
 
+class TestIssue30(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def row(self, pid, text, **kw):
+        return {"page": pid, "status": "ok", "seconds": 5, "model": "surya",
+                "blocks": [{"label": "Text", "bbox": [100, 200, 500, 800], "text": text}], **kw}
+
+    def test_pages_option_reads_only_those_pages(self):
+        job = make_job(Path(self.tmp.name), [self.row("00001", "x" * 200)], pages=3)
+        data = _common.load_job(job)
+        self.assertEqual([p["id"] for p in _common.todo_pages(job, data)], ["00002", "00003"])
+        self.assertEqual([p["id"] for p in _common.todo_pages(job, data, None, {"00001"})], ["00001"])
+        self.assertEqual([p["id"] for p in _common.todo_pages(job, data, 1)], ["00002"])
+
+    def test_page_ids(self):
+        self.assertIsNone(_common.page_ids(None))
+        self.assertEqual(_common.page_ids("12, 00040,3-5"), {"00012", "00040", "00003", "00004", "00005"})
+
+    def test_scanner_mark_and_repeated_line_are_flagged(self):
+        rows = [self.row("00001", "天工開物卷上\n" + "\n".join(["CamScanner"] * 8)),
+                self.row("00002", "乃粒第一\n" * 5 + "x" * 200),
+                self.row("00003", "宋子曰上古神農氏若存若亡然味其徽號兩言至今存矣" * 5)]
+        job = make_job(Path(self.tmp.name), rows, pages=3)
+        s = report.stats(_common.load_job(job), _common.read_rows(job))
+        self.assertEqual(s["marks"], ["00001"])
+        self.assertEqual(s["repeated"], ["00001", "00002"])
+        with mock.patch.object(sys, "argv", ["report.py", str(job)]):
+            report.main()
+        self.assertIn("scanner or watermark text", (job / "report.md").read_text())
+        field = (job / "field-report.md").read_text()
+        self.assertIn("scanner or watermark text 1", field)
+        self.assertNotIn("CamScanner", field)
+
+    def test_field_report_flag_line_does_not_contradict_itself(self):
+        job = make_job(Path(self.tmp.name), [self.row("00001", "短")], pages=1)
+        with mock.patch.object(sys, "argv", ["report.py", str(job)]):
+            report.main()
+        line = next(ln for ln in (job / "field-report.md").read_text().splitlines() if "Flagged pages" in ln)
+        self.assertIn("little text for the ink 1", line)
+        self.assertNotIn("none", line)
+        job2 = make_job(Path(self.tmp.name) / "b", [self.row("00001", "宋" * 300)], pages=1)
+        with mock.patch.object(sys, "argv", ["report.py", str(job2)]):
+            report.main()
+        line = next(ln for ln in (job2 / "field-report.md").read_text().splitlines() if "Flagged pages" in ln)
+        self.assertTrue(line.endswith("none"))
+
+    def test_coords_original_scales_boxes(self):
+        job = make_job(Path(self.tmp.name), [self.row("00001", "宋" * 300)], pages=1)
+        data = _common.load_job(job)
+        data["pages"][0].update(orig_width=2000, orig_height=4000)   # working copy is 1000 x 2000
+        _common.save_job(job, data)
+        with mock.patch.object(sys, "argv", ["export.py", str(job), "--formats", "pagexml,alto,json"]):
+            export.main()
+        page = (job / "export/pagexml/a/00001.xml").read_text()
+        self.assertIn('points="100,200 500,200 500,800 100,800"', page)
+        self.assertIn("working copy", page)
+        ET.fromstring((job / "export/alto/a/00001.xml").read_text())      # the note is a valid XML comment
+        with mock.patch.object(sys, "argv", ["export.py", str(job), "--formats", "pagexml,alto,json", "--coords", "original"]):
+            export.main()
+        page = (job / "export/pagexml/a/00001.xml").read_text()
+        self.assertIn('points="200,400 1000,400 1000,1600 200,1600"', page)
+        self.assertIn('imageWidth="2000" imageHeight="4000"', page)
+        ET.fromstring((job / "export/alto/a/00001.xml").read_text())
+        self.assertEqual(json.loads((job / "export/json/a.json").read_text())["pages"][0]["coords"], "original")
+
+
 if __name__ == "__main__":
     unittest.main()

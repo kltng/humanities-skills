@@ -95,7 +95,163 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
     # shared or installed copy) must still open.
     conn = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
+    apply_corrections(conn)
     return conn
+
+
+# ---------------------------------------------------------------------------
+# Corrections to the database (issues #28 and #32)
+# ---------------------------------------------------------------------------
+#
+# calendar.db is downloaded as it is and opened read-only. Known errors in it
+# are corrected here, in a TEMP view and a TEMP table that take the place of
+# `month` and `era_summary` for this connection. The file itself is never changed. Each
+# correction first checks that the error is still in the data, so it switches
+# itself off when a later calendar.db has been fixed.
+
+# (emperor, wrong era name, right era name)
+ERA_NAME_FIXES = [
+    ("成帝", "始建", "建始"),   # 西漢 成帝, 32–29 BCE; 漢書 卷10
+]
+
+# Joseon kings who took the throne after a deposition. The Sillok counts the
+# accession year as year 1 (中宗 1년 = 1506, 仁祖 1년 = 1623); the database
+# starts the count in the next year and keeps the deposed king until then.
+# (deposed king, new king, deposed king's last year, month, day of accession)
+KOREAN_ACCESSION_FIXES = [
+    ("燕山君", "中宗", 12, 9, 2),    # 中宗實錄: 1년 9월 2일 (1506-09-18 Julian)
+    ("光海君", "仁祖", 15, 3, 13),   # 仁祖實錄: 1년 3월 13일 (1623-04-12)
+]
+_KOREAN_DYNASTY = "大朝鮮國"
+
+_MONTH_COLS = ("id", "year", "month", "month_name", "leap_month", "era_id", "first_jdn",
+               "last_jdn", "ganzhi", "start_from", "status", "eclipse")
+
+_ERA_SUMMARY_SQL = """
+    CREATE TEMP TABLE era_summary AS
+    SELECT e.id AS era_id,
+           COALESCE(fx.right_name, en.name) AS era_name,
+           emp.id AS emperor_id,
+           empn.name AS emperor_name,
+           d.id AS dynasty_id,
+           dn.name AS dynasty_name,
+           d.type AS country,
+           MIN(m.first_jdn) AS start_jdn,
+           MAX(m.last_jdn) AS end_jdn
+    FROM main.era e
+    JOIN main.era_name en ON en.era_id = e.id AND en.ranking = 0
+    JOIN main.emperor emp ON emp.id = e.emperor_id
+    LEFT JOIN main.emperor_name empn ON empn.emperor_id = emp.id AND empn.ranking = 0
+    JOIN main.dynasty d ON d.id = emp.dynasty_id
+    LEFT JOIN main.dynasty_name dn ON dn.dynasty_id = d.id AND dn.ranking = 0
+    LEFT JOIN temp.era_name_fix fx ON fx.era_id = e.id
+    LEFT JOIN month m ON m.era_id = e.id
+    GROUP BY e.id
+"""
+
+
+def _era_ids(conn: sqlite3.Connection, emperor: str, era_name: str,
+             dynasty: str | None = None) -> list[int]:
+    """Era ids by emperor and era name (no month rows read, so it is fast)."""
+    sql = ("SELECT e.id FROM main.era e "
+           "JOIN main.era_name en ON en.era_id = e.id AND en.ranking = 0 "
+           "JOIN main.emperor_name empn ON empn.emperor_id = e.emperor_id AND empn.ranking = 0 "
+           "JOIN main.emperor emp ON emp.id = e.emperor_id "
+           "LEFT JOIN main.dynasty_name dn ON dn.dynasty_id = emp.dynasty_id AND dn.ranking = 0 "
+           "WHERE empn.name = ? AND en.name = ?")
+    params = [emperor, era_name]
+    if dynasty:
+        sql += " AND dn.name = ?"
+        params.append(dynasty)
+    return [r[0] for r in conn.execute(sql, params)]
+
+
+def _accession_month_rows(conn: sqlite3.Connection, old_king: str, new_king: str,
+                          last_year: int, month: int, day: int) -> tuple[list[int], list[tuple]] | None:
+    """Corrected month rows for one accession, or None when nothing is to fix."""
+    ids = {}
+    for king in (old_king, new_king):
+        found = _era_ids(conn, king, "（王年）", _KOREAN_DYNASTY)
+        if len(found) != 1:
+            return None
+        ids[king] = found[0]
+    old_id, new_id = ids[old_king], ids[new_king]
+    cols = ", ".join(_MONTH_COLS)
+    old_rows = [dict(r) for r in conn.execute(
+        f"SELECT {cols} FROM main.month WHERE era_id = ? ORDER BY first_jdn, id", (old_id,))]
+    new_rows = [dict(r) for r in conn.execute(
+        f"SELECT {cols} FROM main.month WHERE era_id = ? ORDER BY first_jdn, id", (new_id,))]
+    pieces = [r for r in old_rows
+              if r["year"] == last_year and r["month"] == month and not r["leap_month"]]
+    if not pieces or not new_rows:
+        return None
+    month_first = min(r["first_jdn"] for r in pieces)
+    month_last = max(r["last_jdn"] for r in pieces)
+    first_day = min(r["start_from"] for r in pieces)
+    accession = month_first + (day - first_day)
+    if not month_first <= accession <= month_last:
+        return None
+    if (min(r["first_jdn"] for r in new_rows) <= accession
+            or max(r["last_jdn"] for r in old_rows) <= accession):
+        return None  # the database already starts the new king in the accession year
+
+    out: list[dict] = []
+    for r in old_rows:
+        if r["last_jdn"] < month_first:
+            out.append(r)
+    base = pieces[0]
+    if accession > month_first:  # the deposed king's part of the month
+        out.append({**base, "first_jdn": month_first, "last_jdn": accession - 1,
+                    "start_from": first_day, "status": "S"})
+    # the new king's part; a negative id marks a row that is not in the file
+    out.append({**base, "id": -base["id"], "era_id": new_id, "year": 1,
+                "first_jdn": accession, "last_jdn": month_last, "start_from": day, "status": "S"})
+    for r in old_rows:
+        if r["first_jdn"] > month_last:
+            out.append({**r, "era_id": new_id, "year": 1, "status": "S"})
+    for r in new_rows:
+        out.append({**r, "year": r["year"] + 1})
+    return [old_id, new_id], [tuple(r[c] for c in _MONTH_COLS) for r in out]
+
+
+def apply_corrections(conn: sqlite3.Connection) -> None:
+    """Put corrected TEMP copies of `month` and `era_summary` on this connection."""
+    try:
+        cols = ", ".join(_MONTH_COLS)
+        conn.execute("CREATE TEMP TABLE era_name_fix (era_id INTEGER PRIMARY KEY, right_name TEXT)")
+        for emperor, wrong, right in ERA_NAME_FIXES:
+            for era_id in _era_ids(conn, emperor, wrong):
+                conn.execute("INSERT INTO temp.era_name_fix VALUES (?, ?)", (era_id, right))
+
+        conn.execute(f"CREATE TEMP TABLE month_fix AS SELECT {cols} FROM main.month WHERE 0")
+        fixed_eras: list[int] = []
+        for fix in KOREAN_ACCESSION_FIXES:
+            result = _accession_month_rows(conn, *fix)
+            if result is None:
+                continue
+            era_ids, rows = result
+            fixed_eras += era_ids
+            conn.executemany(
+                f"INSERT INTO temp.month_fix ({cols}) VALUES ({', '.join('?' * len(_MONTH_COLS))})", rows)
+        if fixed_eras:
+            conn.execute("CREATE INDEX temp.idx_month_fix_era ON month_fix(era_id, year)")
+            conn.execute("CREATE INDEX temp.idx_month_fix_jdn ON month_fix(first_jdn, last_jdn)")
+            id_list = ", ".join(str(int(i)) for i in sorted(set(fixed_eras)))
+            conn.execute(
+                f"CREATE TEMP VIEW month AS SELECT {cols} FROM main.month WHERE era_id NOT IN ({id_list}) "
+                f"UNION ALL SELECT {cols} FROM temp.month_fix")
+        # A table, not a view: it is built once and every later lookup is fast.
+        conn.execute(_ERA_SUMMARY_SQL)
+        conn.execute("CREATE INDEX temp.idx_era_summary_name ON era_summary(era_name)")
+        conn.execute("CREATE INDEX temp.idx_era_summary_id ON era_summary(era_id)")
+        conn.execute("CREATE INDEX temp.idx_era_summary_emperor ON era_summary(emperor_name)")
+    except sqlite3.Error:
+        # A database with another layout: use it as it is.
+        for stmt in ("DROP TABLE IF EXISTS temp.era_summary", "DROP VIEW IF EXISTS temp.month"):
+            try:
+                conn.execute(stmt)
+            except sqlite3.Error:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -232,9 +388,11 @@ _CJK_PATTERN = re.compile(
     r"(?P<leap>閏)?"
     r"(?P<month>[正一二三四五六七八九十廿]+|\d{1,2})月"
     r"(?:"
+    rf"(?P<gz_day>{_GANZHI_CHAR})"
+    r"|"
     r"(?P<day>[初一二三四五六七八九十廿卅]+|\d{1,2})"
-    r"日?"
     r")?"
+    r"日?"
     r")?"
     r"$"
 )
@@ -327,7 +485,8 @@ def parse_cjk_date(text: str) -> ParsedDate | None:
         day: int | None = None
         if day_str:
             day = int(day_str) if day_str.isdecimal() else _parse_chinese_number(day_str)
-        return ParsedDate(era=era, year=year, month=month, day=day, is_leap_month=is_leap)
+        return ParsedDate(era=era, year=year, month=month, day=day, is_leap_month=is_leap,
+                          ganzhi_day=m.group("gz_day"))
 
     return None
 
@@ -439,14 +598,42 @@ def traditional_variants(name: str, limit: int = 64) -> list[str]:
 # Database queries
 # ---------------------------------------------------------------------------
 
+# Names the database gives to years that have no era name of their own
+_REIGN_ERA_NAMES = ("（無年號）", "（王年）")
+# 文帝後三年, 景帝中五年: the 後元 / 中元 years of a Han emperor
+_REIGN_SUFFIXES = {"後": "（後元）", "中": "（中元）"}
+
+
 def find_eras_by_name(conn: sqlite3.Connection, era_name: str, country: str | None = None) -> list[sqlite3.Row]:
-    sql = "SELECT es.* FROM era_summary es WHERE es.era_name = ?"
-    params: list[str] = [era_name]
+    """Eras with this name. 後元 also finds the rows stored as （後元）."""
+    sql = "SELECT es.* FROM era_summary es WHERE es.era_name IN (?, ?)"
+    params: list[str] = [era_name, f"（{era_name}）"]
     if country:
         sql += " AND es.country = ?"
         params.append(country)
     sql += " ORDER BY es.start_jdn"
     return conn.execute(sql, params).fetchall()
+
+
+def find_eras_by_reign(conn: sqlite3.Connection, name: str, country: str | None = None) -> list[sqlite3.Row]:
+    """
+    Years counted by the ruler's name, with no era name: 文帝七年, 仁祖二十二年,
+    and 文帝後三年 / 景帝中五年 for the 後元 / 中元 years.
+    """
+    tries: list[tuple[str, tuple[str, ...]]] = [(name, _REIGN_ERA_NAMES)]
+    if len(name) > 1 and name[-1] in _REIGN_SUFFIXES:
+        tries.append((name[:-1], (_REIGN_SUFFIXES[name[-1]],)))
+    rows: list[sqlite3.Row] = []
+    for emperor, era_names in tries:
+        sql = (f"SELECT es.* FROM era_summary es WHERE es.emperor_name = ? "
+               f"AND es.era_name IN ({', '.join('?' * len(era_names))})")
+        params: list[str] = [emperor, *era_names]
+        if country:
+            sql += " AND es.country = ?"
+            params.append(country)
+        sql += " ORDER BY es.start_jdn"
+        rows += conn.execute(sql, params).fetchall()
+    return rows
 
 
 def resolve_era_name(conn: sqlite3.Connection, era_name: str,
@@ -464,6 +651,10 @@ def resolve_era_name(conn: sqlite3.Connection, era_name: str,
         rows = find_eras_by_name(conn, variant, country)
         if rows:
             return rows, variant
+    for name in [era_name] + traditional_variants(era_name):
+        rows = find_eras_by_reign(conn, name, country)
+        if rows:
+            return rows, name
     return [], era_name
 
 
@@ -827,7 +1018,7 @@ def main():
         results = convert_cjk_to_jdn(conn, parsed, country)
         if not results:
             print(f"No matching dates found for: {text}", file=sys.stderr)
-            if not find_eras_by_name(conn, era_used):
+            if not resolve_era_name(conn, era_used)[0]:
                 print(f"The era name {parsed.era} is not in the database. Era names use "
                       "traditional characters (萬曆, not 万历); Japanese eras use Japanese "
                       "forms (寛永). Check with: eras --name <name>", file=sys.stderr)

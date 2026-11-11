@@ -17,7 +17,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import load_job, norm_label, run_pages, runner_args, todo_pages  # noqa: E402
+from _common import load_job, norm_label, run_pages, runner_args, page_ids, todo_pages  # noqa: E402
 
 
 def inside(line_box: list[float], block_box: list[float]) -> bool:
@@ -28,7 +28,7 @@ def inside(line_box: list[float], block_box: list[float]) -> bool:
 def main() -> None:
     a = runner_args(__doc__, ["cpu"])
     data = load_job(a.job)
-    redo = set(a.pages.split(",")) if a.pages else None
+    redo = page_ids(a.pages, data)
     todo = todo_pages(a.job, data, a.limit, redo)
     if not todo and not a.setup:
         print("Nothing to read: every page has a row. Use --pages to read pages again.")
@@ -36,7 +36,7 @@ def main() -> None:
 
     import indra_ocr
 
-    print("Loading Indra OCR (first use downloads about 76 MB) …", flush=True)
+    print("Loading Indra OCR (downloads about 76 MB if it is not on this machine yet) …", flush=True)
     conv = indra_ocr.load(threads=min(8, os.cpu_count() or 4), mode="ocr")
     if a.setup:
         print("Indra OCR is ready.")

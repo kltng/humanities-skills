@@ -151,11 +151,13 @@ def main() -> None:
             try:
                 with opener() as im:
                     im = ImageOps.exif_transpose(im).convert("RGB")
+                    orig_w, orig_h = im.size  # before shrinking: export.py --coords original needs it
                     im = fit(im, a.long_side)
                     im.save(job / "pages" / f"{pid}.png")
                     ink = ink_ratio(im)
                     data["pages"].append({"id": pid, "doc": doc, "doc_page": doc_page, "file": f"pages/{pid}.png",
-                                          "width": im.width, "height": im.height, "ink": round(ink, 5),
+                                          "width": im.width, "height": im.height,
+                                          "orig_width": orig_w, "orig_height": orig_h, "ink": round(ink, 5),
                                           "blank": ink < a.blank_below})
             except Exception as e:  # one bad page should not stop a corpus
                 data["pages"].append({"id": pid, "doc": doc, "doc_page": doc_page, "file": None,

@@ -1,7 +1,11 @@
 ---
 name: loc-catalog
 description: Search the Library of Congress digital collections via the loc.gov JSON API. Use this skill whenever the user wants to search LOC's digitized books, photos, maps, manuscripts, newspapers, audio, or film/video, look up items by LCCN, browse LOC collections, find primary sources with date range filters, or retrieve citations and download links for LOC materials. Also triggers when cross-referencing items found in other library catalogs against LOC holdings.
-version: 1.0.2
+version: 1.0.3
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # Library of Congress API Skill

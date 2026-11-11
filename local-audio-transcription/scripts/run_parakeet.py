@@ -52,7 +52,7 @@ def main() -> None:
 
     if backend == "mlx":
         from parakeet_mlx import from_pretrained
-        print(f"Loading {MLX_REPO} (first use downloads about 2.5 GB) …", flush=True)
+        print(f"Loading {MLX_REPO} (downloads about 2.5 GB if it is not on this machine yet) …", flush=True)
         model = from_pretrained(MLX_REPO)
         versions = {"parakeet-mlx": version("parakeet-mlx"), "weights": MLX_REPO}
 

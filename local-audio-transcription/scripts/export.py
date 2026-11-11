@@ -10,6 +10,7 @@ during it). Chunks with status error are left out and listed.
 from __future__ import annotations
 
 import argparse
+import math
 import csv
 import json
 import sys
@@ -71,12 +72,17 @@ def assign_speakers(segments: list[dict[str, Any]], turns: list[dict[str, Any]])
             s["speaker"] = best
 
 
-def paragraphs(segments: list[dict[str, Any]], max_gap: float) -> list[dict[str, Any]]:
-    """Segments joined into paragraphs: a new one at a speaker change or a pause longer than max_gap."""
+def paragraphs(segments: list[dict[str, Any]], max_gap: float, max_seconds: float = 60.0) -> list[dict[str, Any]]:
+    """Segments joined into paragraphs.
+
+    A new paragraph starts at a speaker change, at a pause longer than max_gap, after 1,200 characters,
+    or when the paragraph would get longer than max_seconds. So the time marks in txt and md are never
+    much more than max_seconds apart, and a place in the recording is easy to find. 0 = no time limit.
+    """
     out: list[dict[str, Any]] = []
     for s in segments:
         if out and out[-1].get("speaker") == s.get("speaker") and s["start"] - out[-1]["end"] <= max_gap \
-                and len(out[-1]["text"]) < 1200:
+                and len(out[-1]["text"]) < 1200 and not (max_seconds and s["end"] - out[-1]["start"] > max_seconds):
             p = out[-1]
             p["text"] += ("" if is_cjk(p["text"][-1:]) and is_cjk(s["text"][:1]) else " ") + s["text"]
             p["end"] = s["end"]
@@ -94,7 +100,7 @@ def speaker_name(s: Any) -> str:
 def write_txt(out: Path, data: dict, docs: dict, opt: Any) -> None:
     for name, d in docs.items():
         lines = []
-        for p in paragraphs(d["segments"], opt.max_gap):
+        for p in paragraphs(d["segments"], opt.max_gap, opt.max_paragraph_seconds):
             head = ""
             if not opt.no_timestamps:
                 head += f"[{fmt_time(p['start'])}] "
@@ -108,7 +114,7 @@ def write_md(out: Path, data: dict, docs: dict, opt: Any) -> None:
     for name, d in docs.items():
         lines = [f"# {name}", "", f"Transcribed by {data.get('model')} (local-audio-transcription {SKILL_VERSION}). "
                  f"Length {fmt_time(d['duration'])}. Machine transcription, not proofread.", ""]
-        for p in paragraphs(d["segments"], opt.max_gap):
+        for p in paragraphs(d["segments"], opt.max_gap, opt.max_paragraph_seconds):
             head = ""
             if not opt.no_timestamps:
                 head += f"**{fmt_time(p['start'])}** "
@@ -118,22 +124,74 @@ def write_md(out: Path, data: dict, docs: dict, opt: Any) -> None:
         (out / f"{name}.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def _cues(d: dict) -> list[dict[str, Any]]:
-    """Subtitle cues: a segment, or a shorter piece when it is long (over 8 s or 80 characters)."""
+_STRONG = "。！？!?…"            # sentence ends
+_WEAK = "，、；：,;:"              # clause ends
+
+
+def split_text(text: str, parts: int) -> list[str]:
+    """Cut text into about `parts` pieces of similar length: at sentence ends when possible, else at
+    clause ends, else at spaces, else (Chinese with no punctuation) anywhere."""
+    text = text.strip()
+    if parts <= 1 or len(text) < 2:
+        return [text] if text else []
+    target = len(text) / parts
+    out: list[str] = []
+    rest = text
+    while len(out) < parts - 1 and len(rest) > target * 1.3:
+        lo, hi = int(target * 0.6), min(int(target * 1.3), len(rest) - 1)
+        cut = None
+        for marks in (_STRONG + ".", _WEAK, " "):
+            # the mark closest to the target length; a "." only counts before a space (not 3.5)
+            places = [i + 1 for i in range(lo, hi) if rest[i] in marks
+                      and not (rest[i] == "." and rest[i + 1:i + 2] not in (" ", ""))]
+            if places:
+                cut = min(places, key=lambda i: abs(i - target))
+                break
+        if cut is None:
+            cut = max(1, int(target))
+        out.append(rest[:cut].strip())
+        rest = rest[cut:].strip()
+    if rest:
+        out.append(rest)
+    return [x for x in out if x]
+
+
+def _cues(d: dict, max_seconds: float = 8.0, max_chars: int = 80) -> list[dict[str, Any]]:
+    """Subtitle cues: a segment, or shorter pieces when it is long (over max_seconds or max_chars;
+    Chinese, Japanese and Korean characters count double).
+
+    With word times (Whisper --words, Parakeet) the pieces have real times. Without them (Qwen3-ASR,
+    SenseVoice: one segment per piece between silences, up to 30 s) the text is cut at punctuation and
+    the time is shared out by the number of characters, so the times inside such a segment are estimates.
+    """
+    def width(t: str) -> int:
+        return sum(2 if is_cjk(ch) else 1 for ch in t)
+
     cues = []
     for s in d["segments"]:
         words = s.get("words")
-        if words and (s["end"] - s["start"] > 8 or len(s["text"]) > 80):
+        long = s["end"] - s["start"] > max_seconds or width(s["text"]) > max_chars
+        if long and words:
             cur: list[dict[str, Any]] = []
             for w in words:
                 cur.append(w)
-                if cur[-1]["end"] - cur[0]["start"] > 6 or sum(len(x["text"]) + 1 for x in cur) > 70:
+                if cur[-1]["end"] - cur[0]["start"] > max_seconds * 0.75 or sum(len(x["text"]) + 1 for x in cur) > max_chars * 0.875:
                     cues.append({"start": cur[0]["start"], "end": cur[-1]["end"],
                                  "text": " ".join(x["text"] for x in cur), "speaker": s.get("speaker")})
                     cur = []
             if cur:
                 cues.append({"start": cur[0]["start"], "end": cur[-1]["end"],
                              "text": " ".join(x["text"] for x in cur), "speaker": s.get("speaker")})
+        elif long:
+            n = max(math.ceil((s["end"] - s["start"]) / max_seconds), math.ceil(width(s["text"]) / max_chars))
+            pieces = split_text(s["text"], n)
+            total = sum(len(x) for x in pieces) or 1
+            t = s["start"]
+            for i, piece in enumerate(pieces):
+                end = s["end"] if i == len(pieces) - 1 else round(t + (s["end"] - s["start"]) * len(piece) / total, 2)
+                cues.append({"start": round(t, 2), "end": end, "text": piece, "speaker": s.get("speaker"),
+                             "estimated": True})
+                t = end
         else:
             cues.append({"start": s["start"], "end": s["end"], "text": s["text"], "speaker": s.get("speaker")})
     return cues
@@ -142,7 +200,7 @@ def _cues(d: dict) -> list[dict[str, Any]]:
 def write_srt(out: Path, data: dict, docs: dict, opt: Any) -> None:
     for name, d in docs.items():
         lines = []
-        for i, c in enumerate(_cues(d), 1):
+        for i, c in enumerate(_cues(d, opt.max_cue_seconds), 1):
             text = (f"{speaker_name(c['speaker'])}: " if c.get("speaker") is not None else "") + c["text"]
             lines += [str(i), f"{srt_time(c['start'])} --> {srt_time(c['end'])}", text, ""]
         (out / f"{name}.srt").write_text("\n".join(lines), encoding="utf-8")
@@ -151,7 +209,7 @@ def write_srt(out: Path, data: dict, docs: dict, opt: Any) -> None:
 def write_vtt(out: Path, data: dict, docs: dict, opt: Any) -> None:
     for name, d in docs.items():
         lines = ["WEBVTT", ""]
-        for c in _cues(d):
+        for c in _cues(d, opt.max_cue_seconds):
             text = (f"<v {speaker_name(c['speaker'])}>" if c.get("speaker") is not None else "") + c["text"]
             lines += [f"{srt_time(c['start'], '.')} --> {srt_time(c['end'], '.')}", text, ""]
         (out / f"{name}.vtt").write_text("\n".join(lines), encoding="utf-8")
@@ -186,7 +244,7 @@ def write_csv(out: Path, data: dict, docs: dict, opt: Any) -> None:
 def write_tei(out: Path, data: dict, docs: dict, opt: Any) -> None:
     """TEI P5 for transcribed speech: <u> per paragraph with who/start/end on a <timeline>."""
     for name, d in docs.items():
-        paras = paragraphs(d["segments"], opt.max_gap)
+        paras = paragraphs(d["segments"], opt.max_gap, opt.max_paragraph_seconds)
         spk = sorted({p["speaker"] for p in paras if p.get("speaker") is not None})
         x = ['<?xml version="1.0" encoding="UTF-8"?>',
              '<TEI xmlns="http://www.tei-c.org/ns/1.0">', "<teiHeader><fileDesc>",
@@ -223,6 +281,10 @@ def main() -> None:
     ap.add_argument("--formats", help="comma list; default: the formats stored in the job")
     ap.add_argument("--no-timestamps", action="store_true", help="txt/md without the time at each paragraph")
     ap.add_argument("--max-gap", type=float, default=1.0, help="a pause longer than this starts a new paragraph")
+    ap.add_argument("--max-paragraph-seconds", type=float, default=60.0,
+                    help="txt/md/tei: start a new paragraph (with its time mark) at least this often; 0 = no limit")
+    ap.add_argument("--max-cue-seconds", type=float, default=8.0,
+                    help="srt/vtt: cut longer segments into cues of about this length")
     a = ap.parse_args()
 
     data, docs, missing = collect(a.job)

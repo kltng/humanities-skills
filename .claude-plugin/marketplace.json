@@ -52,7 +52,7 @@
       "name": "cbdb-local",
       "source": "./cbdb-local",
       "description": "Query the China Biographical Database locally via SQLite for 656K+ historical Chinese figures — biographical data, kinship networks, official postings, social associations, and examination records (7th c. BCE to 19th c. CE)",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -72,7 +72,7 @@
       "name": "cjk-calendar",
       "source": "./cjk-calendar",
       "description": "Convert between Chinese, Japanese, Korean, and Vietnamese lunisolar calendar dates and Gregorian/Julian dates using a local SQLite database (~220 BCE to 1945 CE)",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -82,7 +82,7 @@
       "name": "tgaz-sqlite",
       "source": "./tgaz-sqlite",
       "description": "Query the TGAZ (Temporal Gazetteer) SQLite database locally for 82,000+ historical Chinese placenames spanning 763 BCE to 1911 CE — name search, spatial bounding box, temporal filtering, full-text search, administrative hierarchies, and raw SQL",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -142,7 +142,7 @@
       "name": "europeana-collections",
       "source": "./europeana-collections",
       "description": "Search Europeana's 50M+ cultural heritage items from 4,000+ European museums, galleries, libraries, and archives — art, manuscripts, photographs, maps, 3D objects, audio, and video",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -152,7 +152,7 @@
       "name": "harvard-library-catalog",
       "source": "./harvard-library-catalog",
       "description": "Search Harvard Library's 13M+ bibliographic records via LibraryCloud and retrieve MARC/MODS data via PRESTO — books, manuscripts, finding aids, and digital collections",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -162,7 +162,7 @@
       "name": "hathitrust-catalog",
       "source": "./hathitrust-catalog",
       "description": "Look up bibliographic records and digitized volumes in HathiTrust's 17M+ volume collection by ISBN, OCLC, LCCN, ISSN, or HathiTrust ID",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -172,7 +172,7 @@
       "name": "loc-catalog",
       "source": "./loc-catalog",
       "description": "Search the Library of Congress digital collections via the loc.gov JSON API — digitized books, photos, maps, manuscripts, newspapers, audio, and film/video with date range filters",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -182,7 +182,7 @@
       "name": "nlb-singapore",
       "source": "./nlb-singapore",
       "description": "Search the National Library Board Singapore catalog for books, audiovisual materials, and digital resources — availability across NLB branches, new arrivals, checkout trends, and detailed bibliographic records",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -272,7 +272,7 @@
       "name": "zotero-local",
       "source": "./zotero-local",
       "description": "Search, read, export, and add items in a local Zotero 8 desktop library through its HTTP API — import citations and PDFs, list collections and tags, read full text; with the optional Debug Bridge add-on, attach files and create collections. Cannot edit or delete existing items",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -302,7 +302,7 @@
       "name": "local-ocr",
       "source": "./local-ocr",
       "description": "OCR PDFs, scans, or a whole corpus on your own computer with Datalab's open models (Chandra OCR 2, Surya OCR 2.5, Indra OCR): interview, hardware check, one-time model download, resumable runs, and export to JSON, text, Markdown, HTML, ALTO, PAGE XML, TEI, or hOCR, with a run report and a GitHub field report",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
@@ -322,7 +322,7 @@
       "name": "local-audio-transcription",
       "source": "./local-audio-transcription",
       "description": "Transcribe recordings on your own computer with Whisper, Qwen3-ASR (Cantonese and Chinese dialects), SenseVoice or Parakeet, with optional speaker labels; asks first whether the material must stay completely offline, proves the pipeline runs with the network blocked on a sample clip the user provides, then hands over a script to run after disconnecting; exports txt, Markdown, SRT, VTT, JSON, CSV and TEI",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"

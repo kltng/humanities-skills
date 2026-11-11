@@ -1,7 +1,11 @@
 ---
 name: zotero-local
 description: Interact with a local Zotero 8 desktop application through its HTTP API at localhost:23119. Use this skill whenever the user wants to search, read, or export items in their Zotero library, add new items (with tags and notes), import citations (BibTeX, RIS, etc.) or PDFs, list collections and tags, or retrieve full-text content from Zotero. With the optional Debug Bridge add-on it can also attach files to existing items and create or delete collections. It cannot edit or delete existing items. Triggers on mentions of Zotero, citation management, reference libraries, bibliographic databases, or local library management. Also use when chaining with other catalog skills (Harvard, LOC, HathiTrust, etc.) to save found records into the user's Zotero library.
-version: 1.0.2
+version: 1.0.3
+license: MIT
+author: Kwok-leong Tang
+contributors:
+  - Claude
 ---
 
 # Zotero Local API Skill

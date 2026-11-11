@@ -1,7 +1,7 @@
 ---
 name: cjk-calendar
 description: Convert between Chinese, Japanese, Korean, and Vietnamese lunisolar calendar dates and Gregorian/Julian dates. Use when the user needs to look up historical East Asian dates, convert era names (年號) like 康熙, 天保, 崇禎 to Western dates, compute sexagenary cycle (干支) day/month/year, or work with Julian Day Numbers. Supports ~220 BCE to 1945 CE with 1,637 eras and 131,808 lunar month records. Runs entirely locally with a SQLite database.
-version: 1.0.2
+version: 1.0.3
 license: MIT
 author: Kwok-leong Tang
 contributors:
@@ -89,6 +89,9 @@ python3 scripts/calendar_converter.py eras --country japanese
 | Ganzhi year | 嘉慶甲子年三月初五 | Sexagenary year cycle (the year must fall in that era) |
 | Full ganzhi | 嘉慶甲子年戊辰月甲午日 | Year + month + day ganzhi |
 | Simplified era name | 万历10年1月1日 | Read as 萬曆; a note on stderr says so |
+| Numbered year + ganzhi day | 建元六年六月丁酉 | The usual form in the 正史. No result if that 干支 day is not in the month |
+| Ruler's name, no era name | 文帝七年十月, 仁祖二十二年三月十九日 | Finds the years stored as （無年號） or （王年）: Han before 建元, Korean kings |
+| 中 / 後 years of a Han emperor | 景帝中五年, 文帝後三年, 後元元年 | Finds the eras stored as （中元） and （後元） |
 
 ## Output Format
 
@@ -147,6 +150,15 @@ The 60-unit cycle combines 10 Heavenly Stems (天干: 甲乙丙丁戊己庚辛�
 The same era name can appear in different dynasties or countries (e.g., 建武 was used by both Han and Japanese emperors). When results are ambiguous, the converter returns all matches. Use `--country` to filter. Example: `天保三年` alone gives 38 months across 北齊, 西梁 and Japan; with `--country japanese` it gives 13.
 
 Era names in the database use traditional characters (Japanese eras use Japanese forms, e.g. 寛永). Simplified names such as 万历 or 光绪 are converted for you. If a name is still not found, check it with `eras --name`.
+
+### Corrections to the database
+
+The converter corrects known errors in `calendar.db` when it opens the file. The file itself is not changed, so raw SQL on `calendar.db` with another tool still shows the old values.
+
+- **建始** (西漢 成帝, 32–29 BCE) is stored as 「始建」. The converter shows and finds it as 建始.
+- **Korean regnal years of 中宗 and 仁祖.** Both kings took the throne after the king before them was deposed, and the Joseon Sillok counts that same year as year 1 (中宗 1년 = 1506, 仁祖 1년 = 1623). The database starts the count one year later. The converter follows the Sillok: 1644-04-25 is 仁祖 22年 3月 19日, and 光海君 15年 ends on 3月 12日 (1623-04-11).
+
+For other Korean kings the database already agrees with the Sillok (year 1 is the year after the accession, or the accession year for 太祖 and 世祖). When a Korean regnal year matters, still check it against the Sillok (https://sillok.history.go.kr), which prints the year at the top of each entry.
 
 ## Coverage
 

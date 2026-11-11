@@ -46,8 +46,8 @@ document each. Its images, taken together, are one document.
 | Option | Meaning |
 |---|---|
 | `--backend` | chandra: `mlx`, `hf`; surya: `llamacpp`, `mlx`, `vllm`; indra: `cpu`. Default `auto`. |
-| `--limit N` | read at most N unread pages (smoke test) |
-| `--pages` | read these page ids again, even if done |
+| `--limit N` | read the next N unread pages, then stop (smoke test) |
+| `--pages 12,40` | read **only** these pages, also if they were read before. Ids with or without leading zeros, and ranges (`12-15`) |
 | `--setup` | install, download and load the model, then stop |
 | `--read-blank` | (chandra) also read pages that look blank |
 | `--max-tokens` | (chandra) token limit per page (default 12,384) |
@@ -58,7 +58,7 @@ end, outcome).
 
 ### export.py
 
-`uv run export.py JOB [--formats ...] [--drop-furniture] [--no-page-marks]`
+`uv run export.py JOB [--formats ...] [--drop-furniture] [--no-page-marks] [--coords working|original]`
 
 ### jobs.py
 
@@ -80,7 +80,7 @@ JOB/
   report.md, field-report.md
 ```
 
-`job.json` → `pages[]`: `{id, doc, doc_page, file, width, height, ink, blank}` (`error` if the page could
+`job.json` → `pages[]`: `{id, doc, doc_page, file, width, height, orig_width, orig_height, ink, blank}` (`error` if the page could
 not be rendered).
 
 `rows.jsonl`, one line per page:
@@ -95,7 +95,7 @@ not be rendered).
 ```
 
 - `status`: `ok`, `loop` (Chandra hit the token limit), `slow` (Surya over 120 s), `skipped_blank`, `error`.
-- `bbox`: `[x0, y0, x1, y1]` in pixels of `pages/<id>.png`.
+- `bbox`: `[x0, y0, x1, y1]` in pixels of `pages/<id>.png` (the working copy; `width` and `height` are its size, `orig_width` and `orig_height` the size before shrinking). `export.py --coords original` scales all boxes to the original size; each ALTO and PAGE file says which one it uses.
 - `lines`: only Indra gives line boxes. For the other models, exports use the block box for each line.
 - `raw`: Chandra's full output. `tokens` and `finish_reason` are Chandra only. Indra adds `vertical`.
 - Labels are made the same across models: `Title`, `SectionHeader`, `Text`, `ListItem`, `Footnote`,

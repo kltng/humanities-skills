@@ -26,8 +26,36 @@ WHY = {"loop": "the model repeated itself until the token limit; no usable text"
        "skipped_blank": "looked blank, not sent to the model"}
 
 
+# Text that scanner apps and digitisers stamp on pages. Models also invent it: Surya once wrote
+# eight lines of "CamScanner" in place of a real line of a 1637 print (issue #30).
+SCANNER_MARKS = ("camscanner", "scanned by", "scanned with", "adobe scan", "genius scan", "tapscanner",
+                 "microsoft lens", "office lens", "vflat", "扫描全能王", "掃描全能王", "digitized by google")
+REPEAT_MIN = 4  # the same line this many times on one page
+
+
+def page_lines(row: dict[str, Any]) -> list[str]:
+    return [ln.strip() for b in row.get("blocks", []) for ln in (b.get("text") or "").split("\n") if ln.strip()]
+
+
+def has_scanner_mark(row: dict[str, Any]) -> bool:
+    text = " ".join(page_lines(row)).lower()
+    return any(mark in text for mark in SCANNER_MARKS)
+
+
+def has_repeated_line(row: dict[str, Any]) -> bool:
+    """The same line (2+ characters) at least REPEAT_MIN times: a sign that the model looped."""
+    counts: dict[str, int] = {}
+    for ln in page_lines(row):
+        if len(ln) >= 2:
+            counts[ln] = counts.get(ln, 0) + 1
+    return any(n >= REPEAT_MIN for n in counts.values())
+
+
 def stats(data: dict[str, Any], rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
     pages = data["pages"]
+    read = [p["id"] for p in pages if rows.get(p["id"], {}).get("status") in ("ok", "slow")]
+    marks = [pid for pid in read if has_scanner_mark(rows[pid])]
+    repeated = [pid for pid in read if has_repeated_line(rows[pid])]
     secs = [r["seconds"] for r in rows.values() if r.get("status") in ("ok", "slow", "loop") and r.get("seconds")]
     chars = {pid: sum(len(b.get("text") or "") for b in r.get("blocks", [])) for pid, r in rows.items()}
     empty = [p["id"] for p in pages if rows.get(p["id"], {}).get("status") == "ok" and chars.get(p["id"], 0) == 0]
@@ -47,7 +75,8 @@ def stats(data: dict[str, Any], rows: dict[str, dict[str, Any]]) -> dict[str, An
             "median_s": round(statistics.median(secs), 1) if secs else None,
             "mean_s": round(statistics.mean(secs), 1) if secs else None,
             "time": duration(sum(secs)), "chars": sum(chars.values()),
-            "empty": empty, "little": little, "flagged": flagged, "invented": invented, "labels": labels, "warnings": warnings}
+            "empty": empty, "little": little, "flagged": flagged, "invented": invented, "labels": labels,
+            "warnings": warnings, "marks": marks, "repeated": repeated}
 
 
 def duration(seconds: float) -> str:
@@ -105,6 +134,15 @@ def main() -> None:
     if s["invented"]:
         u.append(f"- **text on a page that looks blank** ({len(s['invented'])}): probably invented by the model. "
                  + ids([f"{x} ({page_doc[x]})" for x in s["invented"]], 15))
+    if s["marks"]:
+        u.append(f"- **scanner or watermark text** ({len(s['marks'])}): the page text names a scanner app or a "
+                 "digitiser (CamScanner, Digitized by Google …). The model may have invented it, and it may stand "
+                 "in the place of a real line. Compare with the image. "
+                 + ids([f"{x} ({page_doc[x]})" for x in s["marks"]], 15))
+    if s["repeated"]:
+        u.append(f"- **the same line many times** ({len(s['repeated'])}): the model probably repeated itself, and "
+                 "real text may be missing there. Compare with the image. "
+                 + ids([f"{x} ({page_doc[x]})" for x in s["repeated"]], 15))
     if u[-1] == "":
         u.append("- none flagged. Still read a few pages against the image.")
     u += ["", "## Files", "", f"- Job folder: `{a.job.resolve()}`",
@@ -122,7 +160,11 @@ def main() -> None:
                                        ("material", "script", "direction", "languages", "condition")) or "(not described)"
     if a.share_titles:
         material += f" | documents: {', '.join(src['doc'] for src in data['sources'])}"
-    flagged_line = "; ".join(f"{st} {len(v)}" for st, v in s["flagged"].items() if v) or "none"
+    counts = {**{st: len(v) for st, v in s["flagged"].items()},
+              "no text": len(s["empty"]), "little text for the ink": len(s["little"]),
+              "text on blank-looking pages": len(s["invented"]), "scanner or watermark text": len(s["marks"]),
+              "same line many times": len(s["repeated"])}
+    flagged_line = "; ".join(f"{k} {n}" for k, n in counts.items() if n) or "none"
     f = [f"**Skill:** local-ocr {SKILL_VERSION} | **Date:** {data.get('created')} – {(last.get('ended') or '')[:10]}",
          f"**Machine:** {m.get('chip')} | {m.get('cpu_cores')} cores | {m.get('ram_gb')} GB | GPU: {gpu} | "
          f"{m.get('os')} {m.get('arch')}",
@@ -131,7 +173,7 @@ def main() -> None:
          f"**Material:** {material}",
          f"**Pages:** {s['read']}/{s['pages']} read in {s['docs']} document(s) | "
          f"median {s['median_s']} s/page, mean {s['mean_s']} s/page | {len(runs)} run(s)",
-         f"**Flagged pages:** {flagged_line} | no text {len(s['empty'])} | little text for the ink {len(s['little'])} | text on blank-looking pages {len(s['invented'])}",
+         f"**Flagged pages:** {flagged_line}",
          f"**Layout labels seen:** {', '.join(f'{k} {v}' for k, v in sorted(s['labels'].items(), key=lambda x: -x[1]))}",
          f"**Formats exported:** {', '.join(exported) or 'none'}", "",
          "**What happened / problems:**"]

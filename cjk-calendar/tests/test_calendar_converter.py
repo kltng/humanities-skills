@@ -53,6 +53,13 @@ ERAS = [
     (650, "崇禎", "明", "思宗", "chinese"),
     (664, "道光", "清", "宣宗", "chinese"),
     (1191, "天保", "江戸時代", "仁孝天皇", "japanese"),
+    # rows for the database corrections (issues #28 and #32)
+    (695, "始建", "西漢", "成帝", "chinese"),        # wrong in the database: it is 建始
+    (710, "（後元）", "西漢", "武帝", "chinese"),
+    (720, "建元", "西漢", "武帝", "chinese"),
+    (724, "（無年號）", "西漢", "文帝", "chinese"),
+    (1490, "（王年）", "大朝鮮國", "光海君", "korean"),
+    (1491, "（王年）", "大朝鮮國", "仁祖", "korean"),
 ]
 
 # era_id, year, month, month_name, leap, first_jdn, last_jdn, ganzhi, start_from, status
@@ -65,6 +72,16 @@ MONTHS = [
     (664, 12, 10, "十", 0, 2390510, 2390539, "壬辰", 1, "S"),
     (1191, 3, 10, "十", 0, 2390481, 2390509, "壬辰", 1, "S"),
     (1191, 3, 11, "十一", 0, 2390510, 2390539, "壬辰", 1, "S"),
+    (695, 3, 1, "正", 0, 1710510, 1710539, "辛卯", 1, "S"),
+    (710, 1, 1, "正", 0, 1689307, 1689336, "癸巳", 1, "S"),
+    (720, 6, 6, "六", 0, 1672298, 1672327, "丙午", 1, "S"),
+    (724, 7, 10, "十", 0, 1658183, 1658211, "戊辰", 1, "S"),
+    # 光海君 was deposed in 15年三月; the database keeps him to the end of the year
+    (1490, 15, 3, "三", 0, 2313938, 2313950, "癸亥", 1, "S"),
+    (1490, 15, 3, "三", 0, 2313951, 2313966, "癸亥", 14, "P"),
+    (1490, 15, 4, "四", 0, 2313967, 2313996, "癸亥", 1, "P"),
+    (1491, 1, 1, "正", 0, 2314263, 2314291, "甲子", 1, "S"),
+    (1491, 21, 3, "三", 0, 2321616, 2321644, "甲申", 1, "S"),
 ]
 
 
@@ -208,6 +225,84 @@ class CliTest(FixtureTest):
         code, out, _ = self.run_cli("eras", "--name", "万历", "--db", str(self.db))
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)[0]["era_name"], "萬曆")
+
+
+
+class DatabaseCorrectionTest(FixtureTest):
+    """Issues #28 and #32: errors in calendar.db that the converter corrects."""
+
+    def convert(self, text, country=None):
+        return cc.convert_cjk_to_jdn(self.conn, cc.parse_cjk_date(text), country)
+
+    def test_jianshi_is_found_under_its_right_name(self):
+        results = self.convert("建始三年正月")
+        self.assertEqual([(j, e.era_name, e.emperor_name) for j, e in results],
+                         [(1710510, "建始", "成帝")])
+        self.assertEqual(self.convert("始建三年正月"), [])
+
+    def test_bracketed_era_name_is_found_without_brackets(self):
+        results = self.convert("後元元年正月")
+        self.assertEqual([(j, e.emperor_name) for j, e in results], [(1689307, "武帝")])
+
+    def test_numeric_year_with_ganzhi_day(self):
+        parsed = cc.parse_cjk_date("建元六年六月丁酉")
+        self.assertEqual((parsed.year, parsed.month, parsed.day, parsed.ganzhi_day),
+                         (6, 6, None, "丁酉"))
+        (jdn, era), = self.convert("建元六年六月丁酉")
+        self.assertEqual((era.day, cc.jdn_to_ganzhi_day(jdn)), (7, "丁酉"))
+        # a 干支 day that does not fall in the month gives no result
+        self.assertEqual(self.convert("建元六年六月辛卯")[0][1].day, 1)
+        self.assertEqual(cc.parse_cjk_date("建元六年六月初七日").day, 7)
+
+    def test_reign_name_finds_years_without_an_era_name(self):
+        (jdn, era), = self.convert("文帝七年十月")
+        self.assertEqual((jdn, era.era_name, era.year_in_era), (1658183, "（無年號）", 7))
+
+    def test_injo_years_count_from_the_accession_year(self):
+        # 1644-04-25 is 仁祖 22년 3월 19일 in the Sillok (the database says 21)
+        korean = cc.convert_jdn(self.conn, cc.gregorian_to_jdn(1644, 4, 25), country="korean").cjk_dates
+        self.assertEqual([(e.emperor_name, e.year_in_era, e.month, e.day) for e in korean],
+                         [("仁祖", 22, 3, 19)])
+        (jdn, _), = self.convert("仁祖二十二年三月十九日", "korean")
+        self.assertEqual(cc.jdn_to_gregorian(jdn), (1644, 4, 25))
+
+    def test_accession_year_is_split_on_the_accession_day(self):
+        def korean(y, m, d):
+            dates = cc.convert_jdn(self.conn, cc.gregorian_to_jdn(y, m, d), country="korean").cjk_dates
+            return [(e.emperor_name, e.year_in_era, e.month, e.day) for e in dates]
+
+        self.assertEqual(korean(1623, 4, 11), [("光海君", 15, 3, 12)])
+        self.assertEqual(korean(1623, 4, 12), [("仁祖", 1, 3, 13)])
+        self.assertEqual(korean(1623, 5, 1), [("仁祖", 1, 4, 3)])
+        self.assertEqual(self.convert("光海君十五年三月十三日"), [])
+
+    def test_era_list_shows_the_corrected_start(self):
+        injo, = cc.get_era_metadata(self.conn, era_name="仁祖")
+        self.assertEqual(injo.start_gregorian, "1623-04-12")
+
+
+class NoCorrectionNeededTest(unittest.TestCase):
+    """A database that is already right must be left as it is."""
+
+    def test_fixed_database_is_not_changed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "calendar.db"
+            build_db(db)
+            conn = sqlite3.connect(db)
+            conn.execute("UPDATE era_name SET name = '建始' WHERE era_id = 695")
+            # the new king already starts in the accession year
+            conn.execute("UPDATE month SET era_id = 1491, year = 1, status = 'S' "
+                         "WHERE era_id = 1490 AND status = 'P'")
+            conn.execute("UPDATE month SET year = year + 1 WHERE era_id = 1491 AND first_jdn > 2314000")
+            conn.commit()
+            conn.close()
+            conn = cc.get_connection(db)
+            try:
+                dates = cc.convert_jdn(conn, cc.gregorian_to_jdn(1644, 4, 25), country="korean").cjk_dates
+                self.assertEqual([(e.emperor_name, e.year_in_era) for e in dates], [("仁祖", 22)])
+                self.assertEqual(len(cc.find_eras_by_name(conn, "建始")), 1)
+            finally:
+                conn.close()
 
 
 if __name__ == "__main__":
