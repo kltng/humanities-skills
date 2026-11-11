@@ -327,6 +327,16 @@
         "name": "Kwok-leong Tang",
         "notes": "Created with AI assistance from Claude"
       }
+    },
+    {
+      "name": "cbeta-api",
+      "source": "./cbeta-api",
+      "description": "Search and read the CBETA Chinese Buddhist canon and look up Buddhist persons, places and dates in the DILA authority database — works by creator, citations and line text, full-text and similar-passage search, variant characters, and Wikidata links (P1187)",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kwok-leong Tang",
+        "notes": "Created with AI assistance from Claude"
+      }
     }
   ]
 }

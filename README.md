@@ -11,6 +11,7 @@ A Claude Code skill marketplace for academic research, focused on East Asian his
 | [cbdb-api](cbdb-api/) | Query the China Biographical Database API — 656K+ historical Chinese figures (7th c. BCE – 19th c. CE) |
 | [cbdb-local](cbdb-local/) | Query CBDB locally via SQLite — kinship networks, official postings, social associations, examinations |
 | [jbdb-api](jbdb-api/) | Query the Japan Biographical Database API — historical Japanese figures, events, occupations |
+| [cbeta-api](cbeta-api/) | Search and read the CBETA Buddhist canon; look up Buddhist persons, places and dates in the DILA authority database, with Wikidata links |
 
 ### Historical Geography
 
